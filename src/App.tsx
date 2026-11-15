@@ -1,7 +1,11 @@
 import { useEffect } from 'react'
 import { Screen, TabBar } from './components/Screen'
 import { Empty } from './components/ui'
+import { CompleteMatch } from './screens/CompleteMatch'
+import { ExpenseCategories } from './screens/ExpenseCategories'
+import { Funds } from './screens/Funds'
 import { BootError, NoAccess, PinGate, Splash, TokenGate } from './screens/Gates'
+import { SplitExpenses } from './screens/SplitExpenses'
 import { MatchDetail } from './screens/MatchDetail'
 import { Matches } from './screens/Matches'
 import { Onboard } from './screens/Onboard'
@@ -15,8 +19,8 @@ import { navigate, useRoute } from './state/router'
 
 function Placeholder({ title }: { title: string }) {
   return (
-    <Screen title={title}>
-      <Empty icon="🏏" title={title} text="This screen is built in a later step." />
+    <Screen title={title} back="/teams">
+      <Empty icon="🤷" title={title} text="There is nothing at this address." />
     </Screen>
   )
 }
@@ -60,11 +64,13 @@ export default function App() {
     tabs = !e
     if (!e) screen = <MatchDetail teamId={b} matchId={d} />
     else if (e === 'squad') screen = <SquadPicker teamId={b} matchId={d} />
-    else screen = <Placeholder title="Match" />
+    else if (e === 'complete') screen = <CompleteMatch teamId={b} matchId={d} />
+    else if (e === 'expenses') screen = <SplitExpenses teamId={b} matchId={d} />
+    else screen = <Placeholder title="Not found" />
   } else if (a === 'matches') screen = <Matches />
-  else if (a === 'funds') screen = <Placeholder title="Funds" />
+  else if (a === 'funds') screen = <Funds />
   else if (a === 'settings' && b === 'users') screen = <Users />
-  else if (a === 'settings' && b === 'categories') screen = <Placeholder title="Expense categories" />
+  else if (a === 'settings' && b === 'categories') screen = <ExpenseCategories />
   else if (a === 'settings') screen = <Settings />
   else screen = <Placeholder title="Not found" />
 
