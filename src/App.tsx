@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { NotifyPrompt } from './components/NotificationsCard'
 import { Screen, TabBar } from './components/Screen'
 import { Empty } from './components/ui'
 import { CompleteMatch } from './screens/CompleteMatch'
@@ -47,6 +48,17 @@ export default function App() {
     if (stray) navigate('/onboard', { replace: true })
   }, [stray])
 
+  // Tapping a notification while the app is open: the service worker posts the
+  // route to show (a closed app is simply opened at that URL).
+  useEffect(() => {
+    const onMessage = (ev: MessageEvent) => {
+      const url = (ev.data as { type?: string; url?: string } | null)?.type === 'open' ? (ev.data as { url?: string }).url : null
+      if (url && url.startsWith('#/')) navigate(url.slice(1))
+    }
+    navigator.serviceWorker?.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker?.removeEventListener('message', onMessage)
+  }, [])
+
   if (phase === 'boot') return <Splash />
   if (phase === 'error') return <BootError />
   if (phase === 'out') return <Onboard mode={a === 'setup' ? 'setup' : 'join'} />
@@ -78,6 +90,7 @@ export default function App() {
     <>
       {screen}
       {tabs && <TabBar />}
+      <NotifyPrompt />
     </>
   )
 }

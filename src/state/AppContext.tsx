@@ -8,6 +8,7 @@ import { CORE_PATHS, createBackend, openStore } from '../lib/connect'
 import { categoriesOf, configOf, credsOf, loadTeam, peopleOf, teamsOf } from '../lib/domain'
 import { describeRepoError } from '../lib/github'
 import { P } from '../lib/paths'
+import { disablePush } from '../lib/push'
 import { clearSession, forgetEverything, getPref, loadSession, saveSession, type Session } from '../lib/session'
 import type { Store, StoreStatus } from '../lib/store'
 import type { AppConfig, Credential, ExpenseCategory, FundEntry, FundsFile, Match, MatchesFile, MembersFile, Membership, Person, Team } from '../types'
@@ -200,6 +201,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     if (store) {
+      // This phone stops receiving notifications for the person logging out.
+      if (session) await disablePush(store, session.personId).catch(() => {})
       await store.flush().catch(() => false)
       await store.clear()
     }
@@ -209,7 +212,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSession(null)
     setNotice(null)
     setPhase('out')
-  }, [store])
+  }, [store, session])
 
   const switchNumber = useCallback(() => {
     clearSession()

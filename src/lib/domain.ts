@@ -599,7 +599,7 @@ export function submitExpenses(
   const result = computeSplit({ lines, payerIds: draft.payerIds, available: availableFor(s, teamId, matchId, draft.payerIds) })
   const previous = match.expense?.status === 'submitted' ? match.expense.shares : []
   const { shares: carried, reopened } = carrySettlements(result.shares, previous)
-  const shares = carried.map((sh) => (sh.settled && !sh.settledAt ? { ...sh, settledAt: now } : sh))
+  const shares = carried.map((sh) => (sh.settled && !sh.settledAt ? { ...sh, settledAt: todayISO() } : sh))
 
   // Replace this match's deductions (git history keeps the old ones).
   const entries = fundsOf(s, teamId)

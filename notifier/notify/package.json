@@ -1,0 +1,9 @@
+{
+  "name": "allaroundcricket-notifier",
+  "private": true,
+  "type": "module",
+  "description": "Sends Web Push notifications when match expenses are submitted. Runs in the data repo's GitHub Action.",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}
