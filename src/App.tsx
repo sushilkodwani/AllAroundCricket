@@ -2,8 +2,13 @@ import { useEffect } from 'react'
 import { Screen, TabBar } from './components/Screen'
 import { Empty } from './components/ui'
 import { BootError, NoAccess, PinGate, Splash, TokenGate } from './screens/Gates'
+import { MatchDetail } from './screens/MatchDetail'
+import { Matches } from './screens/Matches'
 import { Onboard } from './screens/Onboard'
 import { Settings } from './screens/Settings'
+import { SquadPicker } from './screens/SquadPicker'
+import { TeamDetail } from './screens/TeamDetail'
+import { Teams } from './screens/Teams'
 import { Users } from './screens/Users'
 import { useApp } from './state/AppContext'
 import { navigate, useRoute } from './state/router'
@@ -48,12 +53,15 @@ export default function App() {
 
   let screen: React.ReactNode
   let tabs = true
-  if (a === 'teams' && !b) screen = <Placeholder title="Teams" />
-  else if (a === 'teams' && b && !c) screen = <Placeholder title="Team" />
+  if (a === 'teams' && !b) screen = <Teams />
+  else if (a === 'teams' && b && !c) screen = <TeamDetail teamId={b} />
   else if (a === 'teams' && b && c === 'matches' && d) {
+    // Squad picker, complete and split are full-screen flows with their own footer.
     tabs = !e
-    screen = <Placeholder title="Match" />
-  } else if (a === 'matches') screen = <Placeholder title="Matches" />
+    if (!e) screen = <MatchDetail teamId={b} matchId={d} />
+    else if (e === 'squad') screen = <SquadPicker teamId={b} matchId={d} />
+    else screen = <Placeholder title="Match" />
+  } else if (a === 'matches') screen = <Matches />
   else if (a === 'funds') screen = <Placeholder title="Funds" />
   else if (a === 'settings' && b === 'users') screen = <Users />
   else if (a === 'settings' && b === 'categories') screen = <Placeholder title="Expense categories" />
