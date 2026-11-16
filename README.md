@@ -6,8 +6,6 @@ players see their teams read-only. No server and no hosting bill — the app is
 served from GitHub Pages and the data lives as JSON files in a **private**
 GitHub repo.
 
-The full design is in [PLAN.md](PLAN.md).
-
 ## Admin setup guide
 
 1. **Create a private repo for the data** (for example `cricket-data`). Leave it
