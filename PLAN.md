@@ -1526,3 +1526,14 @@ score on open and with a Refresh button; no photo gallery.
 Milestone banners, player of the
 match, push notifications for match start/result, a scorer role, two-innings
 matches, super over, pitch map.
+
+## 29. Other teams on the Teams tab (v0.9)
+
+- Teams tab: "My team(s)" cards first, then **Other teams** — every opponent in
+  `opponents.json`, with player count, matches and head-to-head. This replaces the
+  earlier rule that opponents never appear there. Opponents of older matches get a
+  record automatically (admin's phone).
+- `#/opponents/:id`: Players (admin can add with name + number, or remove),
+  Matches against them, Stats of their players from those matches; each player
+  opens the same stats screen as our own players.
+- Viewers see other teams too, built only from matches of teams they belong to.

@@ -79,7 +79,8 @@ const TABS: { path: string; icon: string; label: string }[] = [
 
 export function TabBar() {
   const route = useRoute()
-  const current = `/${route.segs[0] ?? 'teams'}`
+  // Opponent teams are reached from the Teams tab, so they light it up too.
+  const current = route.segs[0] === 'opponents' ? '/teams' : `/${route.segs[0] ?? 'teams'}`
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]" aria-label="Main">
       <div className="mx-auto flex max-w-2xl">

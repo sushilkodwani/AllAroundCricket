@@ -4,45 +4,52 @@ import { batAverage, batStrikeRate, bestBowling, bowlEconomy, bowlOvers, careerS
 import { P } from '../lib/paths'
 import { useApp, type TeamData } from '../state/AppContext'
 import { navigate } from '../state/router'
-import type { Match, ScoreFile, Team } from '../types'
+import type { Match, ScoreFile, SideKey, Team } from '../types'
 import { Empty } from './ui'
 
 /** Score files of a team's scored matches; each is loaded (cache first) the first time it is needed. */
-export function useTeamScores(teamId: string, matches: Match[]): { files: ScoreFile[]; scored: Match[]; ready: boolean } {
+export function useScores(matches: Match[]): { files: ScoreFile[]; scored: Match[]; ready: boolean } {
   const { store } = useApp()
+  const key = matches
+    .filter((m) => m.scoring && !m.cancelled)
+    .map((m) => P.scoring(m.teamId, m.id))
+    .join(',')
   const scored = useMemo(() => matches.filter((m) => m.scoring && !m.cancelled), [matches])
-  const key = scored.map((m) => m.id).join(',')
   useEffect(() => {
     if (!store) return
-    for (const id of key.split(',').filter(Boolean)) void store.load(P.scoring(teamId, id)).catch(() => {})
-  }, [store, teamId, key])
-  const paths = scored.map((m) => P.scoring(teamId, m.id))
+    for (const path of key.split(',').filter(Boolean)) void store.load(path).catch(() => {})
+  }, [store, key])
+  const paths = key.split(',').filter(Boolean)
   const files = store ? paths.map((p) => store.get<ScoreFile>(p)).filter((f): f is ScoreFile => !!f) : []
   return { files, scored, ready: !!store && paths.every((p) => store.has(p)) }
 }
 
-/** Our own players only: everyone who was in this team's XI in a scored match. */
-export function teamCareers(files: ScoreFile[]): Career[] {
-  const ours = new Set(files.flatMap((f) => f.home.xi))
-  return [...careerStats(files).values()].filter((c) => ours.has(c.id))
+/** One side's players only: everyone who was in that side's XI in these matches. */
+export function sideCareers(files: ScoreFile[], side: SideKey): Career[] {
+  const ids = new Set(files.flatMap((f) => f[side].xi))
+  return [...careerStats(files).values()].filter((c) => ids.has(c.id))
 }
 
 const Th = ({ children, left }: { children?: ReactNode; left?: boolean }) => <th className={`px-1.5 py-1.5 text-xs font-semibold text-muted ${left ? 'pl-3 text-left' : 'text-right'}`}>{children}</th>
 const Td = ({ children, strong }: { children?: ReactNode; strong?: boolean }) => <td className={`px-1.5 py-2.5 text-right ${strong ? 'font-bold' : ''}`}>{children}</td>
 
 export function StatsTab({ data }: { data: TeamData & { team: Team } }) {
-  const { personName } = useApp()
   const { team, matches } = data
-  const { files, scored, ready } = useTeamScores(team.id, matches)
+  return <StatsTables matches={matches} side="home" onOpen={(id) => navigate(`/teams/${team.id}/players/${id}`)} />
+}
+
+/** Leaderboards for one side (`home` = our team, `away` = the opponent) over the given matches. */
+export function StatsTables({ matches, side, onOpen: open }: { matches: Match[]; side: SideKey; onOpen: (personId: string) => void }) {
+  const { personName } = useApp()
+  const { files, scored, ready } = useScores(matches)
   // `files` is a new array each render; its content only changes with the store.
   const stamp = files.map((f) => f.updatedAt).join('|')
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const careers = useMemo(() => teamCareers(files), [stamp])
+  const careers = useMemo(() => sideCareers(files, side), [stamp, side])
 
   if (scored.length === 0) return <Empty icon="📊" title="No stats yet" text="Stats appear once a match has been scored ball by ball." />
   if (!ready) return <p className="p-10 text-center text-sm text-muted">Loading…</p>
 
-  const open = (id: string) => navigate(`/teams/${team.id}/players/${id}`)
   const name = (c: Career) => (
     <td className="max-w-0 py-2.5 pl-3 pr-1.5" style={{ width: '38%' }}>
       <span className="block truncate font-medium">{personName(c.id)}</span>

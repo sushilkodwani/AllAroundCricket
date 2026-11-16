@@ -2,13 +2,14 @@
 import { useMemo, type ReactNode } from 'react'
 import { GroundMap } from '../components/scoring'
 import { Screen } from '../components/Screen'
-import { useTeamScores } from '../components/StatsTab'
+import { useScores } from '../components/StatsTab'
 import { Avatar, Empty, Pill } from '../components/ui'
 import { batAverage, batStrikeRate, bestBowling, bowlAverage, bowlEconomy, bowlOvers, careerStats, highScore } from '../lib/career'
 import { fmtDayMonth } from '../lib/dates'
 import { oversText } from '../lib/scoring'
 import { useApp, useTeam } from '../state/AppContext'
 import { navigate } from '../state/router'
+import type { Match } from '../types'
 
 function Grid({ items }: { items: [string, ReactNode][] }) {
   return (
@@ -24,16 +25,20 @@ function Grid({ items }: { items: [string, ReactNode][] }) {
 }
 
 export function PlayerStats({ teamId, personId }: { teamId: string; personId: string }) {
-  const { people, personName } = useApp()
   const data = useTeam(teamId)
-  const { files, scored, ready } = useTeamScores(teamId, data.matches)
+  return <PlayerStatsView personId={personId} matches={data.matches} loading={!data.ready} back={`/teams/${teamId}?tab=stats`} teamName={data.team?.name ?? ''} color={data.team?.color} />
+}
+
+/** A player's record over any set of matches (one of our teams, or every match against an opponent). */
+export function PlayerStatsView({ personId, matches, loading, back, teamName, color }: { personId: string; matches: Match[]; loading?: boolean; back: string; teamName: string; color?: string }) {
+  const { people, personName } = useApp()
+  const { files, scored, ready } = useScores(matches)
   const stamp = files.map((f) => f.updatedAt).join('|')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const c = useMemo(() => careerStats(files).get(personId), [stamp, personId])
   const person = people.find((p) => p.id === personId)
-  const back = `/teams/${teamId}?tab=stats`
 
-  if (!data.ready || !ready) {
+  if (loading || !ready) {
     return (
       <Screen title={personName(personId)} back={back}>
         <p className="p-10 text-center text-sm text-muted">Loading…</p>
@@ -43,7 +48,7 @@ export function PlayerStats({ teamId, personId }: { teamId: string; personId: st
   if (!c) {
     return (
       <Screen title={personName(personId)} back={back}>
-        <Empty icon="📊" title="No stats yet" text="This player has not appeared in a scored match for this team." />
+        <Empty icon="📊" title="No stats yet" text="This player has not appeared in a scored match here." />
       </Screen>
     )
   }
@@ -58,11 +63,11 @@ export function PlayerStats({ teamId, personId }: { teamId: string; personId: st
     <Screen title={personName(personId)} back={back}>
       <div className="flex flex-col gap-4 p-4">
         <div className="flex items-center gap-3">
-          <Avatar name={personName(personId)} color={data.team?.color} size={52} />
+          <Avatar name={personName(personId)} color={color} size={52} />
           <div className="min-w-0">
             <p className="truncate text-lg font-bold">{personName(personId)}</p>
             <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted">
-              {data.team?.name} · {c.matches} match{c.matches === 1 ? '' : 'es'}
+              {teamName} · {c.matches} match{c.matches === 1 ? '' : 'es'}
               {person?.batsLeft && <Pill>Left-hand bat</Pill>}
             </p>
           </div>
@@ -154,7 +159,7 @@ export function PlayerStats({ teamId, personId }: { teamId: string; personId: st
           <h2 className="section-title">Match by match</h2>
           <div className="card divide-y divide-line overflow-hidden">
             {rows.map(({ l, m }) => (
-              <button key={l.matchId} className="row active:bg-alt" onClick={() => navigate(`/teams/${teamId}/matches/${l.matchId}/live?tab=scorecard`)}>
+              <button key={l.matchId} className="row active:bg-alt" onClick={() => navigate(`/teams/${m!.teamId}/matches/${l.matchId}/live?tab=scorecard`)}>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">vs {m!.opponent}</span>
                   <span className="block text-xs text-muted">{fmtDayMonth(m!.date)}</span>
