@@ -37,12 +37,14 @@ export interface Backup {
 
 /** Every data file except PIN hashes (auth/) and push subscriptions (push/). */
 export function backupPaths(s: Store): string[] {
-  return [P.config, P.categories, P.people, P.teams, ...teamsOf(s).flatMap((t) => teamPaths(t.id))]
+  const scoring = teamsOf(s).flatMap((t) => matchesOf(s, t.id).filter((m) => m.scoring).map((m) => P.scoring(t.id, m.id)))
+  return [P.config, P.categories, P.people, P.teams, P.opponents, ...teamsOf(s).flatMap((t) => teamPaths(t.id)), ...scoring]
 }
 
 export async function buildBackup(s: Store): Promise<Backup> {
   // Make sure every team's files are loaded before exporting.
   await Promise.all(teamsOf(s).map((t) => loadTeam(s, t.id)))
+  await Promise.all(backupPaths(s).map((p) => s.load(p).catch(() => null)))
   const files: Record<string, unknown> = {}
   for (const path of backupPaths(s)) {
     const data = s.get(path)
@@ -63,7 +65,7 @@ export function parseBackup(text: string): Backup {
 }
 
 const RESTORABLE = (path: string) =>
-  path === P.categories || path === P.people || path === P.teams || /^teams\/[^/]+\/(members|matches|funds)\.json$/.test(path)
+  path === P.categories || path === P.people || path === P.teams || path === P.opponents || /^teams\/[^/]+\/(members|matches|funds)\.json$/.test(path) || /^teams\/[^/]+\/scoring\/[^/]+\.json$/.test(path)
 
 /**
  * Replaces the current data with the backup's. The app config (admin, phone

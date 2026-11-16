@@ -46,6 +46,7 @@ export function MatchRow({ match, team, showTeam }: { match: Match; team?: Team;
         <span className="mt-1 flex flex-wrap items-center gap-1.5">
           <Pill>{MATCH_TYPE_LABELS[match.matchType]}</Pill>
           <span className="text-xs text-muted">{match.squad.length > 0 ? `${match.squad.length} in squad` : 'No squad yet'}</span>
+          {match.scoring === 'live' && <Pill tone="bad">LIVE</Pill>}
           <ResultChip result={match.result} />
           {showStatus && <StatusChip status={status} />}
           {playing && <span className="text-xs font-medium text-ok">You’re playing ✅</span>}

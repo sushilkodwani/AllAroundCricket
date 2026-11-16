@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { todayISO } from '../lib/dates'
-import { addMatch, editMatch, type MatchInput } from '../lib/domain'
+import { addMatch, editMatch, opponentsOf, type MatchInput } from '../lib/domain'
 import { useApp } from '../state/AppContext'
 import { MATCH_TYPE_LABELS, RESULT_LABELS, type Match, type MatchResult, type MatchType, type Team } from '../types'
 import { ChoiceChips, ErrorNote, Field, NumberInput, Sheet, SuggestInput } from './ui'
@@ -24,7 +24,10 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
   const [error, setError] = useState<string | null>(null)
 
   // Suggestions come from this team's earlier matches.
-  const opponents = useMemo(() => [...new Set(matches.map((m) => m.opponent))].sort(), [matches])
+  // …and from every saved opponent team, whose players are remembered for scoring.
+  const saved = store ? opponentsOf(store) : []
+  const savedKey = saved.map((o) => o.name).join('|')
+  const opponents = useMemo(() => [...new Set([...savedKey.split('|').filter(Boolean), ...matches.map((m) => m.opponent)])].sort(), [matches, savedKey])
   const venues = useMemo(() => [...new Set([team.homeGround, ...matches.map((m) => m.venue)].filter((v): v is string => !!v))].sort(), [matches, team.homeGround])
   const isPast = date <= todayISO()
 
@@ -68,7 +71,7 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
             <input className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           </Field>
         </div>
-        <Field label="Opponent">
+        <Field label="Opponent" hint="Pick a saved opponent to reuse its players, or type a new name.">
           <SuggestInput value={opponent} onChange={setOpponent} suggestions={opponents} placeholder="e.g. Lions" autoFocus={!match} />
         </Field>
         <Field label="Venue (optional)">
@@ -78,7 +81,7 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
           <span className="label">Type</span>
           <ChoiceChips options={TYPES} value={matchType} onChange={setMatchType} />
         </div>
-        <Field label="Overs (optional)">
+        <Field label="Overs per innings" hint="Needed for live scoring; can be set later.">
           <NumberInput value={overs} onChange={setOvers} maxLength={3} placeholder="20" ariaLabel="Overs" />
         </Field>
         <Field label="Notes (optional)">

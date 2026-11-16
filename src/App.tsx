@@ -10,6 +10,9 @@ import { SplitExpenses } from './screens/SplitExpenses'
 import { MatchDetail } from './screens/MatchDetail'
 import { Matches } from './screens/Matches'
 import { Onboard } from './screens/Onboard'
+import { ScoreMatch } from './screens/ScoreMatch'
+import { ScoreView } from './screens/ScoreView'
+import { ScoringSetup } from './screens/ScoringSetup'
 import { Settings } from './screens/Settings'
 import { SquadPicker } from './screens/SquadPicker'
 import { TeamDetail } from './screens/TeamDetail'
@@ -78,6 +81,9 @@ export default function App() {
     else if (e === 'squad') screen = <SquadPicker teamId={b} matchId={d} />
     else if (e === 'complete') screen = <CompleteMatch teamId={b} matchId={d} />
     else if (e === 'expenses') screen = <SplitExpenses teamId={b} matchId={d} />
+    else if (e === 'setup') screen = <ScoringSetup teamId={b} matchId={d} />
+    else if (e === 'score') screen = <ScoreMatch teamId={b} matchId={d} />
+    else if (e === 'live') screen = <ScoreView teamId={b} matchId={d} />
     else screen = <Placeholder title="Not found" />
   } else if (a === 'matches') screen = <Matches />
   else if (a === 'funds') screen = <Funds />

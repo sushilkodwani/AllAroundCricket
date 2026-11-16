@@ -37,6 +37,8 @@ export interface Person {
    * log in / which teams do they see" from people.json alone.
    */
   teamIds: string[]
+  /** Left-handed batter — used to name shot directions (PLAN §26). */
+  batsLeft?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -167,6 +169,10 @@ export interface Match {
   expense?: MatchExpense
   noExpenseSplit?: boolean
   completedAt?: string
+  /** Opponent record in opponents.json (PLAN §23). */
+  opponentId?: string
+  /** Set while / after the match is scored ball by ball (PLAN §24). */
+  scoring?: 'live' | 'finished'
   createdAt: string
   updatedAt: string
 }
@@ -225,6 +231,130 @@ export interface PushSubscriptionRecord {
 export interface SubscriptionsFile {
   schemaVersion: 1
   subscriptions: PushSubscriptionRecord[]
+}
+
+// ---------- opponents.json (PLAN §23) ----------
+/** A team we play against. Kept for reuse; never shown in the Teams tab. */
+export interface Opponent {
+  id: string
+  name: string
+  shortName: string
+  /** People who have played for this opponent (records in people.json, no login). */
+  playerIds: string[]
+  createdAt: string
+  updatedAt: string
+}
+export interface OpponentsFile {
+  schemaVersion: 1
+  opponents: Opponent[]
+}
+
+// ---------- teams/<id>/scoring/<matchId>.json (PLAN §24) ----------
+export type SideKey = 'home' | 'away'
+export interface ScoreSide {
+  name: string
+  shortName: string
+  xi: string[]
+  captainId?: string
+  keeperId?: string
+}
+export type DeliveryKind = 'legal' | 'wd' | 'nb'
+export type WicketKind =
+  | 'bowled'
+  | 'caught'
+  | 'caught_behind'
+  | 'caught_bowled'
+  | 'lbw'
+  | 'stumped'
+  | 'run_out'
+  | 'hit_wicket'
+  | 'obstructing'
+  | 'retired_out'
+  | 'timed_out'
+
+/** Who is in the middle right now. A missing value means "to be picked". */
+export interface Crease {
+  striker?: string
+  nonStriker?: string
+  bowler?: string
+}
+
+export interface BallEvent {
+  t: 'ball'
+  id: string
+  striker: string
+  nonStriker: string
+  bowler: string
+  kind: DeliveryKind
+  /** Runs off the bat (always 0 on a wide). */
+  bat: number
+  /** Runs run / boundary as byes or leg-byes; on a wide, the extra wides run. */
+  byes: number
+  byeType?: 'b' | 'lb'
+  wicket?: { kind: WicketKind; who: string; fielder?: string }
+  /** Where a boundary went: point on the ground, unit circle, centre = 0,0, y down. */
+  shot?: [number, number]
+  at: string
+}
+/** A batter walks off between balls (hurt = may return; out = dismissed). */
+export interface RetireEvent {
+  t: 'retire'
+  id: string
+  who: string
+  out: boolean
+  crease: Crease
+  at: string
+}
+export interface PenaltyEvent {
+  t: 'penalty'
+  id: string
+  runs: number
+  to: 'batting' | 'fielding'
+  crease: Crease
+  at: string
+}
+export type ScoreEvent = BallEvent | RetireEvent | PenaltyEvent
+
+export interface Innings {
+  batting: SideKey
+  /** Overs limit of this innings (can be reduced, e.g. for rain). */
+  overs: number
+  /** Second innings only. */
+  target?: number
+  targetRevised?: boolean
+  events: ScoreEvent[]
+  crease: Crease
+  closed?: 'all_out' | 'overs' | 'target' | 'ended'
+}
+
+export interface ScoreFile {
+  schemaVersion: 1
+  matchId: string
+  teamId: string
+  overs: number
+  home: ScoreSide
+  away: ScoreSide
+  opponentId?: string
+  toss: { wonBy: SideKey; chose: 'bat' | 'bowl' }
+  innings: Innings[]
+  status: 'live' | 'break' | 'finished'
+  result?: { winner?: SideKey; text: string }
+  startedAt: string
+  updatedAt: string
+}
+
+export const WICKET_LABELS: Record<WicketKind, string> = {
+  bowled: 'Bowled',
+  caught: 'Caught',
+  caught_behind: 'Caught behind',
+  caught_bowled: 'Caught & bowled',
+  lbw: 'LBW',
+  stumped: 'Stumped',
+  run_out: 'Run out',
+  hit_wicket: 'Hit wicket',
+  obstructing: 'Obstructing the field',
+  retired_out: 'Retired out',
+  timed_out: 'Timed out',
 }
 
 // ---------- labels ----------

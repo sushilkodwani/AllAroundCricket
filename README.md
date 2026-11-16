@@ -35,6 +35,14 @@ The full design is in [PLAN.md](PLAN.md).
 Each player onboards once per phone with the repo, the token and their number,
 then sets their own PIN. Later onboardings with that number ask for the PIN.
 
+## Live scoring
+
+On a match, the admin taps **Start live scoring**, picks both playing XIs
+(opponent players need a name and mobile number and are remembered), records the
+toss and scores ball by ball. Everyone else opens **View scorecard** for the live
+score, scorecard, commentary and charts. The score is fetched when the screen
+opens and when the viewer taps ⟳ — the app does not poll.
+
 ## Security in plain words
 
 - Everyone uses one shared token that can write. **View-only is enforced by the
@@ -83,6 +91,8 @@ artwork).
 | Every data change | `src/lib/domain.ts` |
 | Onboarding, setup, PINs | `src/lib/connect.ts`, `pin.ts`, `phone.ts` |
 | Expense split and fund maths | `src/lib/split.ts`, `funds.ts`, `stats.ts` |
+| Live scoring rules (ball-by-ball engine) | `src/lib/scoring.ts`, `scoreDomain.ts` |
+| Scorecard, commentary and chart data | `src/lib/scorecard.ts`, `src/components/charts.tsx` |
 | Screens | `src/screens/` |
 | Service worker (network-first pages, push) | `public/sw.js` |
 | Notification sender for the data repo | `notifier/` |

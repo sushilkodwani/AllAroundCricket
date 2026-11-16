@@ -87,7 +87,7 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
               <Pill>{MATCH_TYPE_LABELS[match.matchType]}</Pill>
               {match.overs && <Pill>{match.overs} overs</Pill>}
             </p>
-            {(match.result || match.ourScore || match.theirScore) && status !== 'upcoming' && (
+            {(match.result || match.ourScore || match.theirScore) && (status !== 'upcoming' || match.scoring === 'finished') && (
               <div className="flex flex-wrap items-center gap-2 border-t border-line pt-2 text-sm">
                 <ResultChip result={match.result} />
                 {match.ourScore && (
@@ -114,6 +114,35 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
               {match.expense?.status === 'draft' ? 'Continue: complete match' : 'Mark complete'}
             </button>
             {!canMarkComplete(match) && <p className="mt-1 text-center text-xs text-muted">Available from {fmtDayMonth(match.date)}</p>}
+          </div>
+        )}
+
+        {!match.cancelled && (match.scoring || isAdmin) && (
+          <div className="card flex flex-col gap-3 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-semibold">Ball-by-ball score</h2>
+              {match.scoring === 'live' && <Pill tone="bad">LIVE</Pill>}
+              {match.scoring === 'finished' && <Pill tone="ok">Final</Pill>}
+            </div>
+            {match.scoring ? (
+              <div className="flex gap-2">
+                <button className="btn-primary flex-1" onClick={() => navigate(`${base}/live`)}>
+                  View scorecard
+                </button>
+                {isAdmin && (
+                  <button className="btn-secondary flex-1" onClick={() => navigate(`${base}/score`)}>
+                    {match.scoring === 'live' ? 'Continue scoring' : 'Open scoring'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-muted">Score the match ball by ball. Players can follow the scorecard, commentary and charts.</p>
+                <button className="btn-secondary" onClick={() => navigate(`${base}/setup`)}>
+                  🏏 Start live scoring
+                </button>
+              </>
+            )}
           </div>
         )}
 

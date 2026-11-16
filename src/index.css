@@ -19,6 +19,12 @@
   --warning: 180 83 9;
   --header-bg: 155 28 31;
   --header-fg: 255 255 255;
+  /* Chart series (PLAN §26): our team = blue, opponent = orange, in every chart. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --grid: #e1e0d9;
+  --turf: #e3f1e3;
+  --pitch: #d9c9a3;
 }
 
 .dark {
@@ -34,6 +40,11 @@
   --warning: 251 191 36;
   --header-bg: 0 0 0;
   --header-fg: 255 255 255;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --grid: #2c2c2a;
+  --turf: #14261a;
+  --pitch: #5c5238;
   color-scheme: dark;
 }
 

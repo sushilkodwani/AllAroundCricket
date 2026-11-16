@@ -1436,3 +1436,81 @@ your share and anything you owe.
 4. Match reopened and re-submitted → treated as an update (§22.1).
 5. A device's subscription expired → removed by the notifier; the app re-subscribes
    silently on next launch if permission is still granted.
+
+---
+
+# Part 3 — Live scoring & analysis (v0.8)
+
+Answers from the product owner: limited overs only (overs chosen when scheduling);
+the admin scores and hands the phone over when batting (no scorer role); opponent
+players need a name **and** a mobile number; boundary direction is asked for fours
+and sixes only; standard professional rules; **no polling** — viewers fetch the
+score on open and with a Refresh button; no photo gallery.
+
+## 23. Opponent teams
+
+- `opponents.json`: `{ id, name, shortName, playerIds[] }`. Never shown in the Teams
+  tab. Created the first time an opponent name is used on a match; the match keeps
+  `opponentId`. The match form suggests saved opponents.
+- Opponent players are records in `people.json` with `access: 'none'` (no login).
+  Adding one needs name + 10-digit number; the number is hashed like every other
+  number. If the hash already exists, that person is reused and the app says
+  "Already in the app: <name>".
+- The same "add player" sheet is available during the match (late arrivals).
+
+## 24. Scoring data
+
+- One file per match: `teams/<teamId>/scoring/<matchId>.json` (`ScoreFile` in
+  `types.ts`). It holds both XIs, the toss, and per innings an ordered list of
+  events: `ball`, `retire`, `penalty`. **Only events are stored**; totals, the
+  scorecard and every chart are calculated from them.
+- `matches.json` is written only when scoring starts (`scoring: 'live'`) and when
+  the match finishes (`scoring: 'finished'`, result and both score lines). It is
+  never written per ball, because the notifier Action watches that file.
+- Setup screen `#/teams/:t/matches/:m/setup`: overs, our playing XI (squad
+  pre-ticked), opponent XI, toss winner and choice. At least 2 players a side;
+  nobody in both XIs.
+
+## 25. Scoring rules (`lib/scoring.ts`, unit-tested)
+
+- Six legal balls an over. Wides and no-balls add 1 and are re-bowled.
+- Wide: 1 + runs run, all wides, charged to the bowler, not a ball faced.
+  No-ball: 1 to the bowler plus runs off the bat (to batter and bowler) or
+  byes/leg-byes (extras, not the bowler). Byes and leg-byes are never the bowler's.
+- Strike swaps on odd runs and at the end of an over. After a catch the new batter
+  takes strike (unless the over ended).
+- Free hit after a no-ball; it carries over a wide or another no-ball. On a no-ball
+  or free hit only run out / obstructing are allowed; on a wide also stumped and
+  hit wicket.
+- Bowler's wickets: bowled, caught, caught behind, caught & bowled, lbw, stumped,
+  hit wicket. A bowler cannot bowl consecutive overs (enforced); the one-fifth
+  quota is a warning only.
+- Retired hurt is not a wicket and the batter may return; retired out is a wicket.
+- Penalty runs to either side. Overs can be changed mid-innings and the target
+  revised.
+- Innings ends: all out (one batter left), overs done, target reached, or ended by
+  hand. Result: chasing side wins by wickets, defending side by runs, equal = tie.
+- Undo removes the last event and restores batters and bowler; it works back
+  through the innings break and a finished match. Tapping a ball corrects its runs
+  or direction; changing a wicket or a wide/no-ball is done with Undo.
+- Scoring pad `#/…/score` (admin): 0–3, 4, 6, "5, 7…", Wide, No ball, Bye, Leg bye,
+  Wicket, Undo, swap strike. Pickers for next batter and next bowler open by
+  themselves. The screen stays awake.
+
+## 26. Viewing (`#/…/live`, everyone)
+
+- Tabs: Live, Scorecard, Commentary, Analysis, Teams. Header has Refresh and Share
+  (text summary for WhatsApp).
+- Analysis: runs per over, score progression, run rate (both innings together);
+  per innings: runs by shot size, wickets by type, partnerships, wagon wheel of
+  fours and sixes (all or per batter).
+- Chart colours: our team blue, opponent orange, in every chart; legend always
+  shown; values readable by tapping an over. The scorecard is the table view.
+- Ground map: bowler's end at the bottom; off side on the left for a right-hander.
+  `Person.batsLeft` mirrors the region names.
+
+## 27. Not built yet [LATER]
+
+Career statistics across matches, leaderboards, milestone banners, player of the
+match, push notifications for match start/result, a scorer role, two-innings
+matches, super over, pitch map.

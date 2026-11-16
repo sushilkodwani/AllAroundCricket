@@ -19,6 +19,8 @@ import type {
   MatchType,
   MembersFile,
   Membership,
+  Opponent,
+  OpponentsFile,
   PayMethod,
   PeopleFile,
   Person,
@@ -399,7 +401,7 @@ function cleanMatchInput(input: MatchInput): MatchInput {
   }
 }
 
-function patchMatch(s: Store, teamId: string, matchId: string, fn: (m: Match) => Match, msg: string): Match {
+export function patchMatch(s: Store, teamId: string, matchId: string, fn: (m: Match) => Match, msg: string): Match {
   let out: Match | undefined
   const matches = matchesOf(s, teamId).map((m) => {
     if (m.id !== matchId) return m
@@ -414,10 +416,62 @@ function patchMatch(s: Store, teamId: string, matchId: string, fn: (m: Match) =>
 
 export const getMatch = (s: Store, teamId: string, matchId: string) => matchesOf(s, teamId).find((m) => m.id === matchId)
 
+// ---------- opponents (PLAN §23) ----------
+export const opponentsOf = (s: Store) => s.get<OpponentsFile>(P.opponents)?.opponents ?? []
+const putOpponents = (s: Store, opponents: Opponent[], msg: string) => s.write(P.opponents, { schemaVersion: 1, opponents }, msg)
+
+/** The opponent record with this name (any letter case), created the first time the name is used. */
+export function ensureOpponent(s: Store, rawName: string): Opponent {
+  const name = rawName.trim().replace(/\s+/g, ' ').slice(0, 60)
+  const all = opponentsOf(s)
+  const found = all.find((o) => o.name.toLowerCase() === name.toLowerCase())
+  if (found) return found
+  const now = nowStamp()
+  const opp: Opponent = { id: uuid(), name, shortName: shortNameFor(name), playerIds: [], createdAt: now, updatedAt: now }
+  putOpponents(s, [...all, opp], `Add opponent ${name}`)
+  return opp
+}
+
+export function addOpponentPlayers(s: Store, opponentId: string, personIds: string[]): void {
+  const all = opponentsOf(s)
+  const opp = all.find((o) => o.id === opponentId)
+  if (!opp) return
+  const fresh = personIds.filter((id) => !opp.playerIds.includes(id))
+  if (fresh.length === 0) return
+  putOpponents(s, all.map((o) => (o.id === opponentId ? { ...o, playerIds: [...o.playerIds, ...fresh], updatedAt: nowStamp() } : o)), `Add players to ${opp.name}`)
+}
+
+export function removeOpponentPlayer(s: Store, opponentId: string, personId: string): void {
+  const all = opponentsOf(s)
+  putOpponents(s, all.map((o) => (o.id === opponentId ? { ...o, playerIds: o.playerIds.filter((id) => id !== personId), updatedAt: nowStamp() } : o)), 'Remove opponent player')
+}
+
+/**
+ * A player for scoring: name and number are both required. If the number is
+ * already known, that person is reused (`existed`); otherwise a record without
+ * app access is created.
+ */
+export async function findOrCreatePlayer(s: Store, name: string, phone: string): Promise<{ person: Person; existed: boolean }> {
+  const config = configOf(s)
+  if (!config) throw new Error('App data is not loaded yet.')
+  const phoneHash = await hashPhone(phone, config.phoneSalt)
+  const existing = peopleOf(s).find((p) => p.phoneHash === phoneHash)
+  if (existing) return { person: existing, existed: true }
+  const now = nowStamp()
+  const person: Person = { id: uuid(), name: requireName(name), phoneHash, phoneLast4: last4(phone), access: 'none', isGuest: true, teamIds: [], createdAt: now, updatedAt: now }
+  putPeople(s, [...peopleOf(s), person], `Add player ${person.name}`)
+  return { person, existed: false }
+}
+
+export function setBatsLeft(s: Store, personId: string, batsLeft: boolean): void {
+  patchPerson(s, personId, { batsLeft: batsLeft || undefined }, `Set batting hand for ${personName(s, personId)}`)
+}
+
 export function addMatch(s: Store, teamId: string, input: MatchInput): Match {
   const clean = cleanMatchInput(input)
   const now = nowStamp()
-  const match: Match = { id: uuid(), teamId, ...clean, squad: [], cancelled: false, lifecycle: 'scheduled', createdAt: now, updatedAt: now }
+  const opponentId = s.has(P.opponents) ? ensureOpponent(s, clean.opponent).id : undefined
+  const match: Match = { id: uuid(), teamId, ...clean, opponentId, squad: [], cancelled: false, lifecycle: 'scheduled', createdAt: now, updatedAt: now }
   putMatches(s, teamId, [...matchesOf(s, teamId), match], `Add match vs ${match.opponent} on ${match.date}`)
   recomputeTeam(s, teamId)
   return match
@@ -425,7 +479,8 @@ export function addMatch(s: Store, teamId: string, input: MatchInput): Match {
 
 export function editMatch(s: Store, teamId: string, matchId: string, input: MatchInput): Match {
   const clean = cleanMatchInput(input)
-  return patchMatch(s, teamId, matchId, (m) => ({ ...m, ...clean }), `Edit match vs ${clean.opponent} on ${clean.date}`)
+  const opponentId = s.has(P.opponents) ? ensureOpponent(s, clean.opponent).id : undefined
+  return patchMatch(s, teamId, matchId, (m) => ({ ...m, ...clean, opponentId: opponentId ?? m.opponentId }), `Edit match vs ${clean.opponent} on ${clean.date}`)
 }
 
 export function recordResult(s: Store, teamId: string, matchId: string, r: { result?: MatchResult; ourScore?: string; theirScore?: string }): Match {
