@@ -3,6 +3,7 @@ import { MatchRow } from '../components/match'
 import { MatchForm } from '../components/MatchForm'
 import { PlayersTab } from '../components/PlayersTab'
 import { HeaderButton, Screen } from '../components/Screen'
+import { StatsTab } from '../components/StatsTab'
 import { TeamSheet } from '../components/TeamSheet'
 import { Confirm, Empty, ErrorNote, Segmented, Sheet } from '../components/ui'
 import { deleteTeam, setTeamArchived } from '../lib/domain'
@@ -11,7 +12,7 @@ import { useApp, useTeam, type TeamData } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
 import type { Team } from '../types'
 
-type Tab = 'players' | 'matches'
+type Tab = 'players' | 'matches' | 'stats'
 
 export function TeamDetail({ teamId }: { teamId: string }) {
   const { isAdmin, teams, store, toast } = useApp()
@@ -21,7 +22,8 @@ export function TeamDetail({ teamId }: { teamId: string }) {
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const tab: Tab = route.query.get('tab') === 'matches' ? 'matches' : 'players'
+  const q = route.query.get('tab')
+  const tab: Tab = q === 'matches' || q === 'stats' ? q : 'players'
 
   const team = teams.find((t) => t.id === teamId)
   if (!team) {
@@ -52,11 +54,12 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           options={[
             { value: 'players', label: `Players (${data.members.filter((m) => m.status === 'active').length})` },
             { value: 'matches', label: `Matches (${data.matches.filter((m) => !m.cancelled).length})` },
+            { value: 'stats', label: 'Stats' },
           ]}
         />
       </div>
 
-      {!data.ready ? <p className="p-10 text-center text-sm text-muted">Loading…</p> : tab === 'players' ? <PlayersTab data={full} /> : <MatchesTab data={full} />}
+      {!data.ready ? <p className="p-10 text-center text-sm text-muted">Loading…</p> : tab === 'players' ? <PlayersTab data={full} /> : tab === 'stats' ? <StatsTab data={full} /> : <MatchesTab data={full} />}
 
       {sheet.name === 'teammenu' && isAdmin && (
         <Sheet title={team.name} onClose={sheet.close}>

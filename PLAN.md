@@ -1509,8 +1509,20 @@ score on open and with a Refresh button; no photo gallery.
 - Ground map: bowler's end at the bottom; off side on the left for a right-hander.
   `Person.batsLeft` mirrors the region names.
 
+## 28. Career stats (`lib/career.ts`, unit-tested)
+
+- Team → **Stats** tab: most runs / wickets / sixes, then batting, bowling and
+  fielding tables for the team's own players, from every scored match of that team.
+- Player screen `#/teams/:t/players/:p`: full batting, bowling and fielding record,
+  career wagon wheel, and a match-by-match list linking to each scorecard.
+- Nothing is stored: figures are recalculated from the score files, which are
+  loaded once when the tab opens (cached afterwards).
+- Rules: an innings counts once the batter came to the crease; retired hurt is not
+  out; average = runs ÷ dismissals ("–" if never out); a duck needs a dismissal;
+  best bowling = most wickets, then fewest runs.
+
 ## 27. Not built yet [LATER]
 
-Career statistics across matches, leaderboards, milestone banners, player of the
+Milestone banners, player of the
 match, push notifications for match start/result, a scorer role, two-innings
 matches, super over, pitch map.
