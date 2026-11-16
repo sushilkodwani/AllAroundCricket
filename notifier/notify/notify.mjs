@@ -12,16 +12,23 @@
 //
 // Env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (mailto:… or https://…)
 // Optional: TEST_MESSAGE (manual test run → everyone), DRY_RUN=1 (print instead
-//           of sending/committing), BEFORE_SHA (fallback start of the range).
+//           of sending/committing), BEFORE_SHA (fallback start of the range),
+//           MODE=reminders (the daily scheduled run: tomorrow's matches),
+//           TZ_OFFSET_MINUTES (default 330 = India) for what "tomorrow" means.
+//
+// It also sends the payment reminders the admin asks for in the app: new
+// entries in push/outbox.json (PLAN §37).
 
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { buildMessage, expenseEvents, recipients, topicFor } from './diff.mjs'
+import { buildMessage, duesMessage, expenseEvents, matchReminders, newOutbox, recipients, reminderMessage, tomorrowIn, topicFor } from './diff.mjs'
 
 const DRY_RUN = process.env.DRY_RUN === '1'
 const SUBS_PATH = 'push/subscriptions.json'
 const STATE_PATH = 'push/state.json'
+const OUTBOX_PATH = 'push/outbox.json'
+const REMINDERS = process.env.MODE === 'reminders'
 const TTL_SECONDS = 24 * 60 * 60
 
 // ---------- git + file helpers ----------
@@ -97,6 +104,7 @@ const subscriptions = subsFile.subscriptions ?? []
 const send = await sender()
 const gone = new Set()
 let sent = 0
+let remindedFor = null
 
 if (process.env.TEST_MESSAGE) {
   // Manual run (workflow_dispatch): one test message to every subscription.
@@ -104,6 +112,27 @@ if (process.env.TEST_MESSAGE) {
     const result = await send(sub, { title: 'AllAroundCricket', body: process.env.TEST_MESSAGE, tag: 'test', url: '#/teams' })
     if (result === 'gone') gone.add(sub.endpoint)
     if (result === 'ok') sent++
+  }
+} else if (REMINDERS) {
+  // Daily run: one reminder per match played tomorrow. `remindedFor` stops a re-run from sending twice.
+  const state = readJson(STATE_PATH, {})
+  const date = tomorrowIn(new Date(), Number(process.env.TZ_OFFSET_MINUTES ?? 330))
+  if (state.remindedFor !== date) {
+    const people = readJson('people.json', { people: [] }).people ?? []
+    const credentials = readJson('auth/credentials.json', { credentials: [] }).credentials ?? []
+    for (const team of readJson('teams.json', { teams: [] }).teams ?? []) {
+      if (team.archived) continue
+      const matches = readJson(`teams/${team.id}/matches.json`, { matches: [] }).matches
+      const members = readJson(`teams/${team.id}/members.json`, { members: [] }).members
+      for (const event of matchReminders(matches, members, date)) {
+        for (const sub of recipients(event, { people, credentials, subscriptions, actorId: null })) {
+          const result = await send(sub, reminderMessage(event, { team, person: people.find((p) => p.id === sub.personId) }), topicFor(event.match.id))
+          if (result === 'gone') gone.add(sub.endpoint)
+          if (result === 'ok') sent++
+        }
+      }
+    }
+    remindedFor = date
   }
 } else {
   const state = readJson(STATE_PATH, {})
@@ -135,6 +164,19 @@ if (process.env.TEST_MESSAGE) {
         }
       }
     }
+
+    // Payment reminders the admin asked for since the last run.
+    for (const request of newOutbox(jsonAt(from, OUTBOX_PATH)?.messages, readJson(OUTBOX_PATH, { messages: [] }).messages)) {
+      const team = teams.find((t) => t.id === request.teamId)
+      const matches = readJson(`teams/${request.teamId}/matches.json`, { matches: [] }).matches
+      for (const sub of recipients({ personIds: request.personIds ?? [] }, { people, credentials, subscriptions, actorId: null })) {
+        const payload = duesMessage(matches, sub.personId, { team })
+        if (!payload) continue // paid in the meantime
+        const result = await send(sub, payload, topicFor(`dues${request.teamId}`))
+        if (result === 'gone') gone.add(sub.endpoint)
+        if (result === 'ok') sent++
+      }
+    }
   }
 }
 
@@ -142,7 +184,11 @@ console.log(`Sent ${sent} notification(s); ${gone.size} expired subscription(s).
 
 if (!DRY_RUN) {
   if (gone.size) writeJson(SUBS_PATH, { ...subsFile, subscriptions: subscriptions.filter((s) => !gone.has(s.endpoint)) })
-  if (!process.env.TEST_MESSAGE) writeJson(STATE_PATH, { lastCommit: head, updatedAt: new Date().toISOString() })
+  if (!process.env.TEST_MESSAGE) {
+    const state = readJson(STATE_PATH, {})
+    // The daily run only records the day it reminded for; the commit marker belongs to push runs.
+    writeJson(STATE_PATH, REMINDERS ? { ...state, remindedFor: remindedFor ?? state.remindedFor } : { ...state, lastCommit: head, updatedAt: new Date().toISOString() })
+  }
   git('add', 'push')
   if (tryGit('diff', '--cached', '--quiet') === null) {
     git('-c', 'user.name=AllAroundCricket notifier', '-c', 'user.email=notifier@users.noreply.github.com', 'commit', '-m', 'Notifier: update marker [skip ci]')

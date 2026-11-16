@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { todayISO } from '../lib/dates'
 import { addMatch, editMatch, opponentsOf, type MatchInput } from '../lib/domain'
+import { enrolMatchTeams, tournamentsOf } from '../lib/tournament'
 import { useApp } from '../state/AppContext'
 import { MATCH_TYPE_LABELS, RESULT_LABELS, type Match, type MatchResult, type MatchType, type Team } from '../types'
 import { ChoiceChips, ErrorNote, Field, NumberInput, Sheet, SuggestInput } from './ui'
@@ -21,7 +22,9 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
   const [result, setResult] = useState<MatchResult | undefined>(match?.result)
   const [ourScore, setOurScore] = useState(match?.ourScore ?? '')
   const [theirScore, setTheirScore] = useState(match?.theirScore ?? '')
+  const [tournamentId, setTournamentId] = useState(match?.tournamentId ?? '')
   const [error, setError] = useState<string | null>(null)
+  const tournaments = (store ? tournamentsOf(store) : []).filter((t) => !t.archived || t.id === match?.tournamentId)
 
   // Suggestions come from this team's earlier matches.
   // …and from every saved opponent team, whose players are remembered for scoring.
@@ -45,9 +48,12 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
       result,
       ourScore,
       theirScore,
+      tournamentId,
     }
     try {
       const saved = match ? editMatch(store, team.id, match.id, input) : addMatch(store, team.id, input)
+      // Both sides join the tournament's points table.
+      if (saved.tournamentId) enrolMatchTeams(store, saved.tournamentId, saved, team.name)
       onSaved(saved, !match)
     } catch (e) {
       setError((e as Error).message)
@@ -81,6 +87,12 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
           <span className="label">Type</span>
           <ChoiceChips options={TYPES} value={matchType} onChange={setMatchType} />
         </div>
+        {tournaments.length > 0 && (
+          <div>
+            <span className="label">Tournament (optional)</span>
+            <ChoiceChips options={[{ value: '', label: 'None' }, ...tournaments.map((t) => ({ value: t.id, label: t.name }))]} value={tournamentId} onChange={setTournamentId} />
+          </div>
+        )}
         <Field label="Overs per innings" hint="Needed for live scoring; can be set later.">
           <NumberInput value={overs} onChange={setOvers} maxLength={3} placeholder="20" ariaLabel="Overs" />
         </Field>

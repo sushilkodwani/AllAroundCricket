@@ -173,6 +173,10 @@ export interface Match {
   opponentId?: string
   /** Set while / after the match is scored ball by ball (PLAN §24). */
   scoring?: 'live' | 'finished'
+  /** A player the admin lets score this one match (PLAN §31). */
+  scorerId?: string
+  /** Tournament / season this match counts towards (PLAN §35). */
+  tournamentId?: string
   createdAt: string
   updatedAt: string
 }
@@ -339,8 +343,84 @@ export interface ScoreFile {
   innings: Innings[]
   status: 'live' | 'break' | 'finished'
   result?: { winner?: SideKey; text: string }
+  /** Confirmed by the admin after the match (PLAN §33). */
+  awards?: MatchAwards
   startedAt: string
   updatedAt: string
+}
+
+export interface MatchAwards {
+  potm?: string
+  batter?: string
+  bowler?: string
+}
+
+// ---------- teams/<id>/availability.json (PLAN §30) ----------
+export type AvailabilityStatus = 'in' | 'out' | 'maybe'
+export interface AvailabilityEntry {
+  /** `${matchId}:${personId}` */
+  id: string
+  matchId: string
+  personId: string
+  status: AvailabilityStatus
+  updatedAt: string
+}
+export interface AvailabilityFile {
+  schemaVersion: 1
+  entries: AvailabilityEntry[]
+}
+
+// ---------- tournaments.json (PLAN §35) ----------
+export interface TournamentTeam {
+  id: string
+  name: string
+  /** One of our teams… */
+  teamId?: string
+  /** …or an opponent from opponents.json. Neither = a team we never play. */
+  opponentId?: string
+}
+/** A result between two other teams, typed in by hand so the table is complete. */
+export interface OtherResult {
+  id: string
+  a: string
+  b: string
+  aRuns: number
+  /** Balls faced; the full quota when the side was all out. */
+  aBalls: number
+  bRuns: number
+  bBalls: number
+  outcome: 'a' | 'b' | 'tie' | 'nr'
+  date?: string
+  createdAt: string
+  updatedAt: string
+}
+export interface Tournament {
+  id: string
+  name: string
+  points: { win: number; tie: number; nr: number }
+  teams: TournamentTeam[]
+  otherResults: OtherResult[]
+  archived: boolean
+  createdAt: string
+  updatedAt: string
+}
+export interface TournamentsFile {
+  schemaVersion: 1
+  tournaments: Tournament[]
+}
+
+// ---------- push/outbox.json (PLAN §37) ----------
+/** A notification the admin asked for; the notifier Action sends it. */
+export interface OutboxMessage {
+  id: string
+  kind: 'dues'
+  teamId: string
+  personIds: string[]
+  createdAt: string
+}
+export interface OutboxFile {
+  schemaVersion: 1
+  messages: OutboxMessage[]
 }
 
 export const WICKET_LABELS: Record<WicketKind, string> = {

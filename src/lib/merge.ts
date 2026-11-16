@@ -62,6 +62,9 @@ export function listSpecFor(path: string): ListSpec | null {
   if (path === 'teams.json') return { key: 'teams', id: 'id' }
   if (path === 'config/expense-categories.json') return { key: 'categories', id: 'id' }
   if (path === 'opponents.json') return { key: 'opponents', id: 'id' }
+  if (path === 'tournaments.json') return { key: 'tournaments', id: 'id' }
+  if (path === 'push/outbox.json') return { key: 'messages', id: 'id' }
+  if (path.endsWith('/availability.json')) return { key: 'entries', id: 'id' }
   if (path === 'push/subscriptions.json') return { key: 'subscriptions', id: 'deviceId' }
   if (path.endsWith('/members.json')) return { key: 'members', id: 'personId' }
   if (path.endsWith('/matches.json')) return { key: 'matches', id: 'id' }

@@ -12,7 +12,7 @@ import { navigate, useSheet } from '../state/router'
 import type { ScoreFile, SideKey } from '../types'
 
 export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: string }) {
-  const { isAdmin, store, people, personName, toast } = useApp()
+  const { isAdmin, store, people, personName, toast, session } = useApp()
   const sheet = useSheet()
   const data = useTeam(teamId)
   const match = data.matches.find((m) => m.id === matchId)
@@ -23,7 +23,8 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
   const opponent = match ? (opponents.find((o) => o.id === match.opponentId) ?? opponents.find((o) => o.name.toLowerCase() === match.opponent.toLowerCase())) : undefined
 
   // Older matches were saved with just a name: give them an opponent record.
-  const needsOpponent = isAdmin && !!store && !!match && !opponent && store.has(P.opponents)
+  const canScore = isAdmin || (!!match && match.scorerId === session?.personId)
+  const needsOpponent = canScore && !!store && !!match && !opponent && store.has(P.opponents)
   useEffect(() => {
     if (needsOpponent) ensureOpponent(store!, match!.opponent)
   }, [needsOpponent, store, match])
@@ -52,10 +53,10 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
   const theirXi = (theirs ?? (theirPool.length <= 11 ? theirPool : [])).filter((id) => !ourXi.includes(id))
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
 
-  if (!isAdmin) {
+  if (data.ready && !canScore) {
     return (
       <Screen title="Live scoring" back={base}>
-        <Empty icon="🔒" title="Admin only" text="Only the admin can score a match." />
+        <Empty icon="🔒" title="Not your match to score" text="Only the admin, or the player the admin picked as scorer, can score a match." />
       </Screen>
     )
   }

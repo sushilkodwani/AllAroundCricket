@@ -17,9 +17,13 @@ import type {
   MatchExpense,
   MatchResult,
   MatchType,
+  AvailabilityEntry,
+  AvailabilityFile,
+  AvailabilityStatus,
   MembersFile,
   Membership,
   Opponent,
+  OutboxFile,
   OpponentsFile,
   PayMethod,
   PeopleFile,
@@ -58,8 +62,10 @@ const putFunds = (s: Store, teamId: string, entries: FundEntry[], msg: string) =
 const putCategories = (s: Store, categories: ExpenseCategory[], msg: string) =>
   s.write(P.categories, { schemaVersion: 1, categories }, msg)
 
-export const teamPaths = (teamId: string) => [P.members(teamId), P.matches(teamId), P.funds(teamId)]
-export const teamLoaded = (s: Store, teamId: string) => teamPaths(teamId).every((p) => s.has(p))
+/** The three files a team cannot work without; availability answers are loaded alongside but are optional. */
+const coreTeamPaths = (teamId: string) => [P.members(teamId), P.matches(teamId), P.funds(teamId)]
+export const teamPaths = (teamId: string) => [...coreTeamPaths(teamId), P.availability(teamId)]
+export const teamLoaded = (s: Store, teamId: string) => coreTeamPaths(teamId).every((p) => s.has(p))
 export const loadTeam = (s: Store, teamId: string) => Promise.all(teamPaths(teamId).map((p) => s.load(p)))
 
 const personName = (s: Store, id: string) => peopleOf(s).find((p) => p.id === id)?.name ?? 'Player'
@@ -381,6 +387,7 @@ export interface MatchInput {
   result?: MatchResult
   ourScore?: string
   theirScore?: string
+  tournamentId?: string
 }
 
 function cleanMatchInput(input: MatchInput): MatchInput {
@@ -398,6 +405,7 @@ function cleanMatchInput(input: MatchInput): MatchInput {
     result: input.result || undefined,
     ourScore: input.ourScore?.trim() || undefined,
     theirScore: input.theirScore?.trim() || undefined,
+    tournamentId: input.tournamentId || undefined,
   }
 }
 
@@ -924,3 +932,40 @@ export function updateConfig(s: Store, patch: Partial<Pick<AppConfig, 'tokenExpi
 
 export const lowBalanceThreshold = (s: Store) => configOf(s)?.lowBalanceThreshold ?? 500
 export const today = todayISO
+
+// ---------- availability poll (PLAN §30) ----------
+export const availabilityOf = (s: Store, teamId: string) => s.get<AvailabilityFile>(P.availability(teamId))?.entries ?? []
+
+/** A player's own answer for a match; `null` clears it. Returns false if the write was refused. */
+export function setAvailability(s: Store, teamId: string, matchId: string, personId: string, status: AvailabilityStatus | null): boolean {
+  const id = `${matchId}:${personId}`
+  const rest = availabilityOf(s, teamId).filter((e) => e.id !== id)
+  const entries: AvailabilityEntry[] = status ? [...rest, { id, matchId, personId, status, updatedAt: nowStamp() }] : rest
+  return s.write(P.availability(teamId), { schemaVersion: 1, entries }, `Availability: ${personName(s, personId)} is ${status ?? 'undecided'}`)
+}
+
+// ---------- one-match scorer (PLAN §31) ----------
+/** Lets one player score this match from their own phone (or takes it back with `undefined`). */
+export function setScorer(s: Store, teamId: string, matchId: string, personId: string | undefined): Match {
+  return patchMatch(
+    s,
+    teamId,
+    matchId,
+    (m) => {
+      const next = { ...m, scorerId: personId }
+      if (!personId) delete next.scorerId
+      return next
+    },
+    personId ? `Scorer: ${personName(s, personId)}` : 'Remove scorer',
+  )
+}
+
+// ---------- payment reminders (PLAN §37) ----------
+/** Asks the notifier Action to nudge these players about their pending dues. */
+export function queueDuesReminder(s: Store, teamId: string, personIds: string[]): void {
+  if (personIds.length === 0) return
+  const cutoff = new Date(Date.now() - 7 * 86_400_000).toISOString()
+  // Old requests are dropped so the file stays small; the notifier only acts on new ones.
+  const messages = (s.get<OutboxFile>(P.outbox)?.messages ?? []).filter((m) => m.createdAt > cutoff)
+  s.write(P.outbox, { schemaVersion: 1, messages: [...messages, { id: uuid(), kind: 'dues', teamId, personIds, createdAt: nowStamp() }] }, `Payment reminder to ${personIds.length} player${personIds.length === 1 ? '' : 's'}`)
+}

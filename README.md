@@ -43,10 +43,22 @@ toss and scores ball by ball. Everyone else opens **View scorecard** for the liv
 score, scorecard, commentary and charts. The score is fetched when the screen
 opens and when the viewer taps ⟳ — the app does not poll.
 
+## More match-day and season features
+
+- **Availability**: players answer In / Maybe / Out on an upcoming match.
+- **Scorer**: the admin can let one player score one match from their own phone.
+- **During a match**: milestone banners, par score and a rough win chance in a chase.
+- **After a match**: suggested awards to confirm, a shareable result picture, records.
+- **Tournaments** (Matches tab): points table with net run rate.
+- **Money**: a statement per player, and payment reminders.
+- Match reminders and payment reminders are sent by the notifier — see
+  [notifier/README.md](notifier/README.md).
+
 ## Security in plain words
 
 - Everyone uses one shared token that can write. **View-only is enforced by the
-  app**, not by GitHub. Someone holding the token could edit the repo directly;
+  app**, not by GitHub. Players can write only their own PIN, notification
+  settings and availability answers; a chosen scorer also the score of that match. Someone holding the token could edit the repo directly;
   every change is a git commit, so anything can be seen and restored.
 - Phone numbers are stored only as salted hashes plus the last four digits.
   Players never see anyone's number.

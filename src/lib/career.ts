@@ -15,6 +15,8 @@ export interface MatchLine {
 export interface Career {
   id: string
   matches: number
+  /** Player-of-the-match awards. */
+  potm: number
   bat: {
     innings: number
     notOuts: number
@@ -47,6 +49,7 @@ function blank(id: string): Career {
   return {
     id,
     matches: 0,
+    potm: 0,
     bat: { innings: 0, notOuts: 0, runs: 0, balls: 0, fours: 0, sixes: 0, fifties: 0, hundreds: 0, ducks: 0, best: null },
     bowl: { innings: 0, balls: 0, runs: 0, wickets: 0, maidens: 0, wides: 0, noBalls: 0, best: null },
     field: { catches: 0, stumpings: 0, runOuts: 0 },
@@ -75,6 +78,7 @@ export function careerStats(files: ScoreFile[]): Map<string, Career> {
       get(id).matches++
       line(id)
     }
+    if (file.awards?.potm) get(file.awards.potm).potm++
 
     file.innings.forEach((inn, idx) => {
       const s = summarize(file, idx)

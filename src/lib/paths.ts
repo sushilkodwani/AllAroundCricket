@@ -7,6 +7,9 @@ export const P = {
   teams: 'teams.json',
   subs: 'push/subscriptions.json',
   opponents: 'opponents.json',
+  tournaments: 'tournaments.json',
+  outbox: 'push/outbox.json',
+  availability: (teamId: string) => `teams/${teamId}/availability.json`,
   /** Ball-by-ball log of one match. Deliberately not matches.json: the notifier watches that. */
   scoring: (teamId: string, matchId: string) => `teams/${teamId}/scoring/${matchId}.json`,
   members: (teamId: string) => `teams/${teamId}/members.json`,

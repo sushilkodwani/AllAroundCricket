@@ -1,6 +1,6 @@
 // Who may do what (PLAN §5.5, §5.6, §5.9). View-only is enforced here, in the
 // app: the shared token itself can write, so every write passes canWrite().
-import type { AppConfig, Credential, CredentialsFile, PeopleFile, Person, SubscriptionsFile } from '../types'
+import type { AppConfig, AvailabilityFile, Credential, CredentialsFile, MatchesFile, PeopleFile, Person, SubscriptionsFile, TeamsFile } from '../types'
 import { P } from './paths'
 
 export type Role = 'admin' | 'viewer' | 'denied'
@@ -9,6 +9,8 @@ export type Role = 'admin' | 'viewer' | 'denied'
 export interface Actor {
   role: 'admin' | 'viewer' | 'setup' | 'none'
   personId?: string
+  /** Matches the admin handed to this (view-only) person to score. */
+  scorerMatchIds?: string[]
 }
 
 export function roleOf(personId: string | undefined, config: AppConfig | null, people: Person[]): Role {
@@ -84,7 +86,63 @@ export function canWrite(actor: Actor, path: string, before: unknown, after: unk
     return touched(b, a, (s) => s.deviceId).every((s) => s.personId === actor.personId)
   }
 
-  return false
+  // Availability poll: anyone may set or change their own answer, nobody else's.
+  if (/^teams\/[^/]+\/availability\.json$/.test(path)) {
+    const b = (before as AvailabilityFile | null)?.entries ?? []
+    const a = (after as AvailabilityFile | null)?.entries ?? []
+    return touched(b, a, (e) => e.id).every((e) => e.personId === actor.personId)
+  }
+
+  return scorerMayWrite(actor.scorerMatchIds ?? [], path, before, after)
+}
+
+/** Everything about a record except the named fields, for "nothing else changed" checks. */
+function without<T extends object>(rec: T | undefined, keys: string[]): string {
+  if (!rec) return ''
+  const copy = { ...rec } as Record<string, unknown>
+  for (const k of keys) delete copy[k]
+  return JSON.stringify(copy)
+}
+
+/**
+ * A player the admin made scorer of a match may write what scoring needs and
+ * nothing more: that match's ball log; on the match record only the score
+ * fields; the team's derived stats; new players without app access; opponents.
+ */
+function scorerMayWrite(matchIds: string[], path: string, before: unknown, after: unknown): boolean {
+  if (matchIds.length === 0) return false
+  const scoring = path.match(/^teams\/[^/]+\/scoring\/([^/]+)\.json$/)
+  if (scoring) return matchIds.includes(scoring[1])
+
+  if (/^teams\/[^/]+\/matches\.json$/.test(path)) {
+    const b = (before as MatchesFile | null)?.matches ?? []
+    const a = (after as MatchesFile | null)?.matches ?? []
+    const old = new Map(b.map((m) => [m.id, m]))
+    const keep = ['scoring', 'result', 'ourScore', 'theirScore', 'overs', 'opponentId', 'updatedAt']
+    return a.length === b.length && touched(b, a, (m) => m.id).every((m) => matchIds.includes(m.id) && without(old.get(m.id), keep) === without(m, keep))
+  }
+
+  if (path === P.teams) {
+    const b = (before as TeamsFile | null)?.teams ?? []
+    const a = (after as TeamsFile | null)?.teams ?? []
+    const old = new Map(b.map((t) => [t.id, t]))
+    return a.length === b.length && touched(b, a, (t) => t.id).every((t) => without(old.get(t.id), ['stats']) === without(t, ['stats']))
+  }
+
+  if (path === P.people) {
+    const b = (before as PeopleFile | null)?.people ?? []
+    const a = (after as PeopleFile | null)?.people ?? []
+    const old = new Map(b.map((p) => [p.id, p]))
+    const now = new Set(a.map((p) => p.id))
+    return touched(b, a, (p) => p.id).every((p) => {
+      if (!now.has(p.id)) return false // no deleting
+      const was = old.get(p.id)
+      if (!was) return p.access === 'none' && p.isGuest && p.teamIds.length === 0
+      return without(was, ['batsLeft', 'updatedAt']) === without(p, ['batsLeft', 'updatedAt'])
+    })
+  }
+
+  return path === P.opponents
 }
 
 export const peopleOf = (file: PeopleFile | null) => file?.people ?? []

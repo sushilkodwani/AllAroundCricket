@@ -1,10 +1,12 @@
 // The scorer's screen (PLAN §25): one tap per ball, with the app doing the
 // bookkeeping — strike, overs, next batter, next bowler, innings and result.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { AwardsEditor } from '../components/Awards'
 import { AddPlayerSheet, BallChip, GroundMap } from '../components/scoring'
 import { HeaderButton, Screen } from '../components/Screen'
 import { ChoiceChips, Confirm, Empty, Field, NumberInput, Pill, Segmented, Sheet, Toggle } from '../components/ui'
 import { addOpponentPlayers, setBatsLeft } from '../lib/domain'
+import { milestoneText, milestonesOf } from '../lib/insights'
 import { P } from '../lib/paths'
 import { economy, fmtRate, shotRegion, strikeRate, summarize, type BatLine, type BowlLine } from '../lib/scorecard'
 import { applyScore } from '../lib/scoreDomain'
@@ -71,7 +73,7 @@ function useWakeLock() {
 }
 
 export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: string }) {
-  const { isAdmin, store, people, personName, toast } = useApp()
+  const { isAdmin, store, people, personName, toast, session } = useApp()
   const route = useRoute()
   const sheet = useSheet()
   const data = useTeam(teamId)
@@ -79,6 +81,7 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
   const file = useFile<ScoreFile>(path)
   const loaded = !!store?.has(path)
   const base = `/teams/${teamId}/matches/${matchId}`
+  const canScore = isAdmin || data.matches.find((m) => m.id === matchId)?.scorerId === session?.personId
   const [pending, setPending] = useState<BallInput | null>(null)
   const [confirmEnd, setConfirmEnd] = useState(false)
   const prompted = useRef('')
@@ -97,20 +100,20 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
   const openSheet = sheet.open
   const key = `${idx}:${inn?.events.length ?? 0}:${need}`
   useEffect(() => {
-    if (!isAdmin || !need || sheetName || prompted.current === key) return
+    if (!canScore || !need || sheetName || prompted.current === key) return
     prompted.current = key
     openSheet('pick', need)
-  }, [isAdmin, need, sheetName, key, openSheet])
+  }, [canScore, need, sheetName, key, openSheet])
 
   // No score file → scoring has not been set up for this match.
   useEffect(() => {
     if (loaded && !file) navigate(`${base}/setup`, { replace: true })
   }, [loaded, file, base])
 
-  if (!isAdmin) {
+  if (data.ready && !canScore) {
     return (
       <Screen title="Scoring" back={base}>
-        <Empty icon="🔒" title="Admin only" text="Only the admin can score. Open the scorecard to follow the match." action={<button className="btn-primary" onClick={() => navigate(`${base}/live`, { replace: true })}>View scorecard</button>} />
+        <Empty icon="🔒" title="Not your match to score" text="Only the admin or the chosen scorer can score. Open the scorecard to follow the match." action={<button className="btn-primary" onClick={() => navigate(`${base}/live`, { replace: true })}>View scorecard</button>} />
       </Screen>
     )
   }
@@ -154,10 +157,19 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
       show('shot')
       return
     }
-    if (run((f) => addBall(f, input))) {
-      setPending(null)
-      hide()
+    let next: ScoreFile
+    try {
+      next = applyScore(store!, teamId, matchId, (f) => addBall(f, input), `Score vs ${file!.away.name}`)
+    } catch (e) {
+      toast((e as Error).message)
+      return
     }
+    // Fifty, hundred, hat-trick, five wickets, team 50s: say so as it happens.
+    const events = next.innings[idx].events
+    const reached = milestonesOf(next, idx).get(events[events.length - 1].id)
+    if (reached) toast(reached.map((m) => milestoneText(m, personName, bat.name)).join('  '))
+    setPending(null)
+    hide()
   }
 
   const ready = !need && !inn.closed
@@ -223,6 +235,7 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
             </button>
           </div>
         )}
+        {file.status === 'finished' && <AwardsEditor key={file.result?.text} file={file} onSave={(awards) => run((f) => ({ ...f, awards, updatedAt: new Date().toISOString() }), 'Match awards')} />}
 
         {/* ----- who is in the middle ----- */}
         {!inn.closed && (

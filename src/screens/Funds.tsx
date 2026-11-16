@@ -11,6 +11,7 @@ import { getPref, setPref } from '../lib/session'
 import { useApp, useTeam, type TeamData } from '../state/AppContext'
 import { navigate, useSheet } from '../state/router'
 import { METHOD_LABELS, type FundEntry, type PayMethod, type Team } from '../types'
+import { RemindSheet } from './PlayerStatement'
 
 type Filter = 'all' | 'low' | 'dues'
 
@@ -60,6 +61,7 @@ export function Funds() {
   ].filter((s) => s.rows.length > 0)
 
   const selectedId = sheet.name === 'fund' ? sheet.arg : null
+  const owing = [...known].filter((id) => duesOf(matches, id).length > 0)
 
   return (
     <Screen title="Funds">
@@ -116,6 +118,12 @@ export function Funds() {
               </button>
             )}
 
+            {isAdmin && owing.length > 0 && (
+              <button className="btn-secondary" onClick={() => sheet.open('remindall')}>
+                🔔 Remind {owing.length} player{owing.length === 1 ? '' : 's'} with dues
+              </button>
+            )}
+
             <div className="flex flex-wrap gap-2">
               {(
                 [
@@ -167,6 +175,8 @@ export function Funds() {
           </div>
         </Sheet>
       )}
+
+      {sheet.name === 'remindall' && isAdmin && <RemindSheet teamId={current.id} teamName={current.name} personIds={owing} onClose={sheet.close} />}
 
       {selectedId && known.has(selectedId) && data.ready && <PlayerFundSheet team={current} personId={selectedId} data={data} onClose={sheet.close} />}
     </Screen>
@@ -317,6 +327,10 @@ function PlayerFundSheet({ team, personId, data, onClose }: { team: Team; person
               ))}
             </div>
           )}
+
+          <button className="btn-secondary" onClick={() => navigate(`/teams/${team.id}/statement/${personId}`)}>
+            🧾 Full statement{dues.length > 0 && isAdmin ? ' and reminder' : ''}
+          </button>
 
           {isAdmin && (
             <div className="grid grid-cols-3 gap-2">

@@ -1537,3 +1537,75 @@ matches, super over, pitch map.
   Matches against them, Stats of their players from those matches; each player
   opens the same stats screen as our own players.
 - Viewers see other teams too, built only from matches of teams they belong to.
+
+---
+
+# Part 4 — Match-day and season features (v1.0)
+
+## 30. Availability poll
+- `teams/<teamId>/availability.json`: `{ id: "<matchId>:<personId>", matchId, personId, status: in|maybe|out }`.
+  Kept out of `matches.json` so answers never trigger the notifier.
+- Match page (until the match is completed or scored): each active member taps
+  In / Maybe / Out; everyone sees the count and names. The squad picker shows each
+  answer and has "Everyone who said In".
+- Write guard: a view-only player may add, change or clear **only their own** answer.
+
+## 31. One-match scorer
+- The owner asked for a "hand-off code". Built instead as: the admin picks a player
+  on the match page (`Match.scorerId`). No code to share, and it can be taken back.
+- That player can start and score that match from their own phone. The write guard
+  lets them change only: that match's score file; on the match record the fields
+  `scoring, result, ourScore, theirScore, overs, opponentId`; the team's derived
+  stats; new players without app access (and the left-hand flag); opponents.
+
+## 32. Milestones and the chase estimate (`lib/insights.ts`)
+- Milestones: batter 50 and 100, team every 50 runs, hat-trick (three bowler's
+  wickets in three consecutive balls by that bowler), five wickets. Shown as a banner
+  to the scorer, on the Live tab, and inside the commentary.
+- Par score = (target − 1) × balls bowled ÷ total balls. Shown with runs ahead/behind,
+  and as a thin "pace needed" line on the score-progression chart.
+- Win chance: a labelled rough estimate from runs needed, balls left, wickets in hand
+  and the first innings' scoring rate. Not a prediction model.
+
+## 33. Match awards
+- Points: runs + 1 per four + 2 per six, +5/15/30 at 30/50/100, +5/10 for strike rate
+  120/150 (10+ balls); 25 per wicket, 10 per maiden, +10/20 for 3/5 wickets, economy
+  ≤5 +10, ≤7 +5, ≥12 −5 (2+ overs); 10 per catch, stumping or run out.
+- After the match the scorer sees the suggested player of the match, best batter and
+  best bowler, can change any, and confirms. Stored in the score file (`awards`);
+  cleared if the result is undone. Player screens count player-of-the-match awards.
+
+## 34. Result card and records
+- Share → "Share as a picture": a 1080×1350 image drawn on a canvas (scores, result,
+  top two batters and bowlers per innings, player of the match), sent through the
+  phone's share sheet or saved when sharing files is not supported.
+- Stats tab → Records (ours, and the opponent's on their screen): highest total,
+  lowest all-out total, biggest wins, highest score, best partnership, best bowling,
+  most sixes in an innings. Each opens its scorecard.
+
+## 35. Tournaments
+- `tournaments.json`: name, points (win 2, tie 1, no result 1), teams (linked to one
+  of our teams, an opponent, or neither), and `otherResults` typed in by the admin for
+  games between other teams. A match joins a tournament from the match form
+  (`Match.tournamentId`); both sides are added to the table automatically.
+- Points table: P, W, L, T, NR, Pts, NRR. NRR = runs scored per over − runs conceded
+  per over; a side bowled out is charged its full overs; no-result games are left out.
+  Our matches use the ball-by-ball score, or the typed score lines when they include
+  overs; otherwise they count for points only.
+- Reached from Matches tab → Tournaments.
+
+## 36. Player statement
+- `#/teams/:t/statement/:p` (from the Funds player sheet): contributions, refunds,
+  adjustments and every match share in date order, with totals and a text share.
+
+## 37. Payment reminders
+- Admin: "Remind" on a statement, or "Remind N players with dues" on Funds. This adds
+  a request to `push/outbox.json`; the notifier sends each player their own pending
+  amount. A copyable message is offered too, for players without notifications.
+
+## 38. Notifier additions
+- Daily at 18:00 India time: reminder for tomorrow's matches, to the squad, or to all
+  active members while no squad is picked. `push/state.json.remindedFor` stops repeats.
+- On a change to `push/outbox.json`: payment reminders (skipped for anyone who has
+  paid meanwhile). The workflow, script and diff file must be copied to the data repo
+  again to get these.

@@ -3,14 +3,18 @@
 // only when the viewer taps Refresh.
 import { useMemo, useState, type ReactNode } from 'react'
 import { BarList, ChartCard, LineChart, Manhattan, type Series } from '../components/charts'
+import { AwardsList } from '../components/Awards'
 import { BallChip, GroundMap } from '../components/scoring'
 import { HeaderButton, Screen } from '../components/Screen'
-import { ChoiceChips, Empty, Pill } from '../components/ui'
+import { ChoiceChips, Empty, Pill, Sheet } from '../components/ui'
+import { fmtDate } from '../lib/dates'
+import { chaseView, milestoneText, milestonesOf } from '../lib/insights'
+import { drawResultCard, shareResultCard } from '../lib/resultCard'
 import { P } from '../lib/paths'
 import { ballNumbers, ballText, economy, fmtRate, howOut, scoreLine, strikeRate, summarize, type InningsSummary } from '../lib/scorecard'
 import { BALLS, ballRuns, battingSide, bowlingSide, isBall, oversText } from '../lib/scoring'
-import { useApp, useFile } from '../state/AppContext'
-import { navigate, useRoute, withQuery } from '../state/router'
+import { useApp, useFile, useTeam } from '../state/AppContext'
+import { navigate, useRoute, useSheet, withQuery } from '../state/router'
 import { WICKET_LABELS, type ScoreFile, type WicketKind } from '../types'
 
 const TABS = ['live', 'scorecard', 'commentary', 'analysis', 'teams'] as const
@@ -23,8 +27,10 @@ const fmtClock = (iso: string) => {
 }
 
 export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string }) {
-  const { store, isAdmin, people, personName, toast } = useApp()
+  const { store, isAdmin, people, personName, toast, session } = useApp()
   const route = useRoute()
+  const sheet = useSheet()
+  const match = useTeam(teamId).matches.find((m) => m.id === matchId)
   const path = P.scoring(teamId, matchId)
   const file = useFile<ScoreFile>(path)
   const loaded = !!store?.has(path)
@@ -70,11 +76,21 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
           ? `${battingSide(file, inn).name} need ${s.need.runs} from ${s.need.balls} balls`
           : tossText
 
-  function share() {
-    const lines = file!.innings.map((i, n) => `${battingSide(file!, i).name} ${scoreLine(file!, n)}`)
-    const text = [`${file!.home.name} v ${file!.away.name}`, ...lines, status].filter(Boolean).join('\n')
-    if (navigator.share) void navigator.share({ text }).catch(() => {})
-    else void navigator.clipboard?.writeText(text).then(() => toast('Score copied'))
+  const shareText = [`${file.home.name} v ${file.away.name}`, ...file.innings.map((i, n) => `${battingSide(file, i).name} ${scoreLine(file, n)}`), status].filter(Boolean).join('\n')
+  function shareAsText() {
+    if (navigator.share) void navigator.share({ text: shareText }).catch(() => {})
+    else void navigator.clipboard?.writeText(shareText).then(() => toast('Score copied'))
+    sheet.close()
+  }
+  async function shareAsImage() {
+    try {
+      const canvas = drawResultCard(file!, personName, { date: match ? fmtDate(match.date) : '', venue: match?.venue })
+      const how = await shareResultCard(canvas, `${file!.home.shortName}-v-${file!.away.shortName}.png`, shareText)
+      if (how === 'downloaded') toast('Image saved — share it from your photos or downloads')
+    } catch (e) {
+      toast((e as Error).message)
+    }
+    sheet.close()
   }
 
   return (
@@ -83,7 +99,7 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
       back={base}
       actions={
         <>
-          <HeaderButton label="Share score" onClick={share}>
+          <HeaderButton label="Share score" onClick={() => sheet.open('share')}>
             ↗
           </HeaderButton>
           <HeaderButton label="Refresh score" onClick={() => void refresh()}>
@@ -112,9 +128,14 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
             {file.status !== 'finished' && <Pill tone="bad">LIVE</Pill>}
             <span className="font-medium">{status}</span>
           </p>
+          {file.awards && (
+            <div className="mt-2 border-t border-line pt-2">
+              <AwardsList awards={file.awards} />
+            </div>
+          )}
           <p className="mt-1 text-xs text-muted">
             Last scored {fmtClock(file.updatedAt)} · tap ⟳ for the latest
-            {isAdmin && (
+            {(isAdmin || (!!match?.scorerId && match.scorerId === session?.personId)) && (
               <button className="ml-2 font-semibold text-accent" onClick={() => navigate(`${base}/score`)}>
                 {file.status === 'finished' ? 'Open scoring' : 'Continue scoring'}
               </button>
@@ -163,6 +184,19 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
           </div>
         )}
       </div>
+      {sheet.name === 'share' && (
+        <Sheet title="Share" onClose={sheet.close}>
+          <div className="flex flex-col gap-2">
+            <button className="btn-primary" onClick={() => void shareAsImage()}>
+              🖼️ Share as a picture
+            </button>
+            <button className="btn-secondary" onClick={shareAsText}>
+              Share as text
+            </button>
+            <p className="px-1 text-xs text-muted">The picture shows both scores, the result, the top two batters and bowlers of each side and the player of the match.</p>
+          </div>
+        </Sheet>
+      )}
     </Screen>
   )
 }
@@ -261,8 +295,33 @@ function LiveTab({ file, s, tossText }: { file: ScoreFile; s: InningsSummary; to
   const pair = s.partnerships[s.partnerships.length - 1]
   const lastOver = s.overLines[s.overLines.length - 1]
   const bowlerIds = [...new Set([inn.crease.bowler, lastOver?.bowler, s.overLines[s.overLines.length - 2]?.bowler].filter((x): x is string => !!x))]
+  const chase = chaseView(file)
+  const lastBall = balls[balls.length - 1]
+  const reached = lastBall ? milestonesOf(file, file.innings.length - 1).get(lastBall.id) : undefined
   return (
     <>
+      {reached && file.status === 'live' && <p className="rounded-xl bg-ok/15 px-3 py-2 text-center text-sm font-semibold text-ok">{reached.map((m) => milestoneText(m, personName, battingSide(file, inn).name)).join('  ')}</p>}
+      {chase && (
+        <div className="card p-3">
+          <div className="flex justify-between gap-2 text-sm font-semibold">
+            <span>
+              {file[chase.chasing].shortName} {chase.chance}%
+            </span>
+            <span>
+              {100 - chase.chance}% {file[chase.chasing === 'home' ? 'away' : 'home'].shortName}
+            </span>
+          </div>
+          <div className="mt-1.5 flex h-2 gap-0.5 overflow-hidden rounded-full" role="img" aria-label={`Win chance: ${file[chase.chasing].name} ${chase.chance} percent`}>
+            <span style={{ width: `${chase.chance}%`, background: `var(--series-${chase.chasing === 'home' ? 1 : 2})` }} />
+            <span className="flex-1" style={{ background: `var(--series-${chase.chasing === 'home' ? 2 : 1})` }} />
+          </div>
+          <p className="mt-2 text-sm">
+            Par score now: <strong>{chase.par}</strong> ·{' '}
+            {chase.ahead === 0 ? 'level with par' : `${Math.abs(chase.ahead)} run${Math.abs(chase.ahead) === 1 ? '' : 's'} ${chase.ahead > 0 ? 'ahead' : 'behind'}`}
+          </p>
+          <p className="mt-0.5 text-xs text-muted">Win chance is a rough estimate from runs needed, balls left, wickets in hand and the first innings’ scoring rate.</p>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <div className="card p-3">
           <p className="text-xs text-muted">Current run rate</p>
@@ -355,6 +414,8 @@ function CommentaryTab({ file, summaries, lefties }: { file: ScoreFile; summarie
   const idx = Math.min(pick ?? file.innings.length - 1, file.innings.length - 1)
   const s = summaries[idx]
   const overs = [...s.overLines].reverse()
+  const marks = milestonesOf(file, idx)
+  const teamName = battingSide(file, file.innings[idx]).name
   return (
     <>
       <InningsPicker file={file} value={idx} onChange={setPick} />
@@ -384,7 +445,14 @@ function CommentaryTab({ file, summaries, lefties }: { file: ScoreFile; summarie
                   <li key={b.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                     <span className="w-8 shrink-0 text-xs text-muted">{label}</span>
                     <BallChip ball={b} />
-                    <span className={b.wicket || (b.kind !== 'wd' && (b.bat === 4 || b.bat === 6)) ? 'font-semibold' : ''}>{ballText(b, personName, (id) => lefties.has(id))}</span>
+                    <span className={b.wicket || (b.kind !== 'wd' && (b.bat === 4 || b.bat === 6)) ? 'font-semibold' : ''}>
+                      {ballText(b, personName, (id) => lefties.has(id))}
+                      {marks.get(b.id)?.map((m, n) => (
+                        <span key={n} className="mt-0.5 block font-semibold text-ok">
+                          {milestoneText(m, personName, teamName)}
+                        </span>
+                      ))}
+                    </span>
                   </li>
                 ))}
             </ul>
@@ -426,7 +494,12 @@ function AnalysisTab({ file, summaries, lefties }: { file: ScoreFile; summaries:
   return (
     <>
       <Manhattan series={perOver} />
-      <LineChart title="Score progression" series={worm} idle="Tap an over to see the score. ● = wicket" />
+      <LineChart
+        title="Score progression"
+        series={worm}
+        idle="Tap an over to see the score. ● = wicket"
+        pace={file.innings[1]?.target ? { label: 'Pace needed in the chase', to: file.innings[1].target - 1, overs: file.innings[1].overs } : undefined}
+      />
       <LineChart title="Run rate" series={rates} decimals={2} idle="Runs per over so far, after each over." fromZero={false} />
 
       <InningsPicker file={file} value={idx} onChange={(n) => (setPick(n), setBatter('all'))} />

@@ -69,6 +69,7 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
             <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted">
               {teamName} · {c.matches} match{c.matches === 1 ? '' : 'es'}
               {person?.batsLeft && <Pill>Left-hand bat</Pill>}
+              {c.potm > 0 && <Pill tone="ok">🏆 {c.potm} player of the match</Pill>}
             </p>
           </div>
         </div>

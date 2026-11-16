@@ -4,9 +4,14 @@ name: Notify on match expenses
 
 on:
   push:
-    # Only match saves. The notifier's own commits touch push/ and are skipped.
+    # Match saves (expenses) and payment reminders the admin asks for in the app.
+    # The notifier's own commits touch push/state.json and are skipped.
     paths:
       - 'teams/*/matches.json'
+      - 'push/outbox.json'
+  schedule:
+    # Every day at 18:00 India time (12:30 UTC): remind the squad of tomorrow's match.
+    - cron: '30 12 * * *'
   workflow_dispatch:
     inputs:
       message:
@@ -53,3 +58,4 @@ jobs:
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
           BEFORE_SHA: ${{ github.event.before }}
           TEST_MESSAGE: ${{ github.event.inputs.message }}
+          MODE: ${{ github.event_name == 'schedule' && 'reminders' || '' }}

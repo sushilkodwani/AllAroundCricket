@@ -1,11 +1,12 @@
 import { useState } from 'react'
+import { AvailabilityCard } from '../components/Availability'
 import { ResultChip, StatusChip } from '../components/match'
 import { MatchForm, RESULTS } from '../components/MatchForm'
 import { MatchMoney } from '../components/MatchMoney'
 import { HeaderButton, Screen } from '../components/Screen'
 import { Avatar, ChoiceChips, Confirm, Empty, ErrorNote, Field, Pill, Sheet } from '../components/ui'
 import { fmtDate, fmtDayMonth, fmtTime, relativeDay } from '../lib/dates'
-import { deleteMatch, isGuestIn, recordResult, setCancelled } from '../lib/domain'
+import { deleteMatch, isGuestIn, recordResult, setCancelled, setScorer } from '../lib/domain'
 import { canMarkComplete, matchStatus } from '../lib/stats'
 import { useApp, useTeam } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
@@ -42,6 +43,8 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
   const status = matchStatus(match)
   const me = session?.personId ?? ''
   const inSquad = match.squad.includes(me)
+  // The admin, or the one player the admin handed this match to (PLAN §31).
+  const canScore = isAdmin || match.scorerId === me
   const squadLocked = match.lifecycle !== 'scheduled'
   const activeIds = new Set(data.members.filter((m) => m.status === 'active').map((m) => m.personId))
   const squad = [...match.squad].sort((a, b) => personName(a).localeCompare(personName(b)))
@@ -117,7 +120,9 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
           </div>
         )}
 
-        {!match.cancelled && (match.scoring || isAdmin) && (
+        {!match.cancelled && match.lifecycle !== 'completed' && match.scoring !== 'finished' && <AvailabilityCard match={match} data={data} />}
+
+        {!match.cancelled && (match.scoring || canScore) && (
           <div className="card flex flex-col gap-3 p-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="font-semibold">Ball-by-ball score</h2>
@@ -129,7 +134,7 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
                 <button className="btn-primary flex-1" onClick={() => navigate(`${base}/live`)}>
                   View scorecard
                 </button>
-                {isAdmin && (
+                {canScore && (
                   <button className="btn-secondary flex-1" onClick={() => navigate(`${base}/score`)}>
                     {match.scoring === 'live' ? 'Continue scoring' : 'Open scoring'}
                   </button>
@@ -142,6 +147,18 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
                   🏏 Start live scoring
                 </button>
               </>
+            )}
+            {match.scoring !== 'finished' && (isAdmin || match.scorerId) && (
+              <div className="flex items-center justify-between gap-2 border-t border-line pt-2 text-sm">
+                <span className="min-w-0 truncate">
+                  <span className="text-muted">Scorer:</span> {match.scorerId ? `${personName(match.scorerId)}${match.scorerId === me ? ' (you)' : ''}` : 'Admin only'}
+                </span>
+                {isAdmin && (
+                  <button className="btn-ghost min-h-[36px]" onClick={() => sheet.open('scorer')}>
+                    {match.scorerId ? 'Change' : 'Let a player score'}
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -230,6 +247,42 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
             ) : (
               <p className="px-1 text-xs text-muted">A match with submitted expenses can’t be cancelled or deleted, to keep the fund ledger honest.</p>
             )}
+          </div>
+        </Sheet>
+      )}
+
+      {sheet.name === 'scorer' && isAdmin && (
+        <Sheet title="Who scores this match?" onClose={sheet.close}>
+          <p className="mb-3 text-sm text-muted">The player you pick can start and score this one match from their own phone. They can’t change anything else. You can always score too.</p>
+          <div className="card divide-y divide-line overflow-hidden">
+            <button
+              className="row active:bg-alt"
+              onClick={() => {
+                act(() => setScorer(store!, teamId, matchId, undefined))
+                sheet.close()
+              }}
+            >
+              <span className="flex-1">Admin only</span>
+              {!match.scorerId && <span className="text-accent">✓</span>}
+            </button>
+            {[...activeIds]
+              .filter((id) => id !== me)
+              .sort((a, b) => personName(a).localeCompare(personName(b)))
+              .map((id) => (
+                <button
+                  key={id}
+                  className="row active:bg-alt"
+                  onClick={() => {
+                    act(() => setScorer(store!, teamId, matchId, id))
+                    toast(`${personName(id)} can now score this match`)
+                    sheet.close()
+                  }}
+                >
+                  <Avatar name={personName(id)} color={team.color} size={32} />
+                  <span className="min-w-0 flex-1 truncate">{personName(id)}</span>
+                  {match.scorerId === id && <span className="text-accent">✓</span>}
+                </button>
+              ))}
           </div>
         </Sheet>
       )}

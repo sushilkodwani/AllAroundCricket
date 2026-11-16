@@ -144,18 +144,26 @@ export function Manhattan({ series }: { series: Series[] }) {
 }
 
 /** One line per innings; `values[i]` is the value at the end of over i+1. */
-export function LineChart({ title, series, decimals = 0, idle, fromZero = true }: { title: string; series: Series[]; decimals?: number; idle: string; fromZero?: boolean }) {
-  const overs = Math.max(1, ...series.map((s) => s.values.length))
-  const max = niceMax(Math.max(1, ...series.flatMap((s) => s.values)))
+/** pace draws a thin straight guide from 0 to 	o over overs overs (the chase's required pace). */
+export function LineChart({ title, series, decimals = 0, idle, fromZero = true, pace }: { title: string; series: Series[]; decimals?: number; idle: string; fromZero?: boolean; pace?: { label: string; to: number; overs: number } }) {
+  const overs = Math.max(1, pace?.overs ?? 0, ...series.map((s) => s.values.length))
+  const max = niceMax(Math.max(1, pace?.to ?? 0, ...series.flatMap((s) => s.values)))
   const { over, probe, band } = useOverProbe(overs)
   const px = (i: number) => M.l + ((i + 0.5) / overs) * PW
   const py = (v: number) => M.t + PH - (v / max) * PH
   return (
     <ChartCard title={title} subtitle={readout(series, over, (v) => (decimals ? v.toFixed(decimals) : `${v}`), idle)}>
       <Legend items={series} />
+      {pace && (
+        <p className="mb-1 flex items-center gap-1.5 text-xs text-muted">
+          <span className="h-px w-4 bg-muted" />
+          {pace.label}
+        </p>
+      )}
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full touch-pan-y" role="img" aria-label={title} {...probe}>
         <Axes max={max} overs={overs} />
         {band}
+        {pace && <line x1={M.l} y1={py(0)} x2={M.l + (pace.overs / overs) * PW} y2={py(pace.to)} stroke="rgb(var(--text-muted))" strokeWidth="1" />}
         {series.map((s) => {
           if (s.values.length === 0) return null
           const pts = s.values.map((v, i) => `${px(i)},${py(v)}`)

@@ -8,6 +8,7 @@ import { matchesOf, teamLoaded } from '../lib/domain'
 import { getPref } from '../lib/session'
 import { matchStatus, sortMatchesAsc } from '../lib/stats'
 import { useApp, useTeamsLoaded } from '../state/AppContext'
+import { navigate } from '../state/router'
 
 export function Matches() {
   const { teams, store, isAdmin, session } = useApp()
@@ -26,7 +27,14 @@ export function Matches() {
   const recent = pool.filter((m) => matchStatus(m) !== 'upcoming' && m.date >= since).reverse()
 
   return (
-    <Screen title="Matches">
+    <Screen
+      title="Matches"
+      actions={
+        <button className="mr-2 min-h-[36px] rounded-full bg-white px-3 text-sm font-semibold text-brand" onClick={() => navigate('/tournaments')}>
+          🏆 Tournaments
+        </button>
+      }
+    >
       <div className="flex flex-col gap-3 p-4">
         {!isAdmin && (
           <div>

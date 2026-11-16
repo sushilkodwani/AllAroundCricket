@@ -1,6 +1,8 @@
 // Team → Stats (PLAN §28): leaderboards built from every scored match.
 import { useEffect, useMemo, type ReactNode } from 'react'
 import { batAverage, batStrikeRate, bestBowling, bowlEconomy, bowlOvers, careerStats, highScore, type Career } from '../lib/career'
+import { fmtDayMonth } from '../lib/dates'
+import { teamRecords } from '../lib/insights'
 import { P } from '../lib/paths'
 import { useApp, type TeamData } from '../state/AppContext'
 import { navigate } from '../state/router'
@@ -47,6 +49,13 @@ export function StatsTables({ matches, side, onOpen: open }: { matches: Match[];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const careers = useMemo(() => sideCareers(files, side), [stamp, side])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const records = useMemo(() => teamRecords(files, side), [stamp, side])
+  const matchLabel = (id: string) => {
+    const m = scored.find((x) => x.id === id)
+    return m ? `vs ${side === 'home' ? m.opponent : (files.find((f) => f.matchId === id)?.home.shortName ?? 'us')} · ${fmtDayMonth(m.date)}` : ''
+  }
+
   if (scored.length === 0) return <Empty icon="📊" title="No stats yet" text="Stats appear once a match has been scored ball by ball." />
   if (!ready) return <p className="p-10 text-center text-sm text-muted">Loading…</p>
 
@@ -84,6 +93,26 @@ export function StatsTables({ matches, side, onOpen: open }: { matches: Match[];
           </button>
         ))}
       </div>
+
+      {records.length > 0 && (
+        <section>
+          <h2 className="section-title">Records</h2>
+          <div className="card divide-y divide-line overflow-hidden">
+            {records.map((r) => (
+              <button key={r.key} className="row active:bg-alt" onClick={() => navigate(`/teams/${r.teamId}/matches/${r.matchId}/live?tab=scorecard`)}>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs text-muted">{r.label}</span>
+                  <span className="block truncate text-sm">{r.personIds ? r.personIds.map(personName).join(' & ') : matchLabel(r.matchId)}</span>
+                </span>
+                <span className="text-right">
+                  <span className="block font-semibold">{r.value}</span>
+                  {r.personIds && <span className="block text-xs text-muted">{matchLabel(r.matchId)}</span>}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="section-title">Batting</h2>

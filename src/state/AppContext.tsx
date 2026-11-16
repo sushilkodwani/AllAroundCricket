@@ -5,7 +5,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { checkSession, credentialOf, roleOf, type Role } from '../lib/access'
 import { CORE_PATHS, createBackend, openStore } from '../lib/connect'
-import { categoriesOf, configOf, credsOf, loadTeam, peopleOf, teamsOf } from '../lib/domain'
+import { categoriesOf, configOf, credsOf, loadTeam, matchesOf, peopleOf, teamsOf } from '../lib/domain'
 import { describeRepoError } from '../lib/github'
 import { P } from '../lib/paths'
 import { disablePush } from '../lib/push'
@@ -131,7 +131,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // The store enforces view-only, so it must always know who is acting.
   if (store && phase === 'in' && session) {
-    store.actor = { role: role === 'denied' ? 'none' : role, personId: session.personId }
+    // A player the admin made scorer of a match may write that match's score (PLAN §31).
+    const scorerMatchIds = role === 'viewer' && me ? me.teamIds.flatMap((id) => matchesOf(store, id)).filter((m) => m.scorerId === me.id).map((m) => m.id) : undefined
+    store.actor = { role: role === 'denied' ? 'none' : role, personId: session.personId, scorerMatchIds }
   }
 
   const teams = useMemo(

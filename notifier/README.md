@@ -1,10 +1,15 @@
 # Expense notifications — setup
 
 The app only *receives* notifications. They are *sent* by a GitHub Action that
-lives in the **private data repo** and runs whenever a team's `matches.json`
-changes. It sends one thing only: **"expenses posted / updated"** for a match,
-to that match's squad members who turned notifications on, personalised with
-their share.
+lives in the **private data repo**. It sends three things, only to players who
+turned notifications on:
+
+- **Expenses posted / updated** for a match, to its squad, with each player's share
+  (runs when a team's `matches.json` changes).
+- **Match reminder** at 6 pm India time the evening before a match: to the squad,
+  or to every active player if no squad is picked yet (runs once a day).
+- **Payment reminder** when the admin taps *Remind* in the app (runs when
+  `push/outbox.json` changes).
 
 ## One-time setup
 
@@ -43,8 +48,11 @@ their share.
 - The admin who submitted is not notified. A phone that was logged out, or
   whose PIN was reset, stops receiving.
 - Expired subscriptions are removed automatically.
-- Cost: about one billed minute per run; private repos get 2,000 free
-  minutes a month.
+- Cost: about one billed minute per run, plus one a day for the match reminder
+  (about 30 a month); private repos get 2,000 free minutes a month.
+- To change the reminder time, edit the `cron` line in the workflow (it is in UTC).
+- If you set this up before reminders existed, copy `notify.yml`, `notify.mjs`
+  and `diff.mjs` into the data repo again.
 
 ## Trying it without sending anything
 

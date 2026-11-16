@@ -71,3 +71,45 @@ describe('buildMessage', () => {
     expect(topicFor('3bb03d66-0567-407f-a286-cdc05caebbd9')).toMatch(/^[A-Za-z0-9]{1,32}$/)
   })
 })
+
+import { duesFor, duesMessage, matchReminders, newOutbox, reminderMessage, tomorrowIn } from './diff.mjs'
+
+describe('match reminder', () => {
+  const members = [
+    { personId: 'p1', status: 'active' },
+    { personId: 'p2', status: 'active' },
+    { personId: 'p3', status: 'removed' },
+  ]
+  const m = (over) => ({ id: 'm1', teamId: 't', opponent: 'Lions', date: '2026-11-20', time: '07:00', venue: 'Oval', squad: [], cancelled: false, lifecycle: 'scheduled', ...over })
+  it('tomorrow follows India time, not UTC', () => {
+    // 19 Nov 20:00 UTC is already 20 Nov in India → tomorrow is the 21st.
+    expect(tomorrowIn(new Date('2026-11-19T20:00:00Z'))).toBe('2026-11-21')
+    expect(tomorrowIn(new Date('2026-11-19T12:30:00Z'))).toBe('2026-11-20')
+  })
+  it('goes to the squad, or to active members while no squad is picked', () => {
+    expect(matchReminders([m({ squad: ['p2'] })], members, '2026-11-20')[0]).toMatchObject({ hasSquad: true, personIds: ['p2'] })
+    expect(matchReminders([m()], members, '2026-11-20')[0]).toMatchObject({ hasSquad: false, personIds: ['p1', 'p2'] })
+    expect(matchReminders([m({ cancelled: true }), m({ date: '2026-11-21' }), m({ lifecycle: 'completed' })], members, '2026-11-20')).toEqual([])
+  })
+  it('says when and where', () => {
+    const msg = reminderMessage({ match: m({ squad: ['p1'] }), hasSquad: true }, { team: { shortName: 'RCC' }, person: { teamIds: ['t'] } })
+    expect(msg.title).toBe('🏏 vs Lions — tomorrow at 7:00 AM')
+    expect(msg.body).toContain('Oval')
+    expect(msg.url).toBe('#/teams/t/matches/m1')
+  })
+})
+
+describe('payment reminder', () => {
+  const match = (id, pending, settled = false) => ({ id, teamId: 't', opponent: `Opp ${id}`, date: '2026-11-0' + id, cancelled: false, lifecycle: 'settling', expense: { status: 'submitted', shares: [{ personId: 'p1', total: pending, fromFunds: 0, pending, settled }] } })
+  it('only requests added since the last run', () => {
+    expect(newOutbox([{ id: 'a', kind: 'dues' }], [{ id: 'a', kind: 'dues' }, { id: 'b', kind: 'dues' }]).map((x) => x.id)).toEqual(['b'])
+    expect(newOutbox(undefined, undefined)).toEqual([])
+  })
+  it('adds up what is still owed and stays silent once paid', () => {
+    const matches = [match(1, 200), match(2, 150), match(3, 90, true)]
+    expect(duesFor(matches, 'p1').map((d) => d.pending)).toEqual([200, 150])
+    expect(duesMessage(matches, 'p1', { team: { id: 't', name: 'RCC' } }).body).toBe('₹350 is pending across 2 matches. Please pay the admin.')
+    expect(duesMessage([match(3, 90, true)], 'p1', { team: {} })).toBeNull()
+    expect(duesMessage(matches, 'p9', { team: {} })).toBeNull()
+  })
+})

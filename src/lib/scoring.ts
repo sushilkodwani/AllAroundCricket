@@ -132,6 +132,7 @@ function settle(file: ScoreFile): ScoreFile {
     else delete inn.closed
   }
   delete next.result
+  if (!inn.closed || idx === 0) delete next.awards // awards belong to a finished match
   if (!inn.closed) next.status = 'live'
   else if (idx === 0) next.status = 'break'
   else {

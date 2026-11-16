@@ -17,7 +17,9 @@ import { ScoreView } from './screens/ScoreView'
 import { ScoringSetup } from './screens/ScoringSetup'
 import { Settings } from './screens/Settings'
 import { SquadPicker } from './screens/SquadPicker'
+import { PlayerStatement } from './screens/PlayerStatement'
 import { TeamDetail } from './screens/TeamDetail'
+import { TournamentDetail, Tournaments } from './screens/Tournaments'
 import { Teams } from './screens/Teams'
 import { Users } from './screens/Users'
 import { useApp } from './state/AppContext'
@@ -90,6 +92,9 @@ export default function App() {
   } else if (a === 'teams' && b && c === 'players' && d && !e) screen = <PlayerStats teamId={b} personId={d} />
   else if (a === 'opponents' && b && !c) screen = <OpponentDetail opponentId={b} />
   else if (a === 'opponents' && b && c === 'players' && d && !e) screen = <OpponentPlayerStats opponentId={b} personId={d} />
+  else if (a === 'tournaments' && !b) screen = <Tournaments />
+  else if (a === 'tournaments' && b && !c) screen = <TournamentDetail tournamentId={b} />
+  else if (a === 'teams' && b && c === 'statement' && d && !e) screen = <PlayerStatement teamId={b} personId={d} />
   else if (a === 'matches') screen = <Matches />
   else if (a === 'funds') screen = <Funds />
   else if (a === 'settings' && b === 'users') screen = <Users />

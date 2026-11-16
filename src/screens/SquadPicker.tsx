@@ -1,6 +1,7 @@
 // Full-screen squad picker (PLAN §7.4, §20.2): tick everyone at once, add
 // guests, save in one write.
 import { useMemo, useState } from 'react'
+import { AVAIL_LABEL, AVAIL_TONE, useAvailability } from '../components/Availability'
 import { Screen } from '../components/Screen'
 import { Avatar, Empty, ErrorNote, Field, PhoneInput, Pill, Sheet } from '../components/ui'
 import { fmtDayMonth } from '../lib/dates'
@@ -21,6 +22,7 @@ export function SquadPicker({ teamId, matchId }: { teamId: string; matchId: stri
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const backTo = `/teams/${teamId}/matches/${matchId}`
+  const answers = useAvailability(teamId, matchId)
 
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
   if (!team || !match || !store || !isAdmin) {
@@ -40,6 +42,7 @@ export function SquadPicker({ teamId, matchId }: { teamId: string; matchId: stri
     .map((id) => byId.get(id))
     .filter((p): p is Person => !!p)
     .sort((a, b) => a.name.localeCompare(b.name))
+  const availableIds = activeIds.filter((id) => answers.get(id) === 'in')
   const q = query.trim().toLowerCase()
   const shown = q ? candidates.filter((p) => p.name.toLowerCase().includes(q)) : candidates
 
@@ -94,6 +97,11 @@ export function SquadPicker({ teamId, matchId }: { teamId: string; matchId: stri
           <button className="chip min-h-[36px] px-3" onClick={() => setSel(new Set())}>
             Clear
           </button>
+          {availableIds.length > 0 && (
+            <button className="chip min-h-[36px] px-3" onClick={() => setSel(new Set(availableIds))}>
+              Everyone who said In ({availableIds.length})
+            </button>
+          )}
           {lastWithSquad && (
             <button className="chip min-h-[36px] px-3" onClick={() => setSel(new Set(lastWithSquad.squad))}>
               Same as last match
@@ -117,6 +125,7 @@ export function SquadPicker({ teamId, matchId }: { teamId: string; matchId: stri
                     {p.name}
                     {!guest && !activeIds.includes(p.id) && <span className="text-muted"> (left team)</span>}
                   </span>
+                  {answers.has(p.id) && <Pill tone={AVAIL_TONE[answers.get(p.id)!]}>{AVAIL_LABEL[answers.get(p.id)!]}</Pill>}
                   {guest && <Pill>Guest</Pill>}
                 </label>
               )
