@@ -48,7 +48,12 @@ opens and when the viewer taps ⟳ — the app does not poll.
 - **During a match**: milestone banners, par score and a rough win chance in a chase.
 - **After a match**: suggested awards to confirm, a shareable result picture, records.
 - **Tournaments** (Matches tab): points table with net run rate.
-- **Money**: a statement per player, and payment reminders.
+- **Money**: a statement per player, a year summary, and payment reminders.
+- **Players**: a profile card (role, batting hand, bowling style, jersey number) with
+  recent form; players can edit their own.
+- **Sharing**: WhatsApp messages for the squad and for a match's expenses, and a
+  public scorecard link that opens without login (the scorecard is inside the link).
+- **Scouting** an opponent you have scored against, and a **ground directory**.
 - Match reminders and payment reminders are sent by the notifier — see
   [notifier/README.md](notifier/README.md).
 

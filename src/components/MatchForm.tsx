@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { todayISO } from '../lib/dates'
-import { addMatch, editMatch, opponentsOf, type MatchInput } from '../lib/domain'
+import { addMatch, editMatch, groundsOf, opponentsOf, type MatchInput } from '../lib/domain'
 import { enrolMatchTeams, tournamentsOf } from '../lib/tournament'
 import { useApp } from '../state/AppContext'
 import { MATCH_TYPE_LABELS, RESULT_LABELS, type Match, type MatchResult, type MatchType, type Team } from '../types'
@@ -31,7 +31,8 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
   const saved = store ? opponentsOf(store) : []
   const savedKey = saved.map((o) => o.name).join('|')
   const opponents = useMemo(() => [...new Set([...savedKey.split('|').filter(Boolean), ...matches.map((m) => m.opponent)])].sort(), [matches, savedKey])
-  const venues = useMemo(() => [...new Set([team.homeGround, ...matches.map((m) => m.venue)].filter((v): v is string => !!v))].sort(), [matches, team.homeGround])
+  const groundKey = (store ? groundsOf(store) : []).map((g) => g.name).join('|')
+  const venues = useMemo(() => [...new Set([team.homeGround, ...groundKey.split('|'), ...matches.map((m) => m.venue)].filter((v): v is string => !!v))].sort(), [matches, team.homeGround, groundKey])
   const isPast = date <= todayISO()
 
   function save() {

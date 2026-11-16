@@ -4,11 +4,13 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { BarList, ChartCard, LineChart, Manhattan, type Series } from '../components/charts'
 import { AwardsList } from '../components/Awards'
-import { BallChip, GroundMap } from '../components/scoring'
+import { RoleTag } from '../components/Profile'
+import { BallChip, GroundMap, PressureStrip } from '../components/scoring'
 import { HeaderButton, Screen } from '../components/Screen'
 import { ChoiceChips, Empty, Pill, Sheet } from '../components/ui'
 import { fmtDate } from '../lib/dates'
 import { chaseView, milestoneText, milestonesOf } from '../lib/insights'
+import { buildPublicCard, cardUrl, encodeCard } from '../lib/publicCard'
 import { drawResultCard, shareResultCard } from '../lib/resultCard'
 import { P } from '../lib/paths'
 import { ballNumbers, ballText, economy, fmtRate, howOut, scoreLine, strikeRate, summarize, type InningsSummary } from '../lib/scorecard'
@@ -80,6 +82,20 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
   function shareAsText() {
     if (navigator.share) void navigator.share({ text: shareText }).catch(() => {})
     else void navigator.clipboard?.writeText(shareText).then(() => toast('Score copied'))
+    sheet.close()
+  }
+  async function sharePublicLink() {
+    try {
+      const card = buildPublicCard(file!, personName, { date: match ? fmtDate(match.date) : undefined, venue: match?.venue })
+      const url = cardUrl(await encodeCard(card))
+      if (navigator.share) await navigator.share({ title: card.title, url }).catch(() => {})
+      else {
+        await navigator.clipboard?.writeText(url)
+        toast('Link copied')
+      }
+    } catch (e) {
+      toast((e as Error).message)
+    }
     sheet.close()
   }
   async function shareAsImage() {
@@ -170,12 +186,18 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
                 </h3>
                 <ol className="divide-y divide-line text-sm">
                   {file[k].xi.map((id, n) => (
-                    <li key={id} className="flex gap-3 px-4 py-2">
-                      <span className="w-5 text-muted">{n + 1}</span>
-                      <span className="min-w-0 flex-1 truncate">
-                        {personName(id)}
-                        {file[k].keeperId === id && ' †'}
-                      </span>
+                    <li key={id}>
+                      <button
+                        className="flex w-full items-center gap-3 px-4 py-2 text-left active:bg-alt"
+                        onClick={() => navigate(k === 'home' ? `/teams/${teamId}/players/${id}` : file.opponentId ? `/opponents/${file.opponentId}/players/${id}` : `/teams/${teamId}/players/${id}`)}
+                      >
+                        <span className="w-5 text-muted">{n + 1}</span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {personName(id)}
+                          {file[k].keeperId === id && ' †'}
+                        </span>
+                        <RoleTag person={people.find((p) => p.id === id)} />
+                      </button>
                     </li>
                   ))}
                 </ol>
@@ -193,6 +215,10 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
             <button className="btn-secondary" onClick={shareAsText}>
               Share as text
             </button>
+            <button className="btn-secondary" onClick={() => void sharePublicLink()}>
+              🔗 Share a public scorecard link
+            </button>
+            <p className="px-1 text-xs text-muted">The link opens the full scorecard for anyone, with no login — good for opponents and family. It shows player names and scores as they are right now, nothing else, and does not update later.</p>
             <p className="px-1 text-xs text-muted">The picture shows both scores, the result, the top two batters and bowlers of each side and the player of the match.</p>
           </div>
         </Sheet>
@@ -322,6 +348,7 @@ function LiveTab({ file, s, tossText }: { file: ScoreFile; s: InningsSummary; to
           <p className="mt-0.5 text-xs text-muted">Win chance is a rough estimate from runs needed, balls left, wickets in hand and the first innings’ scoring rate.</p>
         </div>
       )}
+      {file.status === 'live' && <PressureStrip file={file} idx={file.innings.length - 1} />}
       <div className="grid grid-cols-2 gap-3">
         <div className="card p-3">
           <p className="text-xs text-muted">Current run rate</p>
@@ -486,6 +513,7 @@ function AnalysisTab({ file, summaries, lefties }: { file: ScoreFile; summaries:
   const boundaries = inn.events.filter(isBall).filter((b) => b.shot && (batter === 'all' || b.striker === batter))
   const hitters = [...new Set(inn.events.filter(isBall).filter((b) => b.shot).map((b) => b.striker))]
   const wicketRows = (Object.keys(s.wicketKinds) as WicketKind[]).map((k) => ({ label: WICKET_LABELS[k], value: s.wicketKinds[k] ?? 0 })).sort((a, b) => b.value - a.value)
+  const caughtAt = inn.events.filter(isBall).flatMap((b) => (b.wicket?.at ? [b.wicket.at] : []))
   const maxPair = Math.max(1, ...s.partnerships.map((p) => p.runs))
   const extrasRuns = inn.events.filter(isBall).reduce((sum, b) => sum + ballRuns(b) - b.bat, 0)
 
@@ -523,6 +551,12 @@ function AnalysisTab({ file, summaries, lefties }: { file: ScoreFile; summaries:
 
       <ChartCard title="Wickets" subtitle={`${battingSide(file, inn).name} — how they got out`}>
         <BarList slot={slot(idx)} rows={wicketRows} />
+        {caughtAt.length > 0 && (
+          <>
+            <p className="mt-3 text-xs text-muted">✕ where catches were taken and run-out throws came from ({caughtAt.length} recorded)</p>
+            <GroundMap marks={caughtAt} />
+          </>
+        )}
       </ChartCard>
 
       <ChartCard title="Partnerships" subtitle={`${battingSide(file, inn).name} — runs (balls)`}>

@@ -2,7 +2,7 @@
 // bookkeeping — strike, overs, next batter, next bowler, innings and result.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AwardsEditor } from '../components/Awards'
-import { AddPlayerSheet, BallChip, GroundMap } from '../components/scoring'
+import { AddPlayerSheet, BallChip, GroundMap, PressureStrip } from '../components/scoring'
 import { HeaderButton, Screen } from '../components/Screen'
 import { ChoiceChips, Confirm, Empty, Field, NumberInput, Pill, Segmented, Sheet, Toggle } from '../components/ui'
 import { addOpponentPlayers, setBatsLeft } from '../lib/domain'
@@ -276,6 +276,8 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
             </button>
           </div>
         )}
+
+        {!inn.closed && <PressureStrip file={file} idx={idx} />}
 
         {/* ----- this over ----- */}
         <div className="flex min-h-[36px] items-center gap-1.5 overflow-x-auto">
@@ -638,13 +640,15 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
   const [who, setWho] = useState(inn.crease.striker)
   const [runs, setRuns] = useState(0)
   const [fielder, setFielder] = useState<string | undefined>()
+  const [at, setAt] = useState<[number, number] | null>(null)
   const byBatter = kind === 'run_out' || kind === 'obstructing'
   const fielderShown = kind && NEEDS_FIELDER.includes(kind)
   const chosenFielder = fielder ?? (kind && KEEPER_KINDS.includes(kind) ? fielders.keeperId : undefined)
 
   function confirm() {
     if (!kind) return
-    const input: BallInput = { ...delivery, wicket: { kind, who: byBatter ? who : undefined, fielder: fielderShown ? chosenFielder : undefined } }
+    const placed = kind === 'caught' || kind === 'run_out'
+    const input: BallInput = { ...delivery, wicket: { kind, who: byBatter ? who : undefined, fielder: fielderShown ? chosenFielder : undefined, at: placed && at ? at : undefined } }
     if (byBatter && runs > 0) {
       if (dk === 'wd' || delivery.byes) input.byes = (delivery.byes ?? 0) + runs
       else input.bat = runs
@@ -672,6 +676,12 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
           <div>
             <span className="label">{kind === 'run_out' ? 'Fielder (optional)' : KEEPER_KINDS.includes(kind!) ? 'Wicket-keeper' : 'Caught by'}</span>
             <ChoiceChips options={fielders.xi.map((id) => ({ value: id, label: personName(id) }))} value={chosenFielder} onChange={setFielder} />
+          </div>
+        )}
+        {(kind === 'caught' || kind === 'run_out') && (
+          <div>
+            <span className="label">{kind === 'caught' ? 'Where was it caught?' : 'Where did the throw come from?'} (optional{at ? ` — ${shotRegion(at, false)}` : ''})</span>
+            <GroundMap exact picked={at} onPick={setAt} />
           </div>
         )}
         <button className="btn-primary" disabled={!kind || (byBatter && !who)} onClick={confirm}>

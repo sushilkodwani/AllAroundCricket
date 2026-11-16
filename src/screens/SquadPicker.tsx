@@ -2,7 +2,10 @@
 // guests, save in one write.
 import { useMemo, useState } from 'react'
 import { AVAIL_LABEL, AVAIL_TONE, useAvailability } from '../components/Availability'
+import { RoleTag } from '../components/Profile'
 import { Screen } from '../components/Screen'
+import { useScores } from '../components/StatsTab'
+import { careerStats, formOf } from '../lib/career'
 import { Avatar, Empty, ErrorNote, Field, PhoneInput, Pill, Sheet } from '../components/ui'
 import { fmtDayMonth } from '../lib/dates'
 import { addGuest, isGuestIn, matchesOf, setSquad } from '../lib/domain'
@@ -23,6 +26,11 @@ export function SquadPicker({ teamId, matchId }: { teamId: string; matchId: stri
   const [error, setError] = useState<string | null>(null)
   const backTo = `/teams/${teamId}/matches/${matchId}`
   const answers = useAvailability(teamId, matchId)
+  // Recent form beside each name (PLAN §40).
+  const { files, scored } = useScores(data.matches)
+  const stamp = files.map((f) => f.updatedAt).join('|')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const careers = useMemo(() => careerStats(files), [stamp])
 
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
   if (!team || !match || !store || !isAdmin) {
@@ -50,6 +58,11 @@ export function SquadPicker({ teamId, matchId }: { teamId: string; matchId: stri
   const lastWithSquad = sortMatchesAsc(data.matches)
     .filter((m) => m.id !== match.id && !m.cancelled && m.squad.length > 0 && m.date <= match.date)
     .pop()
+
+  const formLine = (id: string) => {
+    const f = formOf(careers.get(id), scored, 5)
+    return [f.bat.length ? `Bat ${f.bat.join(' ')}` : null, f.bowl.length ? `Bowl ${f.bowl.join(' ')}` : null].filter(Boolean).join(' · ')
+  }
 
   function toggle(id: string) {
     const next = new Set(selected)
@@ -121,9 +134,15 @@ export function SquadPicker({ teamId, matchId }: { teamId: string; matchId: stri
                 <label key={p.id} className="row cursor-pointer active:bg-alt">
                   <input type="checkbox" className="h-5 w-5 shrink-0 accent-[rgb(155,28,31)]" checked={on} onChange={() => toggle(p.id)} />
                   <Avatar name={p.name} color={team.color} size={36} />
-                  <span className="min-w-0 flex-1 truncate">
-                    {p.name}
-                    {!guest && !activeIds.includes(p.id) && <span className="text-muted"> (left team)</span>}
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate">
+                        {p.name}
+                        {!guest && !activeIds.includes(p.id) && <span className="text-muted"> (left team)</span>}
+                      </span>
+                      <RoleTag person={p} />
+                    </span>
+                    {formLine(p.id) && <span className="block truncate text-xs text-muted">{formLine(p.id)}</span>}
                   </span>
                   {answers.has(p.id) && <Pill tone={AVAIL_TONE[answers.get(p.id)!]}>{AVAIL_LABEL[answers.get(p.id)!]}</Pill>}
                   {guest && <Pill>Guest</Pill>}

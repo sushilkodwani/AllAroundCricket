@@ -10,7 +10,10 @@ import { SplitExpenses } from './screens/SplitExpenses'
 import { MatchDetail } from './screens/MatchDetail'
 import { Matches } from './screens/Matches'
 import { Onboard } from './screens/Onboard'
-import { OpponentDetail, OpponentPlayerStats } from './screens/OpponentDetail'
+import { Grounds } from './screens/Grounds'
+import { OpponentDetail, OpponentPlayerStats, OpponentScout } from './screens/OpponentDetail'
+import { PublicScorecard } from './screens/PublicScorecard'
+import { YearSummary } from './screens/YearSummary'
 import { PlayerStats } from './screens/PlayerStats'
 import { ScoreMatch } from './screens/ScoreMatch'
 import { ScoreView } from './screens/ScoreView'
@@ -50,7 +53,9 @@ export default function App() {
   }, [home])
 
   // Logged out: the URL says so too (and a stale deep link doesn't linger).
-  const stray = phase === 'out' && a !== 'onboard' && a !== 'setup'
+  // A public scorecard link (PLAN §44) opens for anyone, logged in or not.
+  const publicCard = a === 's' && !!b
+  const stray = phase === 'out' && a !== 'onboard' && a !== 'setup' && !publicCard
   useEffect(() => {
     if (stray) navigate('/onboard', { replace: true })
   }, [stray])
@@ -66,6 +71,7 @@ export default function App() {
     return () => navigator.serviceWorker?.removeEventListener('message', onMessage)
   }, [])
 
+  if (publicCard) return <PublicScorecard code={b} />
   if (phase === 'boot') return <Splash />
   if (phase === 'error') return <BootError />
   if (phase === 'out') return <Onboard mode={a === 'setup' ? 'setup' : 'join'} />
@@ -91,6 +97,9 @@ export default function App() {
     else screen = <Placeholder title="Not found" />
   } else if (a === 'teams' && b && c === 'players' && d && !e) screen = <PlayerStats teamId={b} personId={d} />
   else if (a === 'opponents' && b && !c) screen = <OpponentDetail opponentId={b} />
+  else if (a === 'opponents' && b && c === 'scout' && !d) screen = <OpponentScout opponentId={b} />
+  else if (a === 'teams' && b && c === 'year' && !d) screen = <YearSummary teamId={b} />
+  else if (a === 'settings' && b === 'grounds') screen = <Grounds />
   else if (a === 'opponents' && b && c === 'players' && d && !e) screen = <OpponentPlayerStats opponentId={b} personId={d} />
   else if (a === 'tournaments' && !b) screen = <Tournaments />
   else if (a === 'tournaments' && b && !c) screen = <TournamentDetail tournamentId={b} />

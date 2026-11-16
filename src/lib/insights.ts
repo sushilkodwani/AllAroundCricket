@@ -213,3 +213,35 @@ export function teamRecords(files: ScoreFile[], side: SideKey): TeamRecord[] {
   const order = ['total', 'low', 'winRuns', 'winWkts', 'score', 'stand', 'bowl', 'sixes']
   return order.map((k) => best.get(k)).filter((r): r is TeamRecord & { score: number } => !!r)
 }
+
+// ---------- pressure meter (PLAN §41) ----------
+export interface Pressure {
+  /** Share of legal balls with no run of any kind, 0–100. */
+  dotPct: number
+  /** Legal balls since the last four or six (the whole innings if there has been none). */
+  sinceBoundary: number
+  /** Runs off the last 12 legal balls (fewer early on). */
+  lastRuns: number
+  lastBalls: number
+}
+
+export function pressureOf(file: ScoreFile, idx: number): Pressure | null {
+  const balls = file.innings[idx]?.events.filter(isBall) ?? []
+  const legal = balls.filter((b) => b.kind === 'legal')
+  if (legal.length === 0) return null
+  let sinceBoundary = 0
+  for (let i = balls.length - 1; i >= 0; i--) {
+    const b = balls[i]
+    if (b.kind !== 'wd' && (b.bat === 4 || b.bat === 6)) break
+    if (b.kind === 'legal') sinceBoundary++
+  }
+  // The last 12 legal balls, together with any wides and no-balls bowled among them.
+  let count = 0
+  let lastRuns = 0
+  for (let i = balls.length - 1; i >= 0 && count < 12; i--) {
+    lastRuns += ballRuns(balls[i])
+    if (balls[i].kind === 'legal') count++
+  }
+  const dots = legal.filter((b) => ballRuns(b) === 0).length
+  return { dotPct: Math.round((dots * 100) / legal.length), sinceBoundary, lastRuns, lastBalls: count }
+}

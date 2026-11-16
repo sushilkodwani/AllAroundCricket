@@ -118,6 +118,10 @@ export function Funds() {
               </button>
             )}
 
+            <button className="btn-secondary" onClick={() => navigate(`/teams/${current.id}/year`)}>
+              📅 Year summary
+            </button>
+
             {isAdmin && owing.length > 0 && (
               <button className="btn-secondary" onClick={() => sheet.open('remindall')}>
                 🔔 Remind {owing.length} player{owing.length === 1 ? '' : 's'} with dues

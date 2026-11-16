@@ -16,7 +16,7 @@ import { Store } from './store'
 import { uuid } from './uuid'
 
 /** The small files every launch needs. */
-export const CORE_PATHS = [P.config, P.people, P.creds, P.teams, P.categories, P.opponents, P.tournaments]
+export const CORE_PATHS = [P.config, P.people, P.creds, P.teams, P.categories, P.opponents, P.tournaments, P.grounds]
 
 /** On the dev server, owner "demo" selects a fake repo kept in this browser. */
 export const demoAvailable = import.meta.env.DEV

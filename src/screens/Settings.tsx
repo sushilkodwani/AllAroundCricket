@@ -102,6 +102,7 @@ export function Settings() {
             <Section title="Admin">
               <MenuRow label="Users" hint={`${users.length} player${users.length === 1 ? '' : 's'} · access and PIN resets`} onClick={() => navigate('/settings/users')} />
               <MenuRow label="Expense categories" hint="What gets split after a match" onClick={() => navigate('/settings/categories')} />
+            <MenuRow label="Grounds" hint="Venues with map link, pitch and fee" onClick={() => navigate('/settings/grounds')} />
               <MenuRow label="Funds" hint={`Low balance below ₹${store ? lowBalanceThreshold(store) : 500}`} onClick={() => sheet.open('funds')} />
               <MenuRow
                 label="Data repo"

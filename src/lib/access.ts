@@ -93,7 +93,21 @@ export function canWrite(actor: Actor, path: string, before: unknown, after: unk
     return touched(b, a, (e) => e.id).every((e) => e.personId === actor.personId)
   }
 
+  // Profile: a player may change their own role, batting hand, bowling style and jersey number.
+  if (path === P.people && ownProfileOnly(actor.personId, before, after)) return true
+
   return scorerMayWrite(actor.scorerMatchIds ?? [], path, before, after)
+}
+
+const PROFILE_FIELDS = ['role', 'batsLeft', 'bowlStyle', 'jersey', 'updatedAt']
+
+function ownProfileOnly(personId: string, before: unknown, after: unknown): boolean {
+  const b = (before as PeopleFile | null)?.people ?? []
+  const a = (after as PeopleFile | null)?.people ?? []
+  if (a.length !== b.length) return false
+  const old = new Map(b.map((p) => [p.id, p]))
+  const changed = touched(b, a, (p) => p.id)
+  return changed.length > 0 && changed.every((p) => p.id === personId && without(old.get(p.id), PROFILE_FIELDS) === without(p, PROFILE_FIELDS))
 }
 
 /** Everything about a record except the named fields, for "nothing else changed" checks. */

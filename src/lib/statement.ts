@@ -89,3 +89,51 @@ export function duesText(matches: Match[], personId: string, name: string, teamN
   const parts = dues.map((d) => `${money(d.pending)} for vs ${d.match.opponent} (${fmtDayMonth(d.match.date)})`)
   return `Hi ${name.split(' ')[0]}, a reminder from ${teamName}: ${money(total)} is pending — ${parts.join(', ')}. Please pay when you can. Thanks!`
 }
+
+// ---------- year-end summary (PLAN §43) ----------
+export interface YearRow {
+  personId: string
+  /** Completed matches the player was in the squad for. */
+  played: number
+  /** Total of their match shares. */
+  shares: number
+  /** Money they handed over: fund contributions (less refunds) plus direct payments. */
+  paid: number
+  pending: number
+  /** Share per match played; null when they did not play. */
+  perMatch: number | null
+}
+
+/** One row per player with any activity in the calendar year (matches by match date, money by entry date). */
+export function yearSummary(funds: FundEntry[], matches: Match[], year: string): YearRow[] {
+  const rows = new Map<string, YearRow>()
+  const get = (personId: string) => {
+    let r = rows.get(personId)
+    if (!r) rows.set(personId, (r = { personId, played: 0, shares: 0, paid: 0, pending: 0, perMatch: null }))
+    return r
+  }
+  for (const e of funds) {
+    if (!e.date.startsWith(year)) continue
+    if (e.type === 'contribution') get(e.personId).paid += e.amount
+    else if (e.type === 'refund') get(e.personId).paid -= e.amount
+  }
+  for (const m of matches) {
+    if (m.cancelled || !m.date.startsWith(year)) continue
+    if (m.lifecycle === 'completed') for (const id of m.squad) get(id).played++
+    if (m.expense?.status !== 'submitted') continue
+    for (const sh of m.expense.shares) {
+      if (sh.total === 0) continue
+      const r = get(sh.personId)
+      r.shares += sh.total
+      if (sh.settled && sh.settledMethod !== 'funds') r.paid += sh.pending
+      else if (!sh.settled) r.pending += sh.pending
+    }
+  }
+  for (const r of rows.values()) r.perMatch = r.played > 0 ? Math.round(r.shares / r.played) : null
+  return [...rows.values()]
+}
+
+/** Years that have any match or fund entry, newest first. */
+export function activeYears(funds: FundEntry[], matches: Match[]): string[] {
+  return [...new Set([...funds.map((e) => e.date.slice(0, 4)), ...matches.filter((m) => !m.cancelled).map((m) => m.date.slice(0, 4))])].sort().reverse()
+}

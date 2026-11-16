@@ -1,10 +1,11 @@
 // Pieces shared by the scoring setup, the scoring pad and the scorecard viewer.
 import { useRef, useState, type ReactNode } from 'react'
 import { findOrCreatePlayer } from '../lib/domain'
+import { pressureOf } from '../lib/insights'
 import { normalizePhone } from '../lib/phone'
 import { BATTER_POS, ballToken, ballTone, type BallTone } from '../lib/scorecard'
 import { useApp } from '../state/AppContext'
-import type { BallEvent, Person } from '../types'
+import type { BallEvent, Person, ScoreFile } from '../types'
 import { ErrorNote, Field, PhoneInput, Sheet } from './ui'
 
 const TONE: Record<BallTone, string> = {
@@ -106,7 +107,24 @@ export interface GroundShot {
  * of the pitch. With `onPick` it is an input (tap where the ball went);
  * with `shots` it is a wagon wheel.
  */
-export function GroundMap({ left, shots = [], picked, onPick, children }: { left?: boolean; shots?: GroundShot[]; picked?: [number, number] | null; onPick?: (p: [number, number]) => void; children?: ReactNode }) {
+/** `exact` keeps the tapped spot (a catch in the ring) instead of stretching it to the rope; `marks` are ✕ points. */
+export function GroundMap({
+  left,
+  shots = [],
+  marks = [],
+  picked,
+  onPick,
+  exact,
+  children,
+}: {
+  left?: boolean
+  shots?: GroundShot[]
+  marks?: [number, number][]
+  picked?: [number, number] | null
+  onPick?: (p: [number, number]) => void
+  exact?: boolean
+  children?: ReactNode
+}) {
   const ref = useRef<SVGSVGElement>(null)
   const [bx, by] = BATTER_POS
   const off = left ? 1 : -1 // screen side of the off side
@@ -122,7 +140,11 @@ export function GroundMap({ left, shots = [], picked, onPick, children }: { left
         const r = ref.current.getBoundingClientRect()
         const x = ((e.clientX - r.left) / r.width) * 2.24 - 1.12
         const y = ((e.clientY - r.top) / r.height) * 2.24 - 1.12
-        onPick(toBoundary([x, y]))
+        if (!exact) return onPick(toBoundary([x, y]))
+        // Inside the rope: keep the spot, pulled back onto the field if the tap was outside it.
+        const d = Math.hypot(x, y)
+        const k = d > 1 ? 1 / d : 1
+        onPick([Math.round(x * k * 100) / 100, Math.round(y * k * 100) / 100])
       }}
     >
       <circle r="1" fill="var(--turf)" stroke="rgb(var(--border))" strokeWidth="0.02" />
@@ -142,14 +164,42 @@ export function GroundMap({ left, shots = [], picked, onPick, children }: { left
       {shots.map((s, i) => (
         <line key={i} x1={bx} y1={by} x2={s.shot[0]} y2={s.shot[1]} stroke={s.runs === 6 ? 'var(--series-2)' : 'var(--series-1)'} strokeWidth="0.022" strokeLinecap="round" />
       ))}
-      {picked && (
+      {marks.map((m, i) => (
+        <g key={`m${i}`} stroke="rgb(var(--danger))" strokeWidth="0.03" strokeLinecap="round">
+          <line x1={m[0] - 0.045} y1={m[1] - 0.045} x2={m[0] + 0.045} y2={m[1] + 0.045} />
+          <line x1={m[0] - 0.045} y1={m[1] + 0.045} x2={m[0] + 0.045} y2={m[1] - 0.045} />
+        </g>
+      ))}
+      {picked && !exact && (
         <>
           <line x1={bx} y1={by} x2={picked[0]} y2={picked[1]} stroke="rgb(var(--brand-text))" strokeWidth="0.03" strokeLinecap="round" />
           <circle cx={picked[0]} cy={picked[1]} r="0.06" fill="rgb(var(--brand))" stroke="rgb(var(--surface))" strokeWidth="0.02" />
         </>
       )}
+      {picked && exact && <circle cx={picked[0]} cy={picked[1]} r="0.06" fill="rgb(var(--danger))" stroke="rgb(var(--surface))" strokeWidth="0.02" />}
       <circle cx={bx} cy={by} r="0.035" fill="rgb(var(--text))" />
       {children}
     </svg>
+  )
+}
+
+/** Pressure meter (PLAN §41): how tied down the batting side is right now. */
+export function PressureStrip({ file, idx }: { file: ScoreFile; idx: number }) {
+  const p = pressureOf(file, idx)
+  if (!p) return null
+  const items: [string, string][] = [
+    ['Dot balls', `${p.dotPct}%`],
+    ['Since a boundary', `${p.sinceBoundary} ball${p.sinceBoundary === 1 ? '' : 's'}`],
+    [`Last ${p.lastBalls} balls`, `${p.lastRuns} run${p.lastRuns === 1 ? '' : 's'}`],
+  ]
+  return (
+    <div className="card grid grid-cols-3 divide-x divide-line py-2 text-center">
+      {items.map(([label, value]) => (
+        <div key={label} className="px-1">
+          <p className="text-sm font-semibold">{value}</p>
+          <p className="text-[11px] text-muted">{label}</p>
+        </div>
+      ))}
+    </div>
   )
 }

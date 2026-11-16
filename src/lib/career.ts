@@ -1,7 +1,7 @@
 // Career statistics (PLAN §28): each player's batting, bowling and fielding
 // record added up over every scored match. Worked out from the score files —
 // nothing extra is stored.
-import type { ScoreFile } from '../types'
+import type { Match, ScoreFile, WicketKind } from '../types'
 import { summarize } from './scorecard'
 import { BALLS, isBall, oversText } from './scoring'
 
@@ -40,6 +40,10 @@ export interface Career {
     best: { wickets: number; runs: number } | null
   }
   field: { catches: number; stumpings: number; runOuts: number }
+  /** How this batter got out, by kind. */
+  dismissals: Partial<Record<WicketKind, number>>
+  /** Where catches off this batter were taken (and run-out throws came from), when recorded. */
+  outAt: [number, number][]
   /** Recorded boundary directions, for the career wagon wheel. */
   shots: { shot: [number, number]; runs: number }[]
   byMatch: MatchLine[]
@@ -53,6 +57,8 @@ function blank(id: string): Career {
     bat: { innings: 0, notOuts: 0, runs: 0, balls: 0, fours: 0, sixes: 0, fifties: 0, hundreds: 0, ducks: 0, best: null },
     bowl: { innings: 0, balls: 0, runs: 0, wickets: 0, maidens: 0, wides: 0, noBalls: 0, best: null },
     field: { catches: 0, stumpings: 0, runOuts: 0 },
+    dismissals: {},
+    outAt: [],
     shots: [],
     byMatch: [],
   }
@@ -96,6 +102,7 @@ export function careerStats(files: ScoreFile[]): Map<string, Career> {
         if (b.runs === 0 && !notOut) c.ducks++
         if (!c.best || b.runs > c.best.runs || (b.runs === c.best.runs && notOut && !c.best.notOut)) c.best = { runs: b.runs, notOut }
         line(b.id).bat = { runs: b.runs, balls: b.balls, notOut }
+        if (b.out) get(b.id).dismissals[b.out.kind] = (get(b.id).dismissals[b.out.kind] ?? 0) + 1
       }
       for (const b of s.bowlers) {
         if (b.balls === 0 && b.runs === 0) continue // picked but never bowled
@@ -114,6 +121,7 @@ export function careerStats(files: ScoreFile[]): Map<string, Career> {
         if (e.shot) get(e.striker).shots.push({ shot: e.shot, runs: e.bat })
         const w = e.wicket
         if (!w) continue
+        if (w.at) get(w.who).outAt.push(w.at)
         if (w.kind === 'caught_bowled') get(e.bowler).field.catches++
         else if (w.fielder && (w.kind === 'caught' || w.kind === 'caught_behind')) get(w.fielder).field.catches++
         else if (w.fielder && w.kind === 'stumped') get(w.fielder).field.stumpings++
@@ -136,3 +144,22 @@ export const bowlOvers = (c: Career) => oversText(c.bowl.balls)
 export const bowlEconomy = (c: Career) => fixed(c.bowl.balls > 0 ? (c.bowl.runs * BALLS) / c.bowl.balls : null)
 export const bowlAverage = (c: Career) => fixed(c.bowl.wickets > 0 ? c.bowl.runs / c.bowl.wickets : null)
 export const bestBowling = (c: Career) => (c.bowl.best ? `${c.bowl.best.wickets}/${c.bowl.best.runs}` : '–')
+
+// ---------- form guide (PLAN §40) ----------
+export interface Form {
+  /** Latest first: "34", "12*", "0". */
+  bat: string[]
+  /** Latest first: "2/18". */
+  bowl: string[]
+}
+
+/** A player's last few innings and bowling spells, newest first. */
+export function formOf(c: Career | undefined, matches: Match[], count = 5): Form {
+  if (!c) return { bat: [], bowl: [] }
+  const date = new Map(matches.map((m) => [m.id, m.date + (m.time ?? '')]))
+  const lines = [...c.byMatch].sort((a, b) => (date.get(b.matchId) ?? '').localeCompare(date.get(a.matchId) ?? ''))
+  return {
+    bat: lines.filter((l) => l.bat).slice(0, count).map((l) => `${l.bat!.runs}${l.bat!.notOut ? '*' : ''}`),
+    bowl: lines.filter((l) => l.bowl).slice(0, count).map((l) => `${l.bowl!.wickets}/${l.bowl!.runs}`),
+  }
+}

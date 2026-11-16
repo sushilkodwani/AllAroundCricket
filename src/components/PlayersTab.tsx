@@ -5,6 +5,7 @@ import { fmtDate } from '../lib/dates'
 import { addExistingPlayer, addNewPlayer, changeNumber, lookupPlayer, removePlayer, renamePerson, type PlayerLookup } from '../lib/domain'
 import { maskPhone, normalizePhone } from '../lib/phone'
 import { lastPlayed, playedCount } from '../lib/stats'
+import { RoleTag } from './Profile'
 import { useApp, type TeamData } from '../state/AppContext'
 import { navigate, useSheet } from '../state/router'
 import type { Person, Team } from '../types'
@@ -77,7 +78,10 @@ export function PlayersTab({ data }: { data: TeamData & { team: Team } }) {
                 <button className="row active:bg-alt" onClick={() => sheet.open('player', p.id)}>
                   <Avatar name={p.name} color={team.color} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{p.name}</span>
+                    <span className="flex items-center gap-2 font-medium">
+                      <span className="truncate">{p.name}</span>
+                      <RoleTag person={p} />
+                    </span>
                     <span className="block truncate text-xs text-muted">
                       {played} match{played === 1 ? '' : 'es'} played
                       {isAdmin && ` · ${maskPhone(p.phoneLast4)}`}
@@ -391,6 +395,10 @@ function PlayerSheet({ person, data, onClose, onRemove }: { person: Person; data
             <div className="text-muted">{last ? `Last played ${fmtDate(last.date)} vs ${last.opponent}` : 'Hasn’t played yet'}</div>
           </div>
         </div>
+
+        <button className="btn-primary" onClick={() => navigate(`/teams/${data.team.id}/players/${person.id}`, { replace: true })}>
+          View profile and stats
+        </button>
 
         {isAdmin && store && (
           <>

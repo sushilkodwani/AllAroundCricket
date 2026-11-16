@@ -1,19 +1,23 @@
 import { useState } from 'react'
 import { AvailabilityCard } from '../components/Availability'
+import { RoleTag } from '../components/Profile'
 import { ResultChip, StatusChip } from '../components/match'
 import { MatchForm, RESULTS } from '../components/MatchForm'
 import { MatchMoney } from '../components/MatchMoney'
 import { HeaderButton, Screen } from '../components/Screen'
 import { Avatar, ChoiceChips, Confirm, Empty, ErrorNote, Field, Pill, Sheet } from '../components/ui'
 import { fmtDate, fmtDayMonth, fmtTime, relativeDay } from '../lib/dates'
-import { deleteMatch, isGuestIn, recordResult, setCancelled, setScorer } from '../lib/domain'
+import { deleteMatch, groundByName, isGuestIn, recordResult, setCancelled, setScorer } from '../lib/domain'
+import { expenseMessage, shareMessage, squadMessage } from '../lib/messages'
 import { canMarkComplete, matchStatus } from '../lib/stats'
 import { useApp, useTeam } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
 import { MATCH_TYPE_LABELS, type Match, type MatchResult } from '../types'
+import { GroundInfo } from './Grounds'
+import { ScoutCard } from './OpponentDetail'
 
 export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: string }) {
-  const { isAdmin, teams, store, session, personName, toast } = useApp()
+  const { isAdmin, teams, store, session, personName, toast, people } = useApp()
   const route = useRoute()
   const sheet = useSheet()
   const data = useTeam(teamId)
@@ -45,6 +49,9 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
   const inSquad = match.squad.includes(me)
   // The admin, or the one player the admin handed this match to (PLAN §31).
   const canScore = isAdmin || match.scorerId === me
+  const ground = store ? groundByName(store, match.venue) : undefined
+  const byId = new Map(people.map((p) => [p.id, p]))
+  const share = (text: string) => void shareMessage(text).then((how) => how === 'copied' && toast('Message copied'))
   const squadLocked = match.lifecycle !== 'scheduled'
   const activeIds = new Set(data.members.filter((m) => m.status === 'active').map((m) => m.personId))
   const squad = [...match.squad].sort((a, b) => personName(a).localeCompare(personName(b)))
@@ -111,6 +118,9 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
 
         <ErrorNote>{error}</ErrorNote>
 
+        {ground && <GroundInfo ground={ground} />}
+        {!match.cancelled && match.lifecycle === 'scheduled' && match.scoring !== 'finished' && match.opponentId && <ScoutCard opponentId={match.opponentId} />}
+
         {isAdmin && !match.cancelled && match.lifecycle === 'scheduled' && (
           <div>
             <button className="btn-primary w-full" disabled={!canMarkComplete(match)} onClick={() => navigate(`${base}/complete`)}>
@@ -164,10 +174,20 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
         )}
 
         <MatchMoney team={team} match={match} data={data} />
+        {match.expense?.status === 'submitted' && !match.cancelled && (
+          <button className="btn-secondary" onClick={() => share(expenseMessage(match, team, people))}>
+            📤 Share expenses on WhatsApp
+          </button>
+        )}
 
         <section>
           <div className="flex items-center justify-between">
             <h2 className="section-title">Squad ({match.squad.length})</h2>
+            {match.squad.length > 0 && !match.cancelled && (
+              <button className="btn-ghost min-h-[36px]" onClick={() => share(squadMessage(match, team, people))}>
+                📤 Share squad
+              </button>
+            )}
             {isAdmin && !match.cancelled && !squadLocked && match.squad.length > 0 && (
               <button className="btn-ghost min-h-[36px]" onClick={() => navigate(`${base}/squad`)}>
                 Edit squad
@@ -197,15 +217,16 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
           ) : (
             <div className="card divide-y divide-line overflow-hidden">
               {squad.map((id) => (
-                <div key={id} className={`row ${id === me ? 'bg-alt' : ''}`}>
+                <button key={id} className={`row active:bg-alt ${id === me ? 'bg-alt' : ''}`} onClick={() => navigate(`/teams/${teamId}/players/${id}`)}>
                   <Avatar name={personName(id)} color={team.color} size={36} />
                   <span className="min-w-0 flex-1 truncate">
                     {personName(id)}
                     {id === me && <span className="text-muted"> (you)</span>}
                     {!activeIds.has(id) && !isGuestIn(data.members, id) && <span className="text-muted"> (left team)</span>}
                   </span>
+                  <RoleTag person={byId.get(id)} />
                   {isGuestIn(data.members, id) && <Pill>Guest</Pill>}
-                </div>
+                </button>
               ))}
             </div>
           )}

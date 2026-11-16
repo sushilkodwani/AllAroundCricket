@@ -19,6 +19,10 @@ import type {
   MatchType,
   AvailabilityEntry,
   AvailabilityFile,
+  BowlStyle,
+  Ground,
+  GroundsFile,
+  PlayerRole,
   AvailabilityStatus,
   MembersFile,
   Membership,
@@ -968,4 +972,51 @@ export function queueDuesReminder(s: Store, teamId: string, personIds: string[])
   // Old requests are dropped so the file stays small; the notifier only acts on new ones.
   const messages = (s.get<OutboxFile>(P.outbox)?.messages ?? []).filter((m) => m.createdAt > cutoff)
   s.write(P.outbox, { schemaVersion: 1, messages: [...messages, { id: uuid(), kind: 'dues', teamId, personIds, createdAt: nowStamp() }] }, `Payment reminder to ${personIds.length} player${personIds.length === 1 ? '' : 's'}`)
+}
+// ---------- player profile (PLAN §39) ----------
+export interface ProfileInput {
+  role?: PlayerRole
+  batsLeft?: boolean
+  bowlStyle?: BowlStyle
+  jersey?: number
+}
+
+/** Role, batting hand, bowling style and jersey number. The admin edits anyone; a player edits their own. */
+export function updateProfile(s: Store, personId: string, input: ProfileInput): boolean {
+  if (input.jersey !== undefined && (!Number.isInteger(input.jersey) || input.jersey < 0 || input.jersey > 999)) throw new Error('Jersey number must be between 0 and 999.')
+  const now = nowStamp()
+  const people = peopleOf(s).map((p) => {
+    if (p.id !== personId) return p
+    const next: Person = { ...p, updatedAt: now }
+    for (const key of ['role', 'bowlStyle', 'jersey'] as const) {
+      if (input[key] === undefined) delete next[key]
+      else (next[key] as unknown) = input[key]
+    }
+    if (input.batsLeft) next.batsLeft = true
+    else delete next.batsLeft
+    return next
+  })
+  return putPeople(s, people, `Update profile of ${personName(s, personId)}`)
+}
+
+// ---------- grounds (PLAN §42) ----------
+export const groundsOf = (s: Store) => s.get<GroundsFile>(P.grounds)?.grounds ?? []
+export const groundByName = (s: Store, venue?: string) => (venue ? groundsOf(s).find((g) => g.name.toLowerCase() === venue.trim().toLowerCase()) : undefined)
+
+export function saveGround(s: Store, input: Omit<Ground, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): void {
+  const name = input.name.trim().replace(/\s+/g, ' ').slice(0, 60)
+  if (!name) throw new Error('Enter the ground’s name.')
+  const all = groundsOf(s)
+  if (all.some((g) => g.id !== input.id && g.name.toLowerCase() === name.toLowerCase())) throw new Error('A ground with this name already exists.')
+  const mapUrl = input.mapUrl?.trim() || undefined
+  if (mapUrl && !/^https:\/\/\S+$/.test(mapUrl)) throw new Error('The map link must start with https://')
+  if (/\d{10}/.test(`${input.contact ?? ''}${input.notes ?? ''}`.replace(/[\s-]/g, ''))) throw new Error('Don’t put a phone number here — everyone with the token can read it.')
+  const now = nowStamp()
+  const clean = { name, mapUrl, pitch: input.pitch, fee: input.fee && input.fee > 0 ? Math.round(input.fee) : undefined, contact: input.contact?.trim() || undefined, notes: input.notes?.trim() || undefined }
+  const grounds = input.id ? all.map((g) => (g.id === input.id ? { ...g, ...clean, updatedAt: now } : g)) : [...all, { id: uuid(), ...clean, createdAt: now, updatedAt: now }]
+  s.write(P.grounds, { schemaVersion: 1, grounds }, `${input.id ? 'Edit' : 'Add'} ground ${name}`)
+}
+
+export function deleteGround(s: Store, id: string): void {
+  s.write(P.grounds, { schemaVersion: 1, grounds: groundsOf(s).filter((g) => g.id !== id) }, 'Delete ground')
 }

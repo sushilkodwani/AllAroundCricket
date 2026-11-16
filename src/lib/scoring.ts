@@ -227,7 +227,7 @@ export interface BallInput {
   bat?: number
   byes?: number
   byeType?: 'b' | 'lb'
-  wicket?: { kind: WicketKind; who?: string; fielder?: string }
+  wicket?: { kind: WicketKind; who?: string; fielder?: string; at?: [number, number] }
   shot?: [number, number]
 }
 
@@ -254,6 +254,7 @@ export function addBall(file: ScoreFile, input: BallInput): ScoreFile {
     const who = k === 'run_out' || k === 'obstructing' ? (input.wicket.who ?? striker) : striker
     if (who !== striker && who !== nonStriker) throw new Error('Pick which batter is out.')
     wicket = { kind: k, who, fielder: input.wicket.fielder || undefined }
+    if (input.wicket.at) wicket.at = input.wicket.at
   }
 
   const ball: BallEvent = { t: 'ball', id: uuid(), striker, nonStriker, bowler, kind, bat, byes, at: nowStamp() }

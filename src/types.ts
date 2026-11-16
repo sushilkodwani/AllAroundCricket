@@ -39,6 +39,10 @@ export interface Person {
   teamIds: string[]
   /** Left-handed batter — used to name shot directions (PLAN §26). */
   batsLeft?: boolean
+  /** Player profile (PLAN §39). */
+  role?: PlayerRole
+  bowlStyle?: BowlStyle
+  jersey?: number
   createdAt: string
   updatedAt: string
 }
@@ -237,6 +241,44 @@ export interface SubscriptionsFile {
   subscriptions: PushSubscriptionRecord[]
 }
 
+// ---------- player profile (PLAN §39) ----------
+export type PlayerRole = 'batter' | 'bowler' | 'allrounder' | 'keeper'
+export type BowlStyle = 'rf' | 'rm' | 'ro' | 'rl' | 'lf' | 'lm' | 'lo' | 'lw'
+export const ROLE_LABELS: Record<PlayerRole, string> = { batter: 'Batter', bowler: 'Bowler', allrounder: 'All-rounder', keeper: 'Wicket-keeper' }
+export const ROLE_SHORT: Record<PlayerRole, string> = { batter: 'Bat', bowler: 'Bowl', allrounder: 'AR', keeper: 'WK' }
+export const BOWL_LABELS: Record<BowlStyle, string> = {
+  rf: 'Right-arm fast',
+  rm: 'Right-arm medium',
+  ro: 'Right-arm off spin',
+  rl: 'Right-arm leg spin',
+  lf: 'Left-arm fast',
+  lm: 'Left-arm medium',
+  lo: 'Left-arm orthodox spin',
+  lw: 'Left-arm wrist spin',
+}
+
+// ---------- grounds.json (PLAN §42) ----------
+export type PitchType = 'turf' | 'matting' | 'cement' | 'other'
+export const PITCH_LABELS: Record<PitchType, string> = { turf: 'Turf', matting: 'Matting', cement: 'Cement', other: 'Other' }
+export interface Ground {
+  id: string
+  name: string
+  /** A maps link (https only). */
+  mapUrl?: string
+  pitch?: PitchType
+  /** Usual ground fee in rupees. */
+  fee?: number
+  /** Who to call — a name, never a phone number (numbers stay out of the repo). */
+  contact?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+export interface GroundsFile {
+  schemaVersion: 1
+  grounds: Ground[]
+}
+
 // ---------- opponents.json (PLAN §23) ----------
 /** A team we play against. Kept for reuse; never shown in the Teams tab. */
 export interface Opponent {
@@ -295,7 +337,8 @@ export interface BallEvent {
   /** Runs run / boundary as byes or leg-byes; on a wide, the extra wides run. */
   byes: number
   byeType?: 'b' | 'lb'
-  wicket?: { kind: WicketKind; who: string; fielder?: string }
+  /** t = where the catch was taken / the throw came from (same coordinates as shot). */
+  wicket?: { kind: WicketKind; who: string; fielder?: string; at?: [number, number] }
   /** Where a boundary went: point on the ground, unit circle, centre = 0,0, y down. */
   shot?: [number, number]
   at: string

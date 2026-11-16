@@ -217,3 +217,113 @@ describe('write guard: availability and scorer', () => {
     expect(canWrite(scorer, 'teams/t/funds.json', { entries: [] }, { entries: [{}] })).toBe(false)
   })
 })
+
+import { careerStats, formOf } from './career'
+import { pressureOf } from './insights'
+import { expenseMessage, squadMessage } from './messages'
+import { buildPublicCard, decodeCard, encodeCard } from './publicCard'
+import { yearSummary } from './statement'
+import type { Team } from '../types'
+
+describe('pressure meter', () => {
+  it('dot share, balls since a boundary, recent runs', () => {
+    const f = game(5, [4, 0, 0, 1, { kind: 'wd' }, 0, 0])
+    expect(pressureOf(f, 0)).toEqual({ dotPct: 67, sinceBoundary: 5, lastRuns: 6, lastBalls: 6 })
+    expect(pressureOf(game(5, [{ kind: 'wd' }]), 0)).toBeNull()
+  })
+})
+
+describe('form guide and dismissals', () => {
+  it('lists the latest innings first and counts how a batter gets out', () => {
+    const a = { ...game(2, [6, { wicket: { kind: 'caught', fielder: 'a3', at: [0.5, 0.2] } }, ...rep(0, 10)]), matchId: 'old' }
+    const b = { ...game(2, rep(1, 12)), matchId: 'new' }
+    const careers = careerStats([a, b])
+    const matches = [{ id: 'old', date: '2026-11-01' }, { id: 'new', date: '2026-11-08' }] as Match[]
+    expect(formOf(careers.get('h1'), matches).bat).toEqual(['6*', '6'])
+    expect(careers.get('h1')!.dismissals).toEqual({ caught: 1 })
+    expect(careers.get('h1')!.outAt).toEqual([[0.5, 0.2]])
+    expect(formOf(careers.get('a1'), matches).bowl).toEqual(['0/6', '1/6'])
+    expect(formOf(undefined, matches)).toEqual({ bat: [], bowl: [] })
+  })
+})
+
+describe('whatsapp messages', () => {
+  const team = { name: 'Royal CC', shortName: 'RCC' } as Team
+  const people = [
+    { id: 'p1', name: 'Rahul', role: 'keeper' },
+    { id: 'p2', name: 'Amit' },
+  ] as Person[]
+  it('squad list is padded with TBD up to eleven', () => {
+    const text = squadMessage({ opponent: 'Lions', date: '2026-11-19', time: '07:00', venue: 'Oval', overs: 20, squad: ['p1', 'p2'] } as Match, team, people)
+    const lines = text.split('\n')
+    expect(lines[0]).toBe('🏏 *Royal CC vs Lions*')
+    expect(lines[1]).toBe('📅 Thu 19 Nov 2026 · 7:00 AM')
+    expect(lines).toContain('*Squad* (2 of 11)')
+    expect(lines).toContain('1. Amit')
+    expect(lines).toContain('2. Rahul (WK)')
+    expect(lines.filter((l) => l.endsWith('TBD'))).toHaveLength(9)
+    expect(lines[lines.length - 1]).toBe('11. TBD')
+  })
+  it('expense message shows each share and what is left to collect', () => {
+    const match = {
+      opponent: 'Lions',
+      date: '2026-11-19',
+      expense: {
+        status: 'submitted',
+        lines: [{ categoryName: 'Match fee', total: 1000 }, { categoryName: 'Balls', total: 300 }],
+        shares: [
+          { personId: 'p1', total: 650, fromFunds: 650, pending: 0, settled: true },
+          { personId: 'p2', total: 650, fromFunds: 150, pending: 500, settled: false },
+        ],
+      },
+    } as unknown as Match
+    const text = expenseMessage(match, team, people)
+    expect(text).toContain('Match fee: ₹1,000')
+    expect(text).toContain('Total: *₹1,300* · 2 players')
+    expect(text).toContain('Rahul — ₹650 (from fund ✓)')
+    expect(text).toContain('Amit — ₹650 (₹150 from fund, *₹500 to pay*)')
+    expect(text).toContain('Still to collect: *₹500*')
+    expect(expenseMessage({ ...match, expense: undefined } as Match, team, people)).toBe('')
+  })
+})
+
+describe('public scorecard link', () => {
+  it('survives the round trip through the link and holds names only', async () => {
+    const f = game(2, [6, { wicket: { kind: 'bowled' } }, ...rep(1, 10)], [4, 4, 4, 4, 4])
+    const card = buildPublicCard(f, (id) => `Player ${id}`, { date: 'Thu 19 Nov 2026' })
+    const code = await encodeCard(card)
+    expect(code).toMatch(/^[zj][A-Za-z0-9_-]+$/)
+    expect(await decodeCard(code)).toEqual(JSON.parse(JSON.stringify(card)))
+    expect(card.innings[0].bat[0]).toEqual(['Player h1', 'b Player a1', 6, 2, 0, 1])
+    expect(card.result).toBe('Away won by 10 wickets')
+    expect(JSON.stringify(card)).not.toMatch(/phone|token/i)
+    await expect(decodeCard('zAAAA')).rejects.toThrow(/damaged/)
+    await expect(decodeCard('x123')).rejects.toThrow(/damaged/)
+  })
+})
+
+describe('year summary', () => {
+  it('adds up a calendar year per player', () => {
+    const fund = (p: Partial<FundEntry>) => ({ id: 'f', teamId: 't', personId: 'p', type: 'contribution', amount: 0, date: '2026-03-01', createdAt: '', updatedAt: '', ...p }) as FundEntry
+    const m = (date: string, share: object, lifecycle = 'completed') => ({ id: date, date, cancelled: false, lifecycle, squad: ['p'], expense: { status: 'submitted', shares: [{ personId: 'p', total: 0, fromFunds: 0, pending: 0, settled: true, ...share }] } }) as unknown as Match
+    const rows = yearSummary(
+      [fund({ amount: 1000 }), fund({ type: 'refund', amount: 100 }), fund({ amount: 500, date: '2025-12-30' })],
+      [m('2026-03-02', { total: 300, fromFunds: 300, settledMethod: 'funds' }), m('2026-04-02', { total: 200, pending: 200, settledMethod: 'cash' }), m('2026-05-02', { total: 100, pending: 100, settled: false }, 'settling'), m('2025-05-02', { total: 999 })],
+      '2026',
+    )
+    expect(rows).toEqual([{ personId: 'p', played: 2, shares: 600, paid: 1100, pending: 100, perMatch: 300 }])
+  })
+})
+
+describe('write guard: own profile', () => {
+  const me = { id: 'p1', name: 'Me', access: 'view', isGuest: false, teamIds: ['t'], createdAt: '', updatedAt: '' } as Person
+  const other = { ...me, id: 'p2', name: 'Other' }
+  const pf = (...people: Person[]) => ({ schemaVersion: 1, people })
+  const viewer: Actor = { role: 'viewer', personId: 'p1' }
+  it('a player edits only their own profile fields', () => {
+    expect(canWrite(viewer, 'people.json', pf(me, other), pf({ ...me, role: 'keeper', jersey: 7 }, other))).toBe(true)
+    expect(canWrite(viewer, 'people.json', pf(me, other), pf(me, { ...other, role: 'keeper' }))).toBe(false)
+    expect(canWrite(viewer, 'people.json', pf(me, other), pf({ ...me, name: 'Boss' }, other))).toBe(false)
+    expect(canWrite(viewer, 'people.json', pf(me, other), pf({ ...me, access: 'none', role: 'keeper' }, other))).toBe(false)
+  })
+})
