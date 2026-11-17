@@ -1,9 +1,9 @@
 // Pieces shared by the scoring setup, the scoring pad and the scorecard viewer.
-import { useRef, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import { findOrCreatePlayer } from '../lib/domain'
 import { pressureOf } from '../lib/insights'
 import { normalizePhone } from '../lib/phone'
-import { BATTER_POS, ballToken, ballTone, type BallTone } from '../lib/scorecard'
+import { BATTER_POS, ballToken, ballTone, shotRegion, type BallTone } from '../lib/scorecard'
 import { useApp } from '../state/AppContext'
 import type { BallEvent, Person, ScoreFile } from '../types'
 import { ErrorNote, Field, PhoneInput, Sheet } from './ui'
@@ -103,6 +103,24 @@ export interface GroundShot {
 }
 
 /**
+ * The fielding regions drawn on the map. Angles are degrees from straight back
+ * past the bowler, leg side positive, and match `shotRegion` exactly.
+ */
+const REGIONS: { name: string; label: string; at: number; spans: [number, number][] }[] = [
+  { name: 'straight down the ground', label: 'Straight', at: 0, spans: [[-12, 12]] },
+  { name: 'long on', label: 'Long on', at: 31, spans: [[12, 50]] },
+  { name: 'mid wicket', label: 'Mid wicket', at: 65, spans: [[50, 80]] },
+  { name: 'square leg', label: 'Square leg', at: 97.5, spans: [[80, 115]] },
+  { name: 'fine leg', label: 'Fine leg', at: 141.5, spans: [[115, 168]] },
+  { name: 'behind the wicket', label: 'Behind', at: 180, spans: [[168, 180], [-180, -168]] },
+  { name: 'third man', label: 'Third man', at: -141.5, spans: [[-168, -115]] },
+  { name: 'point', label: 'Point', at: -97.5, spans: [[-115, -80]] },
+  { name: 'cover', label: 'Cover', at: -65, spans: [[-80, -50]] },
+  { name: 'long off', label: 'Long off', at: -31, spans: [[-50, -12]] },
+]
+const EDGES = [12, 50, 80, 115, 168]
+
+/**
  * The outfield seen from above: bowler's end at the bottom, batter at the top
  * of the pitch. With `onPick` it is an input (tap where the ball went);
  * with `shots` it is a wagon wheel.
@@ -128,6 +146,10 @@ export function GroundMap({
   const ref = useRef<SVGSVGElement>(null)
   const [bx, by] = BATTER_POS
   const off = left ? 1 : -1 // screen side of the off side
+  const clip = useId().replace(/:/g, '')
+  // A point at angle d (leg positive) and distance r from the batter, as the screen sees it.
+  const dir = (d: number, r: number): [number, number] => [bx + Math.sin((d * Math.PI) / 180) * r * (left ? -1 : 1), by + Math.cos((d * Math.PI) / 180) * r]
+  const here = picked ? shotRegion(picked, left) : null
   return (
     <svg
       ref={ref}
@@ -148,16 +170,42 @@ export function GroundMap({
       }}
     >
       <circle r="1" fill="var(--turf)" stroke="rgb(var(--border))" strokeWidth="0.02" />
+      <clipPath id={clip}>
+        <circle r="1" />
+      </clipPath>
+      <g clipPath={`url(#${clip})`}>
+        {/* the region the pick falls in */}
+        {REGIONS.filter((r) => r.name === here).flatMap((r) =>
+          r.spans.map(([a, b], i) => {
+            const p = dir(a, 2)
+            const q = dir(b, 2)
+            return <polygon key={r.name + i} points={`${bx},${by} ${p[0]},${p[1]} ${q[0]},${q[1]}`} fill="rgb(var(--brand))" opacity="0.2" />
+          }),
+        )}
+        {/* partition lines, mirrored on both sides */}
+        {EDGES.flatMap((e) => [e, -e]).map((e) => {
+          const p = dir(e, 2)
+          return <line key={e} x1={bx} y1={by} x2={p[0]} y2={p[1]} stroke="rgb(var(--text-muted))" strokeOpacity="0.4" strokeWidth="0.01" strokeDasharray="0.03 0.03" />
+        })}
+      </g>
       <circle r="0.48" fill="none" stroke="rgb(var(--border))" strokeWidth="0.012" />
       <rect x="-0.05" y="-0.18" width="0.1" height="0.36" rx="0.01" fill="var(--pitch)" />
-      <g fontSize="0.085" fill="rgb(var(--text-muted))" textAnchor="middle" fontWeight="600">
-        <text x={off * 0.74} y="-0.1">
+      <g fontSize="0.065" fill="rgb(var(--text-muted))" textAnchor="middle" fontWeight="600" stroke="var(--turf)" strokeWidth="0.03" paintOrder="stroke">
+        {REGIONS.map((r) => {
+          const [x, y] = dir(r.at, r.at === 180 ? 0.7 : 0.74)
+          return (
+            <text key={r.name} x={x} y={y + 0.02} fill={r.name === here ? 'rgb(var(--brand-text))' : undefined} fontWeight={r.name === here ? 800 : 600}>
+              {r.label}
+            </text>
+          )
+        })}
+        <text x={off * 0.22} y="-0.04" fontSize="0.055">
           OFF
         </text>
-        <text x={-off * 0.74} y="-0.1">
+        <text x={-off * 0.22} y="-0.04" fontSize="0.055">
           LEG
         </text>
-        <text x="0" y="0.92">
+        <text x="0" y="1.08" fontSize="0.07" stroke="none">
           bowler’s end
         </text>
       </g>
