@@ -53,7 +53,13 @@ export function startScoring(s: Store, input: StartInput): ScoreFile {
   if (scoreOf(s, input.teamId, input.matchId)) throw new Error('Scoring has already started for this match.')
   const file = newScore(input)
   addOpponentPlayers(s, input.opponentId, input.away.xi)
-  patchMatch(s, input.teamId, input.matchId, (m) => ({ ...m, overs: input.overs, opponentId: input.opponentId }), 'Start live scoring')
+  patchMatch(s, input.teamId, input.matchId, (m) => ({
+    ...m,
+    overs: input.overs,
+    opponentId: input.opponentId,
+    // The XI picked here is the squad: keep the match card and Squad section in step.
+    squad: m.lifecycle === 'scheduled' ? [...new Set([...m.squad, ...input.home.xi])] : m.squad,
+  }), 'Start live scoring')
   saveScore(s, file, `Start scoring vs ${input.away.name}`)
   return file
 }

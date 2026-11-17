@@ -74,6 +74,7 @@ export function Settings() {
               />
             }
           />
+          {!isAdmin && <MenuRow label="Data repo" hint="Replace the access key on this device" onClick={() => sheet.open('repo')} />}
           <button className="row font-medium text-bad active:bg-alt" onClick={() => setConfirmLogout(true)}>
             Log out
           </button>
@@ -192,6 +193,8 @@ export function Settings() {
             <p className="text-sm text-muted">
               {session?.owner}/{session?.repo}
             </p>
+            {isAdmin && (
+            <>
             <Field label="Token expiry date" hint={`You’ll see a reminder from ${TOKEN_WARN_DAYS} days before this date.`}>
               <input className="input" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
             </Field>
@@ -210,8 +213,10 @@ export function Settings() {
               </button>
             </div>
             <hr className="border-line" />
-            <Field label="Replace the token on this device" hint="After creating a new token, enter it here. Everyone else enters it when their app asks.">
-              <input className="input" type="password" value={newToken} onChange={(e) => setNewToken(e.target.value)} autoComplete="off" placeholder="github_pat_…" />
+            </>
+            )}
+            <Field label="Replace the access key on this device" hint="After a new key is created, enter it here.">
+              <input className="input" type="password" value={newToken} onChange={(e) => setNewToken(e.target.value)} autoComplete="off"  />
             </Field>
             <ErrorNote>{tokenError}</ErrorNote>
             <button
@@ -223,7 +228,7 @@ export function Settings() {
                 try {
                   await replaceToken(newToken)
                   setNewToken('')
-                  toast('Token replaced on this device')
+                  toast('Access key replaced on this device')
                 } catch (e) {
                   setTokenError((e as Error).message)
                 } finally {
