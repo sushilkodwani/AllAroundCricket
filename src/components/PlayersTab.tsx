@@ -14,11 +14,15 @@ import { Avatar, Confirm, Empty, ErrorNote, Field, PhoneInput, Pill, Sheet, Togg
 
 function shareText(name: string, team: Team, owner: string, repo: string): string {
   const link = `${window.location.origin}${window.location.pathname}`
+  // A deployed app has its data repo built in, so players are not asked for it.
+  const repoKnown = !!import.meta.env.VITE_DATA_OWNER?.trim() && !!import.meta.env.VITE_DATA_REPO?.trim()
   return [
     `Hi ${name}! You’ve been added to ${team.name} on AllAroundCricket.`,
     '',
     `1. Open ${link} on your phone and add it to your Home Screen.`,
-    `2. Open the app and enter: repo owner “${owner}”, repo name “${repo}”, the access token (I’ll send it separately), and your 10-digit mobile number.`,
+    repoKnown
+      ? '2. Open the app and enter your 10-digit mobile number and the Access Key (I’ll send it separately).'
+      : `2. Open the app and enter: your 10-digit mobile number, repo owner “${owner}”, repo name “${repo}”, and the Access Key (I’ll send it separately).`,
     '3. Set your own 6-digit PIN.',
   ].join('\n')
 }
@@ -183,7 +187,7 @@ function AddPlayerSheet({ team, onClose }: { team: Team; onClose: () => void }) 
       <Sheet title="Player added" onClose={onClose}>
         <div className="flex flex-col gap-3">
           <p className="rounded-xl bg-ok/15 px-3 py-2 text-sm text-ok">{added.name} added — they can now onboard with their number.</p>
-          <p className="text-sm text-muted">Send them the app link and steps. Share the access token separately and privately.</p>
+          <p className="text-sm text-muted">Send them the app link and steps. Share the Access Key separately and privately.</p>
           <div className="flex flex-wrap gap-2">
             {'share' in navigator && (
               <button className="btn-primary flex-1" onClick={() => void navigator.share({ text }).catch(() => {})}>

@@ -74,8 +74,8 @@ export function TokenGate() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   return (
-    <Shell icon="🔑" title="New access token needed">
-      <p className="text-sm text-muted">The access token stopped working (expired or changed). Enter the new token from your admin.</p>
+    <Shell icon="🔑" title="New Access Key needed">
+      <p className="text-sm text-muted">The Access Key stopped working (expired or changed). Enter the new key from your admin.</p>
       <form
         className="flex w-full flex-col gap-3 text-left"
         onSubmit={async (e) => {
@@ -91,12 +91,12 @@ export function TokenGate() {
           }
         }}
       >
-        <Field label="Access token">
-          <input className="input" type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" placeholder="github_pat_…" />
+        <Field label="Access Key">
+          <input className="input" type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
         </Field>
         <ErrorNote>{error}</ErrorNote>
         <button className="btn-primary" disabled={busy || !token.trim()}>
-          {busy ? 'Checking…' : 'Save token'}
+          {busy ? 'Checking…' : 'Save key'}
         </button>
       </form>
       <button className="text-sm font-medium text-accent" onClick={() => void logout()}>

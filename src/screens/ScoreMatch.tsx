@@ -150,9 +150,9 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
   }
 
   /** Every delivery goes through here. A four or six first asks where it went. */
-  function commit(input: BallInput, skipShot = false) {
+  function commit(input: BallInput) {
     const boundary = input.kind !== 'wd' && (input.bat === 4 || input.bat === 6)
-    if (boundary && !input.shot && !skipShot && !input.wicket) {
+    if (boundary && !input.shot && !input.wicket) {
       setPending(input)
       show('shot')
       return
@@ -424,7 +424,6 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
           onLeft={(v) => setBatsLeft(store, striker, v)}
           onClose={sheet.close}
           onSave={(shot) => commit({ ...pending, shot })}
-          onSkip={() => commit(pending, true)}
         />
       )}
 
@@ -696,7 +695,7 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
 }
 
 // ---------- where did the boundary go ----------
-function ShotSheet({ runs, batter, left, onLeft, onSave, onSkip, onClose }: { runs: number; batter: string; left: boolean; onLeft: (v: boolean) => void; onSave: (shot: [number, number]) => void; onSkip: () => void; onClose: () => void }) {
+function ShotSheet({ runs, batter, left, onLeft, onSave, onClose }: { runs: number; batter: string; left: boolean; onLeft: (v: boolean) => void; onSave: (shot: [number, number]) => void; onClose: () => void }) {
   const [picked, setPicked] = useState<[number, number] | null>(null)
   return (
     <Sheet title={`${runs === 6 ? 'SIX' : 'FOUR'} — where did it go?`} onClose={onClose}>
@@ -706,14 +705,9 @@ function ShotSheet({ runs, batter, left, onLeft, onSave, onSkip, onClose }: { ru
         <span className="min-w-0 truncate">{batter} bats left-handed</span>
         <Toggle checked={left} onChange={onLeft} label={`${batter} bats left-handed`} />
       </div>
-      <div className="mt-3 flex gap-2">
-        <button className="btn-secondary flex-1" onClick={onSkip}>
-          Skip
-        </button>
-        <button className="btn-primary flex-1" disabled={!picked} onClick={() => picked && onSave(picked)}>
-          Save
-        </button>
-      </div>
+      <button className="btn-primary mt-3 w-full" disabled={!picked} onClick={() => picked && onSave(picked)}>
+        Save {runs === 6 ? 'six' : 'four'}
+      </button>
     </Sheet>
   )
 }
@@ -746,11 +740,11 @@ function EditBallSheet({ ball, left, onSave, onClose }: { ball: BallEvent; left:
         </div>
         {boundary && (
           <div>
-            <span className="label">Direction {shot ? `— ${shotRegion(shot, left)}` : '(not set)'}</span>
+            <span className="label">Direction (required){shot ? ` — ${shotRegion(shot, left)}` : ''}</span>
             <GroundMap left={left} picked={shot} onPick={setShot} />
           </div>
         )}
-        <button className="btn-primary" onClick={() => onSave(wide ? { bat: 0, byes: n } : how === 'bat' ? { bat: n, byes: 0, shot: boundary ? shot : null } : { bat: 0, byes: n, byeType: how, shot: null })}>
+        <button className="btn-primary" disabled={boundary && !shot} onClick={() => onSave(wide ? { bat: 0, byes: n } : how === 'bat' ? { bat: n, byes: 0, shot: boundary ? shot : null } : { bat: 0, byes: n, byeType: how, shot: null })}>
           Save
         </button>
         <p className="text-xs text-muted">To turn a ball into a wide or no-ball (or back), use Undo instead.</p>

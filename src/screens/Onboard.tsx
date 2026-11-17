@@ -31,10 +31,16 @@ function Brand() {
 export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
   const { login, notice } = useApp()
   const saved = useRef(loadRepoRef()).current
-  const [owner, setOwner] = useState(saved?.owner ?? import.meta.env.VITE_DATA_OWNER ?? '')
-  const [repo, setRepo] = useState(saved?.repo ?? import.meta.env.VITE_DATA_REPO ?? '')
+  // A deployed app already knows its data repo (build settings), so players only need the access key.
+  const envOwner = (import.meta.env.VITE_DATA_OWNER ?? '').trim()
+  const envRepo = (import.meta.env.VITE_DATA_REPO ?? '').trim()
+  const repoFixed = !!envOwner && !!envRepo
+  const [owner, setOwner] = useState(repoFixed ? envOwner : (saved?.owner ?? ''))
+  const [repo, setRepo] = useState(repoFixed ? envRepo : (saved?.repo ?? ''))
   const [token, setToken] = useState(saved?.token ?? '')
   const [editRepo, setEditRepo] = useState(!saved)
+  // The admin-setup link only appears once this repo has been seen to be empty.
+  const [emptyRepo, setEmptyRepo] = useState(false)
   const [name, setName] = useState('')
   const [phoneInput, setPhoneInput] = useState('')
   const [step, setStep] = useState<Step>('form')
@@ -81,7 +87,8 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
   async function submitForm() {
     setError(null)
     const r = ref()
-    if (!r.owner || !r.repo || !r.token) return setError('Enter the repo owner, repo name and access token.')
+    if (!r.token) return setError('Enter your access key.')
+    if (!r.owner || !r.repo) return setError('Enter the repo owner and repo name.')
     if (mode === 'setup' && !name.trim()) return setError('Enter your name.')
     const p = normalizePhone(phoneInput)
     if (!p.ok) return setError(p.error)
@@ -95,7 +102,10 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
         setStep('set_pin')
         return
       }
-      if (!isSetUp(s)) throw new Error('This repo is not set up yet. If you are the admin, use “First time setup”.')
+      if (!isSetUp(s)) {
+        setEmptyRepo(true)
+        throw new Error('This app has not been set up yet. If you are the admin, use “First time setup” below.')
+      }
       const found = await findPersonByPhone(s, p.phone)
       const next = onboardStep(found, configOf(s)!, credsOf(s))
       if (next === 'no_access' || !found) {
@@ -215,49 +225,49 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
             <p className="text-sm text-muted">Do this once for a new, empty private data repo. You become the admin — the only person who can edit.</p>
           )}
 
-          {editRepo ? (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Repo owner">
-                  <input className="input" value={owner} onChange={(e) => setOwner(e.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="github-user" />
-                </Field>
-                <Field label="Repo name">
-                  <input className="input" value={repo} onChange={(e) => setRepo(e.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="cricket-data" />
-                </Field>
-              </div>
-              <Field label="Access token" hint={mode === 'join' ? 'Your team admin shares this with you.' : 'Fine-grained token for only the data repo, Contents: Read and write.'}>
-                <input className="input" type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" placeholder="github_pat_…" />
-              </Field>
-              {demoAvailable && <p className="text-xs text-muted">Dev server only: owner “demo” with any repo name and any token uses a fake repo stored in this browser.</p>}
-            </>
-          ) : (
-            <div className="card flex items-center justify-between px-4 py-3 text-sm">
-              <span className="min-w-0 truncate">
-                Data repo: <strong>{owner}/{repo}</strong>
-              </span>
-              <button type="button" className="font-semibold text-accent" onClick={() => setEditRepo(true)}>
-                Change
-              </button>
-            </div>
-          )}
-
+          <Field label="Mobile number (10 digits)" hint="No country code. It is never stored or shown as-is.">
+            <PhoneInput value={phoneInput} onChange={setPhoneInput} autoFocus />
+          </Field>
           {mode === 'setup' && (
             <Field label="Your name">
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="name" />
             </Field>
           )}
-          <Field label="Mobile number (10 digits)" hint="No country code. It is never stored or shown as-is.">
-            <PhoneInput value={phoneInput} onChange={setPhoneInput} />
+          {!repoFixed &&
+            (editRepo ? (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Repo owner">
+                  <input className="input" value={owner} onChange={(e) => setOwner(e.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+                </Field>
+                <Field label="Repo name">
+                  <input className="input" value={repo} onChange={(e) => setRepo(e.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+                </Field>
+              </div>
+            ) : (
+              <div className="card flex items-center justify-between px-4 py-3 text-sm">
+                <span className="min-w-0 truncate">
+                  Data repo: <strong>{owner}/{repo}</strong>
+                </span>
+                <button type="button" className="font-semibold text-accent" onClick={() => setEditRepo(true)}>
+                  Change
+                </button>
+              </div>
+            ))}
+          <Field label="Access Key" hint={mode === 'join' ? 'Your team admin shares this with you.' : 'Fine-grained token for only the data repo, Contents: Read and write.'}>
+            <input className="input" type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
           </Field>
+          {demoAvailable && !repoFixed && <p className="text-xs text-muted">Dev server only: owner “demo” with any repo name and any key uses a fake repo stored in this browser.</p>}
 
           <ErrorNote>{error}</ErrorNote>
           <button className="btn-primary" disabled={busy}>
             {busy ? 'Checking…' : 'Continue'}
           </button>
           {mode === 'join' ? (
-            <button type="button" className="text-sm font-medium text-accent" onClick={() => navigate('/setup')}>
-              First time setup (admin)
-            </button>
+            emptyRepo && (
+              <button type="button" className="text-sm font-medium text-accent" onClick={() => navigate('/setup')}>
+                First time setup (admin)
+              </button>
+            )
           ) : (
             <button type="button" className="text-sm font-medium text-accent" onClick={() => navigate('/onboard')}>
               Already set up? Use normal onboarding
