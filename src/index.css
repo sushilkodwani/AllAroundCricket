@@ -12,6 +12,9 @@
   --surface: 255 255 255;
   --surface-alt: 247 247 247;
   --border: 229 229 229;
+  /* Unselected tag buttons: a visible step away from the page, with a firmer outline. */
+  --chip: 238 239 242;
+  --chip-line: 190 192 200;
   --text: 17 17 17;
   --text-muted: 107 107 107;
   --success: 21 128 61;
@@ -33,6 +36,8 @@
   --surface: 18 18 18;
   --surface-alt: 28 28 28;
   --border: 42 42 42;
+  --chip: 44 44 50;
+  --chip-line: 92 92 102;
   --text: 245 245 245;
   --text-muted: 163 163 163;
   --success: 34 197 94;
@@ -95,10 +100,10 @@ button {
     @apply mb-1 block text-sm font-medium text-ink;
   }
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full bg-alt px-2.5 py-1 text-xs font-medium text-ink;
+    @apply inline-flex items-center gap-1 rounded-full border border-chip-line bg-chip px-2.5 py-1 text-xs font-medium text-ink;
   }
   .chip-on {
-    @apply inline-flex items-center gap-1 rounded-full bg-brand px-2.5 py-1 text-xs font-medium text-on-brand;
+    @apply inline-flex items-center gap-1 rounded-full border border-brand bg-brand px-2.5 py-1 text-xs font-medium text-on-brand;
   }
   .row {
     @apply flex min-h-[52px] w-full items-center gap-3 px-4 py-2.5 text-left;
@@ -128,4 +133,11 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .shake, .sheet-in { animation: none; }
+}
+
+/* Our own clear button replaces the browser's on search fields. */
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
 }

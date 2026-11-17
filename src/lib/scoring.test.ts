@@ -105,7 +105,7 @@ describe('extras', () => {
     f = balls(f, { kind: 'wd' })
     expect(isFreeHit(inn(f))).toBe(true)
     expect(() => addBall(f, { wicket: { kind: 'bowled' } })).toThrow(/free hit/)
-    f = balls(f, { wicket: { kind: 'run_out', who: 'h1' } })
+    f = balls(f, { wicket: { kind: 'run_out', who: 'h1', fielder: 'a1' } })
     expect(isFreeHit(inn(f))).toBe(false)
   })
   it('no bowled off a no-ball, no lbw off a wide', () => {
@@ -326,5 +326,23 @@ describe('scorecard', () => {
     expect(shotRegion([1, -0.14])).toBe('square leg')
     expect(shotRegion([-0.7, 0.6])).toBe('long off')
     expect(shotRegion([0.7, -0.9])).toBe('fine leg')
+  })
+})
+
+describe('mandatory details', () => {
+  const g = () => newScore({ teamId: 't', matchId: 'm', overs: 5, opponentId: 'o', home: { name: 'H', shortName: 'H', xi: ['h1', 'h2'] }, away: { name: 'A', shortName: 'A', xi: ['a1', 'a2'] }, toss: { wonBy: 'home', chose: 'bat' } })
+  it('needs a named fielder for catches, stumpings and run outs', () => {
+    let f = setCrease(g(), { striker: 'h1', nonStriker: 'h2', bowler: 'a1' })
+    expect(() => addBall(f, { wicket: { kind: 'caught' } })).toThrow(/catch/)
+    expect(() => addBall(f, { wicket: { kind: 'run_out', who: 'h1' } })).toThrow(/ran the batter out/)
+    expect(() => addBall(f, { wicket: { kind: 'stumped' } })).toThrow(/keeper/)
+    f = addBall(f, { wicket: { kind: 'caught', fielder: 'a2' } })
+    expect(summarize(f, 0).wickets).toBe(1)
+  })
+  it('needs the toss and no more than eleven a side', () => {
+    const base = { teamId: 't', matchId: 'm', overs: 5, opponentId: 'o', home: { name: 'H', shortName: 'H', xi: ['h1', 'h2'] }, away: { name: 'A', shortName: 'A', xi: ['a1', 'a2'] } }
+    expect(() => newScore({ ...base, toss: {} as never })).toThrow(/toss/)
+    const twelve = Array.from({ length: 12 }, (_, i) => `x${i}`)
+    expect(() => newScore({ ...base, home: { ...base.home, xi: twelve }, toss: { wonBy: 'home', chose: 'bat' } })).toThrow(/11 at most/)
   })
 })

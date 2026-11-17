@@ -12,6 +12,7 @@ import { economy, fmtRate, shotRegion, strikeRate, summarize, type BatLine, type
 import { applyScore } from '../lib/scoreDomain'
 import {
   BALLS,
+  FIELDER_REQUIRED,
   NO_BALL_WICKETS,
   WIDE_WICKETS,
   addBall,
@@ -45,7 +46,6 @@ import { WICKET_LABELS, type BallEvent, type ScoreFile, type SideKey, type Wicke
 type Role = 'striker' | 'nonStriker' | 'bowler'
 const ROLE_LABEL: Record<Role, string> = { striker: 'striker', nonStriker: 'non-striker', bowler: 'bowler' }
 const PAD_KINDS: WicketKind[] = ['bowled', 'caught', 'caught_behind', 'caught_bowled', 'lbw', 'stumped', 'run_out', 'hit_wicket', 'obstructing']
-const NEEDS_FIELDER: WicketKind[] = ['caught', 'caught_behind', 'stumped', 'run_out']
 const KEEPER_KINDS: WicketKind[] = ['caught_behind', 'stumped']
 
 /** Keeps the phone awake while scoring, where the browser allows it. */
@@ -173,7 +173,7 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
   }
 
   const ready = !need && !inn.closed
-  const padBtn = 'flex min-h-[54px] items-center justify-center rounded-xl border border-line bg-surface text-lg font-bold active:bg-alt disabled:opacity-40'
+  const padBtn = 'flex min-h-[54px] items-center justify-center rounded-xl border border-chip-line bg-chip text-lg font-bold active:bg-line disabled:opacity-40'
   const striker = inn.crease.striker
   const editing = sheet.name === 'editball' ? (inn.events.find((e) => e.t === 'ball' && e.id === sheet.arg) as BallEvent | undefined) : undefined
 
@@ -572,7 +572,7 @@ function PickSheet({ file, role, batLines, bowlLines, onPick, onAdd, onClose }: 
 // ---------- extras ----------
 function ExtraSheet({ kind, onCommit, onWicket, onClose }: { kind: 'wd' | 'nb' | 'b' | 'lb'; onCommit: (input: BallInput) => void; onWicket: (input: BallInput) => void; onClose: () => void }) {
   const [how, setHow] = useState<'bat' | 'b' | 'lb'>('bat')
-  const btn = 'flex min-h-[54px] items-center justify-center rounded-xl border border-line bg-surface text-lg font-bold active:bg-alt'
+  const btn = 'flex min-h-[54px] items-center justify-center rounded-xl border border-chip-line bg-chip text-lg font-bold active:bg-line'
   if (kind === 'b' || kind === 'lb') {
     return (
       <Sheet title={kind === 'b' ? 'Byes' : 'Leg byes'} onClose={onClose}>
@@ -642,11 +642,13 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
   const [fielder, setFielder] = useState<string | undefined>()
   const [at, setAt] = useState<[number, number] | null>(null)
   const byBatter = kind === 'run_out' || kind === 'obstructing'
-  const fielderShown = kind && NEEDS_FIELDER.includes(kind)
+  const fielderShown = kind && FIELDER_REQUIRED.includes(kind)
   const chosenFielder = fielder ?? (kind && KEEPER_KINDS.includes(kind) ? fielders.keeperId : undefined)
 
+  const ready = !!kind && (!byBatter || !!who) && (!fielderShown || !!chosenFielder)
+
   function confirm() {
-    if (!kind) return
+    if (!kind || !ready) return
     const placed = kind === 'caught' || kind === 'run_out'
     const input: BallInput = { ...delivery, wicket: { kind, who: byBatter ? who : undefined, fielder: fielderShown ? chosenFielder : undefined, at: placed && at ? at : undefined } }
     if (byBatter && runs > 0) {
@@ -674,7 +676,7 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
         )}
         {fielderShown && (
           <div>
-            <span className="label">{kind === 'run_out' ? 'Fielder (optional)' : KEEPER_KINDS.includes(kind!) ? 'Wicket-keeper' : 'Caught by'}</span>
+            <span className="label">{kind === 'run_out' ? 'Run out by' : KEEPER_KINDS.includes(kind!) ? 'Wicket-keeper' : 'Caught by'} (required)</span>
             <ChoiceChips options={fielders.xi.map((id) => ({ value: id, label: personName(id) }))} value={chosenFielder} onChange={setFielder} />
           </div>
         )}
@@ -684,7 +686,8 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
             <GroundMap exact picked={at} onPick={setAt} />
           </div>
         )}
-        <button className="btn-primary" disabled={!kind || (byBatter && !who)} onClick={confirm}>
+        {!kind ? <p className="text-sm text-muted">Pick how the batter got out.</p> : fielderShown && !chosenFielder ? <p className="text-sm text-warn">Pick the fielder above to continue.</p> : null}
+        <button className="btn-primary" disabled={!ready} onClick={confirm}>
           Confirm wicket
         </button>
       </div>
@@ -797,7 +800,7 @@ function PenaltySheet({ batting, fielding, onAdd, onClose }: { batting: string; 
             onChange={setTo}
           />
         </div>
-        <button className="btn-primary" onClick={() => onAdd(Number(runs), to)}>
+        <button className="btn-primary" disabled={!(Number(runs) > 0)} onClick={() => onAdd(Number(runs), to)}>
           Add penalty runs
         </button>
       </div>

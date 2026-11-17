@@ -71,8 +71,20 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
 
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
 
+  // Everything the scorer still has to fill in before the first ball.
+  const todo: string[] = []
+  if (!(Number(oversValue) >= 1)) todo.push('Enter the overs per innings')
+  for (const [name, xi] of [[team.name, ourXi], [match.opponent, theirXi]] as const) {
+    if (xi.length < 2) todo.push(`Pick the players for ${name} (at least 2)`)
+    else if (xi.length > 11) todo.push(`${name}: ${xi.length} picked — a side plays 11 at most`)
+  }
+  if (!wonBy) todo.push('Toss: pick who won it')
+  if (!chose) todo.push('Toss: pick bat or bowl')
+  if (!opponent) todo.push('Waiting for the opponent team to load')
+
   function start() {
     setError(null)
+    if (todo.length > 0) return setError(todo[0])
     if (!store || !opponent) return setError('The opponent team is still loading. Try again.')
     if (!wonBy || !chose) return setError('Record the toss: who won it and what they chose.')
     try {
@@ -101,7 +113,7 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
       title="Start live scoring"
       back={base}
       footer={
-        <button className="btn-primary w-full" onClick={start}>
+        <button className="btn-primary w-full" disabled={todo.length > 0} onClick={start}>
           Start match
         </button>
       }
@@ -181,6 +193,16 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
           </div>
         </section>
 
+        {todo.length > 0 && (
+          <div className="rounded-xl border border-warn/40 bg-warn/10 px-4 py-3 text-sm" role="status">
+            <p className="font-semibold text-warn">Still to do before the first ball</p>
+            <ul className="mt-1 list-disc pl-5">
+              {todo.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <ErrorNote>{error}</ErrorNote>
       </div>
 

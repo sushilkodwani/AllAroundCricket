@@ -15,6 +15,7 @@ export default {
         surface: token('surface'),
         alt: token('surface-alt'),
         line: token('border'),
+        chip: { DEFAULT: token('chip'), line: token('chip-line') },
         ink: token('text'),
         muted: token('text-muted'),
         ok: token('success'),

@@ -232,7 +232,7 @@ export function SplitExpenses({ teamId, matchId }: { teamId: string; matchId: st
                           return (
                             <button
                               key={l.categoryId}
-                              className={`min-h-[32px] rounded-full border px-2.5 text-xs ${out ? 'border-line text-muted line-through' : 'border-line bg-alt'}`}
+                              className={`min-h-[32px] rounded-full border px-2.5 text-xs ${out ? 'border-line text-muted line-through' : 'border-chip-line bg-chip'}`}
                               aria-pressed={!out}
                               aria-label={`${l.categoryName} for ${personName(id)}: ${out ? 'excluded' : 'included'}`}
                               onClick={() => toggleExclude(l.categoryId, id)}

@@ -117,7 +117,7 @@ function setup() {
   store.actor = { role: 'admin', personId: 'admin' }
   store.write('people.json', { schemaVersion: 1, people: [] }, 'seed')
   const team = createTeam(store, { name: 'Royal Cricket Club', color: '#000' })
-  const match = addMatch(store, team.id, { date: '2026-01-10', opponent: 'Lions', matchType: 'friendly' })
+  const match = addMatch(store, team.id, { date: '2026-01-10', time: '10:00', opponent: 'Lions', matchType: 'friendly' })
   setSquad(store, team.id, match.id, squad11)
   return { backend, store, teamId: team.id, matchId: match.id }
 }
@@ -193,10 +193,10 @@ describe('match lifecycle and the fund ledger', () => {
 
   it('completes without a split only from the match day', () => {
     const { store, teamId } = setup()
-    const future = addMatch(store, teamId, { date: '2999-01-01', opponent: 'Later', matchType: 'friendly' })
+    const future = addMatch(store, teamId, { date: '2999-01-01', time: '10:00', opponent: 'Later', matchType: 'friendly' })
     expect(canMarkComplete(future)).toBe(false)
     expect(() => completeMatch(store, teamId, future.id, { noExpenseSplit: true })).toThrow(/match day/)
-    const past = addMatch(store, teamId, { date: '2026-01-05', opponent: 'Earlier', matchType: 'friendly' })
+    const past = addMatch(store, teamId, { date: '2026-01-05', time: '10:00', opponent: 'Earlier', matchType: 'friendly' })
     const done = completeMatch(store, teamId, past.id, { noExpenseSplit: true, result: 'lost' })
     expect(done).toMatchObject({ lifecycle: 'completed', noExpenseSplit: true })
     expect(reopenMatch(store, teamId, past.id).lifecycle).toBe('scheduled')
@@ -231,7 +231,7 @@ describe('stats', () => {
       m({ date: '2026-06-02', lifecycle: 'completed', result: 'lost' }),
       m({ date: '2026-06-03', lifecycle: 'completed', result: 'won' }),
       m({ date: '2026-06-04', result: 'won' }), // result typed in but not completed
-      m({ date: '2026-06-20', opponent: 'Next' }),
+      m({ date: '2026-06-20', time: '10:00', opponent: 'Next' }),
       m({ date: '2026-06-05', cancelled: true }),
     ]
     const s = computeTeamStats([], matches, [], '2026-06-10', '09:00')

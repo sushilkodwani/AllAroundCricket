@@ -156,42 +156,95 @@ export function PhoneInput({
   )
 }
 
-/** Text input with tap-to-fill suggestions from earlier entries. */
-export function SuggestInput({
+/**
+ * Searchable dropdown that also takes free text: type to filter the saved
+ * options, tap one to pick it, or just keep what you typed if it is new.
+ */
+export function ComboBox({
   value,
   onChange,
-  suggestions,
+  options,
   placeholder,
   autoFocus,
+  ariaLabel,
+  newLabel = 'Use',
 }: {
   value: string
   onChange: (v: string) => void
-  suggestions: string[]
+  options: string[]
   placeholder?: string
   autoFocus?: boolean
+  ariaLabel: string
+  newLabel?: string
 }) {
-  const [focused, setFocused] = useState(false)
+  const [open, setOpen] = useState(false)
   const q = value.trim().toLowerCase()
-  const matches = suggestions.filter((s) => s.toLowerCase().includes(q) && s.toLowerCase() !== q).slice(0, 5)
+  const exact = options.some((o) => o.toLowerCase() === q)
+  // A complete saved name shows the whole list, so it can be swapped for another.
+  const shown = options.filter((o) => exact || !q || o.toLowerCase().includes(q))
+  const close = () => setOpen(false)
   return (
-    <div>
+    <div className='relative' onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && close()}>
       <input
-        className="input"
+        className='input pr-11'
         value={value}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setTimeout(() => setFocused(false), 150)}
+        aria-label={ariaLabel}
+        role='combobox'
+        aria-expanded={open}
+        autoComplete='off'
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => e.key === 'Escape' && close()}
       />
-      {focused && matches.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {matches.map((s) => (
-            <button key={s} type="button" className="chip" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange(s)}>
-              {s}
+      <button type='button' tabIndex={-1} className='absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted' aria-label={open ? 'Hide list' : 'Show list'} onClick={() => setOpen((v) => !v)}>
+        {open ? '▴' : '▾'}
+      </button>
+      {open && (shown.length > 0 || (q && !exact)) && (
+        <div className='mt-1.5 max-h-56 overflow-y-auto rounded-xl border border-line bg-surface' role='listbox'>
+          {q && !exact && (
+            <button type='button' className='row min-h-[44px] border-b border-line py-2 font-medium text-accent active:bg-alt' onClick={close}>
+              {newLabel} “{value.trim()}” (new)
+            </button>
+          )}
+          {shown.map((o) => (
+            <button
+              key={o}
+              type='button'
+              role='option'
+              aria-selected={o.toLowerCase() === q}
+              className={`row min-h-[44px] py-2 active:bg-alt ${o.toLowerCase() === q ? 'font-semibold text-accent' : ''}`}
+              onClick={() => {
+                onChange(o)
+                close()
+              }}
+            >
+              <span className='min-w-0 flex-1 truncate'>{o}</span>
+              {o.toLowerCase() === q && <span aria-hidden='true'>✓</span>}
             </button>
           ))}
         </div>
+      )}
+    </div>
+  )
+}
+
+/** Search field for the top of a list, with a clear button. */
+export function SearchBox({ value, onChange, placeholder, ariaLabel }: { value: string; onChange: (v: string) => void; placeholder: string; ariaLabel?: string }) {
+  return (
+    <div className='relative'>
+      <span className='pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted' aria-hidden='true'>
+        🔍
+      </span>
+      <input className='input pl-10 pr-11' type='search' enterKeyHint='search' autoComplete='off' value={value} placeholder={placeholder} aria-label={ariaLabel ?? placeholder} onChange={(e) => onChange(e.target.value)} />
+      {value && (
+        <button type='button' className='absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted' aria-label='Clear search' onClick={() => onChange('')}>
+          ✕
+        </button>
       )}
     </div>
   )
@@ -284,7 +337,7 @@ export function ChoiceChips<T extends string>({ options, value, onChange }: { op
           key={o.value}
           type="button"
           aria-pressed={value === o.value}
-          className={`min-h-[40px] rounded-full border px-3.5 text-sm font-medium ${value === o.value ? 'border-brand bg-brand text-on-brand' : 'border-line bg-surface text-ink'}`}
+          className={`min-h-[40px] rounded-full border px-3.5 text-sm font-medium ${value === o.value ? 'border-brand bg-brand text-on-brand' : 'border-chip-line bg-chip text-ink active:bg-line'}`}
           onClick={() => onChange(o.value)}
         >
           {o.label}

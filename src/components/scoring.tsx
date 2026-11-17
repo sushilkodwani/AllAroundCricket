@@ -12,7 +12,7 @@ const TONE: Record<BallTone, string> = {
   wicket: 'bg-bad text-white',
   six: 'bg-brand text-on-brand',
   four: 'bg-ink text-bg',
-  extra: 'border border-line bg-surface text-ink',
+  extra: 'border border-chip-line bg-chip text-ink',
   plain: 'bg-alt text-ink',
 }
 

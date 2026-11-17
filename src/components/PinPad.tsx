@@ -41,13 +41,13 @@ export function PinPad({
   })
 
   return (
-    <div className="flex flex-col items-center">
-      <div className={`flex gap-3 py-4 ${shake ? 'shake' : ''}`} role="status" aria-label={`${label}: ${pin.length} of 6 digits entered`}>
+    <div className="flex w-full flex-col items-center">
+      <div className={`flex gap-4 py-5 ${shake ? 'shake' : ''}`} role="status" aria-label={`${label}: ${pin.length} of 6 digits entered`}>
         {Array.from({ length: 6 }, (_, i) => (
-          <span key={i} className={`h-3.5 w-3.5 rounded-full border-2 ${i < pin.length ? 'border-brand bg-brand' : 'border-line'}`} />
+          <span key={i} className={`h-4 w-4 rounded-full border-2 ${i < pin.length ? 'border-brand bg-brand' : 'border-line'}`} />
         ))}
       </div>
-      <div className="mt-2 grid w-full max-w-[18rem] grid-cols-3 gap-3">
+      <div className="mt-2 grid w-full grid-cols-3 gap-3 sm:gap-4">
         {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
           <Key key={d} onClick={() => press(d)} disabled={disabled}>
             {d}
@@ -69,7 +69,7 @@ function Key({ children, onClick, disabled, label }: { children: string; onClick
   return (
     <button
       type="button"
-      className="flex h-16 items-center justify-center rounded-2xl bg-alt text-2xl font-medium active:bg-line disabled:opacity-40"
+      className="flex h-[4.25rem] items-center justify-center rounded-2xl border border-line bg-alt text-3xl font-medium active:bg-line disabled:opacity-40"
       onClick={onClick}
       disabled={disabled}
       aria-label={label ?? children}

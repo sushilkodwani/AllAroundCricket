@@ -32,6 +32,8 @@ export const BOWLER_WICKETS: WicketKind[] = ['bowled', 'caught', 'caught_behind'
 export const NO_BALL_WICKETS: WicketKind[] = ['run_out', 'obstructing']
 export const WIDE_WICKETS: WicketKind[] = ['stumped', 'run_out', 'hit_wicket', 'obstructing']
 const CAUGHT: WicketKind[] = ['caught', 'caught_behind', 'caught_bowled']
+/** Dismissals that must name the fielder (or keeper) involved. */
+export const FIELDER_REQUIRED: WicketKind[] = ['caught', 'caught_behind', 'stumped', 'run_out']
 
 export function outIds(inn: Innings): Set<string> {
   const out = new Set<string>()
@@ -165,9 +167,11 @@ export interface NewScoreInput {
 }
 
 export function newScore(input: NewScoreInput): ScoreFile {
+  if (!input.toss?.wonBy || !input.toss.chose) throw new Error('Record the toss: who won it and what they chose.')
   if (!Number.isInteger(input.overs) || input.overs < 1 || input.overs > 100) throw new Error('Enter the number of overs (1–100).')
   for (const side of [input.home, input.away]) {
     if (side.xi.length < 2) throw new Error(`Pick at least 2 players for ${side.name}.`)
+    if (side.xi.length > 11) throw new Error(`${side.name} has ${side.xi.length} players — a side plays 11 at most.`)
     if (new Set(side.xi).size !== side.xi.length) throw new Error(`A player is listed twice for ${side.name}.`)
   }
   if (input.home.xi.some((id) => input.away.xi.includes(id))) throw new Error('A player can’t be in both playing XIs.')
@@ -253,7 +257,9 @@ export function addBall(file: ScoreFile, input: BallInput): ScoreFile {
     }
     const who = k === 'run_out' || k === 'obstructing' ? (input.wicket.who ?? striker) : striker
     if (who !== striker && who !== nonStriker) throw new Error('Pick which batter is out.')
-    wicket = { kind: k, who, fielder: input.wicket.fielder || undefined }
+    const fielder = input.wicket.fielder || undefined
+    if (FIELDER_REQUIRED.includes(k) && !fielder) throw new Error(k === 'caught' ? 'Pick who took the catch.' : k === 'run_out' ? 'Pick who ran the batter out.' : 'Pick the wicket-keeper.')
+    wicket = { kind: k, who, fielder }
     if (input.wicket.at) wicket.at = input.wicket.at
   }
 

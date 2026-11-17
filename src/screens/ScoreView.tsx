@@ -6,7 +6,7 @@ import { BarList, ChartCard, LineChart, Manhattan, type Series } from '../compon
 import { AwardsList } from '../components/Awards'
 import { RoleTag } from '../components/Profile'
 import { BallChip, GroundMap, PressureStrip } from '../components/scoring'
-import { HeaderButton, Screen } from '../components/Screen'
+import { HeaderButton, RefreshIcon, Screen } from '../components/Screen'
 import { ChoiceChips, Empty, Pill, Sheet } from '../components/ui'
 import { fmtDate } from '../lib/dates'
 import { chaseView, milestoneText, milestonesOf } from '../lib/insights'
@@ -119,7 +119,7 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
             ↗
           </HeaderButton>
           <HeaderButton label="Refresh score" onClick={() => void refresh()}>
-            <span className={busy ? 'animate-spin' : ''}>⟳</span>
+            <RefreshIcon spinning={busy} />
           </HeaderButton>
         </>
       }

@@ -1670,3 +1670,15 @@ matches, super over, pitch map.
 - Scouting sheet `#/opponents/:id/scout`: each main batter with strike rate, boundaries,
   form, how they get out and a small wagon wheel; each main bowler with wickets,
   economy, best figures and form.
+
+---
+
+# Part 6 — Testing feedback fixes
+
+47. **PIN pad** uses the full width of its screen or sheet (bigger keys and dots).
+48. **Refresh** is a drawn icon (about twice the old size) on Teams and the scorecard.
+49. **Teams tab**: a search box on top; opponent teams use the same card as our teams (colour bar, short name, record, form, next and last match) under their own “Other teams” heading.
+50. **Matches tab**: search over opponent, venue, our team, match type and date. While searching, results older than 30 days are included.
+51. **Match form**: time is mandatory and sits on its own line under the date (`cleanMatchInput` refuses a match without one). Opponent and venue are searchable dropdowns (`ComboBox`) that also take a new name; tournament is a plain select.
+52. **Tag buttons**: unselected tags use `--chip` / `--chip-line` (a step darker than the page, with a firmer outline) in both themes; the scoring pad, extras sheet and availability buttons use the same tokens.
+53. **Mandatory details**: starting a match needs overs, 2–11 players a side and the toss (the setup screen lists what is missing and keeps Start disabled). In scoring, a catch, stumping or run out must name the fielder or keeper (`FIELDER_REQUIRED`, checked in the engine as well as the sheet); penalty runs must be above zero. Where a boundary went stays optional (Skip).

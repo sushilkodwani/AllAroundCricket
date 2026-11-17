@@ -61,7 +61,7 @@ describe('milestones', () => {
     ])
   })
   it('a run out does not count towards a hat-trick', () => {
-    const f = game(20, [{ wicket: { kind: 'bowled' } }, { wicket: { kind: 'run_out', who: 'h2' } }, { wicket: { kind: 'bowled' } }, { wicket: { kind: 'bowled' } }])
+    const f = game(20, [{ wicket: { kind: 'bowled' } }, { wicket: { kind: 'run_out', who: 'h2', fielder: 'a1' } }, { wicket: { kind: 'bowled' } }, { wicket: { kind: 'bowled' } }])
     expect([...milestonesOf(f, 0).values()].flat()).toEqual([])
   })
 })

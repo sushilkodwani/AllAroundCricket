@@ -398,9 +398,10 @@ function cleanMatchInput(input: MatchInput): MatchInput {
   const opponent = input.opponent.trim().replace(/\s+/g, ' ').slice(0, 60)
   if (!opponent) throw new Error('Enter the opponent.')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new Error('Pick a date.')
+  if (!/^\d{2}:\d{2}$/.test(input.time ?? '')) throw new Error('Pick the match time.')
   return {
     date: input.date,
-    time: input.time || undefined,
+    time: input.time,
     opponent,
     venue: input.venue?.trim() || undefined,
     matchType: input.matchType,

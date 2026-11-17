@@ -52,7 +52,7 @@ export function AvailabilityCard({ match, data }: { match: Match; data: TeamData
               <button
                 key={s}
                 aria-pressed={mine === s}
-                className={`min-h-[44px] rounded-xl border text-sm font-semibold ${mine === s ? (s === 'in' ? 'border-ok bg-ok/15 text-ok' : s === 'out' ? 'border-bad bg-bad/15 text-bad' : 'border-warn bg-warn/15 text-warn') : 'border-line bg-surface'}`}
+                className={`min-h-[44px] rounded-xl border text-sm font-semibold ${mine === s ? (s === 'in' ? 'border-ok bg-ok/15 text-ok' : s === 'out' ? 'border-bad bg-bad/15 text-bad' : 'border-warn bg-warn/15 text-warn') : 'border-chip-line bg-chip'}`}
                 onClick={() => answer(s)}
               >
                 {s === 'in' ? '✅ In' : s === 'out' ? '❌ Out' : '🤔 Maybe'}

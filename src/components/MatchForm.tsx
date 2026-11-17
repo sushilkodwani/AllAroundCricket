@@ -4,7 +4,7 @@ import { addMatch, editMatch, groundsOf, opponentsOf, type MatchInput } from '..
 import { enrolMatchTeams, tournamentsOf } from '../lib/tournament'
 import { useApp } from '../state/AppContext'
 import { MATCH_TYPE_LABELS, RESULT_LABELS, type Match, type MatchResult, type MatchType, type Team } from '../types'
-import { ChoiceChips, ErrorNote, Field, NumberInput, Sheet, SuggestInput } from './ui'
+import { ChoiceChips, ComboBox, ErrorNote, Field, NumberInput, Sheet } from './ui'
 
 const TYPES = (Object.keys(MATCH_TYPE_LABELS) as MatchType[]).map((value) => ({ value, label: MATCH_TYPE_LABELS[value] }))
 export const RESULTS = (Object.keys(RESULT_LABELS) as MatchResult[]).map((value) => ({ value, label: RESULT_LABELS[value] }))
@@ -70,29 +70,37 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
           save()
         }}
       >
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Date">
-            <input className="input" type="date" value={date} required onChange={(e) => setDate(e.target.value)} />
-          </Field>
-          <Field label="Time (optional)">
-            <input className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-          </Field>
+        <Field label="Date">
+          <input className="input" type="date" value={date} required onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        <Field label="Time">
+          <input className="input" type="time" value={time} required onChange={(e) => setTime(e.target.value)} />
+        </Field>
+        <div>
+          <span className="label">Opponent</span>
+          <ComboBox value={opponent} onChange={setOpponent} options={opponents} placeholder="Search or type a team name" ariaLabel="Opponent" autoFocus={!match} newLabel="Add" />
+          <span className="mt-1 block text-xs text-muted">Pick a saved team to reuse its players, or type a new name.</span>
         </div>
-        <Field label="Opponent" hint="Pick a saved opponent to reuse its players, or type a new name.">
-          <SuggestInput value={opponent} onChange={setOpponent} suggestions={opponents} placeholder="e.g. Lions" autoFocus={!match} />
-        </Field>
-        <Field label="Venue (optional)">
-          <SuggestInput value={venue} onChange={setVenue} suggestions={venues} />
-        </Field>
+        <div>
+          <span className="label">Venue (optional)</span>
+          <ComboBox value={venue} onChange={setVenue} options={venues} placeholder="Search or type a ground" ariaLabel="Venue" newLabel="Use" />
+        </div>
         <div>
           <span className="label">Type</span>
           <ChoiceChips options={TYPES} value={matchType} onChange={setMatchType} />
         </div>
         {tournaments.length > 0 && (
-          <div>
+          <label className="block">
             <span className="label">Tournament (optional)</span>
-            <ChoiceChips options={[{ value: '', label: 'None' }, ...tournaments.map((t) => ({ value: t.id, label: t.name }))]} value={tournamentId} onChange={setTournamentId} />
-          </div>
+            <select className="input" value={tournamentId} onChange={(e) => setTournamentId(e.target.value)}>
+              <option value="">None</option>
+              {tournaments.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
         <Field label="Overs per innings" hint="Needed for live scoring; can be set later.">
           <NumberInput value={overs} onChange={setOvers} maxLength={3} placeholder="20" ariaLabel="Overs" />
@@ -119,7 +127,7 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
         )}
 
         <ErrorNote>{error}</ErrorNote>
-        <button className="btn-primary" disabled={!opponent.trim() || !date}>
+        <button className="btn-primary" disabled={!opponent.trim() || !date || !time}>
           {match ? 'Save' : 'Add match'}
         </button>
       </form>
