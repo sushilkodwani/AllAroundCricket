@@ -64,7 +64,7 @@ export function Screen({
 /** Refresh arrows, drawn as a shape so the size is predictable on every phone. */
 export function RefreshIcon({ spinning }: { spinning?: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" className={`h-8 w-8 ${spinning ? "animate-spin" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className={`h-6 w-6 ${spinning ? "animate-spin" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M20 12a8 8 0 1 1-2.6-5.9" />
       <path d="M20 3.5v4.6h-4.6" />
     </svg>
@@ -74,7 +74,7 @@ export function RefreshIcon({ spinning }: { spinning?: boolean }) {
 /** Round icon button for header actions. */
 export function HeaderButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
   return (
-    <button className="flex h-12 min-w-[48px] items-center justify-center rounded-full px-2 text-lg font-semibold active:bg-white/20" onClick={onClick} aria-label={label}>
+    <button className="flex h-11 min-w-[44px] items-center justify-center rounded-full px-2 text-lg font-semibold active:bg-white/20" onClick={onClick} aria-label={label}>
       {children}
     </button>
   )
