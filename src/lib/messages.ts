@@ -27,40 +27,47 @@ export function squadMessage(match: Match, team: Team, people: Person[]): string
   return lines.filter((l) => l !== null).join('\n')
 }
 
-/** The match's expense split: what was spent, each player's share and how it is covered. */
+/**
+ * The match's expense split, grouped so it reads at a glance: the costs, how
+ * they were divided (once, when everyone pays alike), who still pays, who is done.
+ */
 export function expenseMessage(match: Match, team: Team, people: Person[]): string {
   const e = match.expense
   if (!e || e.status !== 'submitted') return ''
   const name = (id: string) => people.find((p) => p.id === id)?.name ?? 'Unknown'
   const total = e.lines.reduce((s, l) => s + l.total, 0)
   const shares = [...e.shares].filter((s) => s.total > 0).sort((a, b) => name(a.personId).localeCompare(name(b.personId)))
-  const toCollect = shares.reduce((s, sh) => s + (sh.settled ? 0 : sh.pending), 0)
-  const how = (sh: (typeof shares)[number]) => {
-    if (sh.pending === 0) return 'from fund ✓'
-    if (sh.settled) return `paid${sh.settledMethod && sh.settledMethod !== 'funds' ? ` by ${sh.settledMethod === 'upi' ? 'UPI' : METHOD_LABELS[sh.settledMethod].toLowerCase()}` : ''} ✓`
-    return sh.fromFunds > 0 ? `${money(sh.fromFunds)} from fund, *${money(sh.pending)} to pay*` : `*${money(sh.pending)} to pay*`
-  }
-  // How a player's total divides across the costs, so everyone sees what they are paying for.
-  const division = (sh: (typeof shares)[number]) =>
-    '   ' +
+  type Share = (typeof shares)[number]
+
+  // What a player's total is made of, e.g. "Match fee ₹500 + Balls ₹150".
+  const division = (sh: Share) =>
     e.lines
       .filter((l) => (sh.byCategory?.[l.categoryId] ?? 0) > 0)
       .map((l) => `${l.categoryName} ${money(sh.byCategory[l.categoryId])}`)
       .join(' + ')
+  const parts = shares.map(division)
+  const sameForAll = shares.length > 0 && parts[0] !== '' && parts.every((p) => p === parts[0]) && shares.every((sh) => sh.total === shares[0].total)
+
+  const open = shares.filter((sh) => !sh.settled && sh.pending > 0)
+  const done = shares.filter((sh) => !open.includes(sh))
+  const toCollect = open.reduce((n, sh) => n + sh.pending, 0)
+  const method = (sh: Share) =>
+    sh.pending === 0 ? 'from fund' : sh.settledMethod && sh.settledMethod !== 'funds' ? (sh.settledMethod === 'upi' ? 'UPI' : METHOD_LABELS[sh.settledMethod].toLowerCase()) : 'paid'
+  // Only when shares differ does each player need their own breakdown.
+  const extra = (sh: Share) => (sameForAll || !division(sh) ? '' : `\n    ${division(sh)}`)
+
   return [
-    `💰 *${team.name} vs ${match.opponent}* — ${fmtDate(match.date, false)}`,
+    `💰 *${team.name} vs ${match.opponent}* · ${fmtDate(match.date, false)}`,
     '',
-    '*Expenses*',
-    ...e.lines.map((l) => `${l.categoryName}: ${money(l.total)}`),
-    `Total: *${money(total)}* · ${shares.length} player${shares.length === 1 ? '' : 's'}`,
+    `*Costs* · ${money(total)}`,
+    ...e.lines.map((l) => `• ${l.categoryName} ${money(l.total)}`),
     '',
-    '*Each player*',
-    ...shares.flatMap((sh) => {
-      const parts = division(sh)
-      return parts.trim() ? [`${name(sh.personId)} — ${money(sh.total)} (${how(sh)})`, parts] : [`${name(sh.personId)} — ${money(sh.total)} (${how(sh)})`]
-    }),
+    `*Split* · ${shares.length} player${shares.length === 1 ? '' : 's'}`,
+    sameForAll ? `${money(shares[0].total)} each = ${parts[0]}` : 'Shares differ, so each is shown below.',
+    ...(open.length ? ['', `⏳ *To pay · ${money(toCollect)}*`, ...open.map((sh) => `• ${name(sh.personId)} — ${money(sh.pending)}${sh.fromFunds > 0 ? ` (+${money(sh.fromFunds)} from fund)` : ''}${extra(sh)}`)] : []),
+    ...(done.length ? ['', '✅ *Settled*', ...done.map((sh) => `• ${name(sh.personId)} — ${money(sh.total)} (${method(sh)})${extra(sh)}`)] : []),
     '',
-    toCollect > 0 ? `Still to collect: *${money(toCollect)}*` : 'All settled ✅',
+    open.length ? 'Please pay the admin and let them know. Thanks!' : 'All settled ✅',
   ].join('\n')
 }
 

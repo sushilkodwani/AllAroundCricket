@@ -278,12 +278,15 @@ describe('whatsapp messages', () => {
       },
     } as unknown as Match
     const text = expenseMessage(match, team, people)
-    expect(text).toContain('Match fee: ₹1,000')
-    expect(text).toContain('Total: *₹1,300* · 2 players')
-    expect(text).toContain('Rahul — ₹650 (from fund ✓)')
-    expect(text).toContain('Amit — ₹650 (₹150 from fund, *₹500 to pay*)')
-    expect(text).toContain('   Match fee ₹500 + Balls ₹150')
-    expect(text).toContain('Still to collect: *₹500*')
+    expect(text).toContain('• Match fee ₹1,000')
+    expect(text).toContain('*Costs* · ₹1,300')
+    expect(text).toContain('₹650 each = Match fee ₹500 + Balls ₹150')
+    expect(text).toContain('⏳ *To pay · ₹500*')
+    expect(text).toContain('• Amit — ₹500 (+₹150 from fund)')
+    expect(text).toContain('✅ *Settled*')
+    expect(text).toContain('• Rahul — ₹650 (from fund)')
+    // Same split for everyone → shown once, not repeated per player.
+    expect(text.match(/Match fee ₹500/g)).toHaveLength(1)
     expect(expenseMessage({ ...match, expense: undefined } as Match, team, people)).toBe('')
   })
 })
