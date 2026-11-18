@@ -52,7 +52,7 @@ export function TeamCard({ team }: { team: Team }) {
           <span className="min-w-0 flex-1 truncate font-semibold">{team.name}</span>
           <span className="flex shrink-0 flex-col items-end gap-1">
             {team.archived && <Pill>Archived</Pill>}
-            {s.settlingMatches > 0 && <Pill tone="warn">⚠ {s.settlingMatches} to settle</Pill>}
+            {s.settlingMatches > 0 && <Pill tone="warn">⚠ {s.playersToSettle} player{s.playersToSettle === 1 ? "" : "s"} to settle</Pill>}
             {isAdmin && s.awaitingCompletion > 0 && <Pill tone="warn">🕓 {s.awaitingCompletion} awaiting completion</Pill>}
           </span>
         </span>

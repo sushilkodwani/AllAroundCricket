@@ -45,6 +45,7 @@ export function emptyStats(): TeamStats {
     fundBalance: 0,
     pendingDues: 0,
     settlingMatches: 0,
+    playersToSettle: 0,
   }
 }
 
@@ -81,6 +82,7 @@ export function computeTeamStats(
     fundBalance: teamFund(funds),
     pendingDues: pendingDues(matches),
     settlingMatches: live.filter((m) => m.lifecycle === 'settling').length,
+    playersToSettle: live.filter((m) => m.lifecycle === 'settling').reduce((n, m) => n + (m.expense?.shares ?? []).filter((sh) => !sh.settled).length, 0),
   }
   if (next) stats.nextMatch = { id: next.id, date: next.date, time: next.time, opponent: next.opponent, venue: next.venue }
   if (last) stats.lastMatch = { id: last.id, date: last.date, opponent: last.opponent, result: last.result }

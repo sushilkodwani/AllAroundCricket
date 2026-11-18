@@ -139,7 +139,7 @@ describe('match lifecycle and the fund ledger', () => {
     // Rounding is never booked to the fund: only what was really deducted leaves it.
     expect(teamFund(fundsOf(store, teamId))).toBe(617)
     expect(pendingDues(matchesOf(store, teamId))).toBe(4158 - 583)
-    expect(teamsOf(store)[0].stats).toMatchObject({ settlingMatches: 1, fundBalance: 617, pendingDues: 3575 })
+    expect(teamsOf(store)[0].stats).toMatchObject({ settlingMatches: 1, playersToSettle: 10, fundBalance: 617, pendingDues: 3575 })
     expect(() => completeMatch(store, teamId, matchId)).toThrow(/still to settle/)
     expect(() => deleteMatch(store, teamId, matchId)).toThrow()
     expect(() => setSquad(store, teamId, matchId, ['rahul'])).toThrow(/locked/)

@@ -86,6 +86,8 @@ export interface TeamStats {
   fundBalance: number
   pendingDues: number
   settlingMatches: number
+  /** Players who have not yet paid or been covered, across matches being settled. */
+  playersToSettle: number
 }
 
 export interface Team {
