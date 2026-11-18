@@ -270,10 +270,10 @@ describe('whatsapp messages', () => {
       date: '2026-11-19',
       expense: {
         status: 'submitted',
-        lines: [{ categoryName: 'Match fee', total: 1000 }, { categoryName: 'Balls', total: 300 }],
+        lines: [{ categoryId: 'c1', categoryName: 'Match fee', total: 1000 }, { categoryId: 'c2', categoryName: 'Balls', total: 300 }],
         shares: [
-          { personId: 'p1', total: 650, fromFunds: 650, pending: 0, settled: true },
-          { personId: 'p2', total: 650, fromFunds: 150, pending: 500, settled: false },
+          { personId: 'p1', byCategory: { c1: 500, c2: 150 }, total: 650, fromFunds: 650, pending: 0, settled: true },
+          { personId: 'p2', byCategory: { c1: 500, c2: 150 }, total: 650, fromFunds: 150, pending: 500, settled: false },
         ],
       },
     } as unknown as Match
@@ -282,6 +282,7 @@ describe('whatsapp messages', () => {
     expect(text).toContain('Total: *₹1,300* · 2 players')
     expect(text).toContain('Rahul — ₹650 (from fund ✓)')
     expect(text).toContain('Amit — ₹650 (₹150 from fund, *₹500 to pay*)')
+    expect(text).toContain('   Match fee ₹500 + Balls ₹150')
     expect(text).toContain('Still to collect: *₹500*')
     expect(expenseMessage({ ...match, expense: undefined } as Match, team, people)).toBe('')
   })

@@ -40,6 +40,13 @@ export function expenseMessage(match: Match, team: Team, people: Person[]): stri
     if (sh.settled) return `paid${sh.settledMethod && sh.settledMethod !== 'funds' ? ` by ${sh.settledMethod === 'upi' ? 'UPI' : METHOD_LABELS[sh.settledMethod].toLowerCase()}` : ''} ✓`
     return sh.fromFunds > 0 ? `${money(sh.fromFunds)} from fund, *${money(sh.pending)} to pay*` : `*${money(sh.pending)} to pay*`
   }
+  // How a player's total divides across the costs, so everyone sees what they are paying for.
+  const division = (sh: (typeof shares)[number]) =>
+    '   ' +
+    e.lines
+      .filter((l) => (sh.byCategory?.[l.categoryId] ?? 0) > 0)
+      .map((l) => `${l.categoryName} ${money(sh.byCategory[l.categoryId])}`)
+      .join(' + ')
   return [
     `💰 *${team.name} vs ${match.opponent}* — ${fmtDate(match.date, false)}`,
     '',
@@ -48,7 +55,10 @@ export function expenseMessage(match: Match, team: Team, people: Person[]): stri
     `Total: *${money(total)}* · ${shares.length} player${shares.length === 1 ? '' : 's'}`,
     '',
     '*Each player*',
-    ...shares.map((sh) => `${name(sh.personId)} — ${money(sh.total)} (${how(sh)})`),
+    ...shares.flatMap((sh) => {
+      const parts = division(sh)
+      return parts.trim() ? [`${name(sh.personId)} — ${money(sh.total)} (${how(sh)})`, parts] : [`${name(sh.personId)} — ${money(sh.total)} (${how(sh)})`]
+    }),
     '',
     toCollect > 0 ? `Still to collect: *${money(toCollect)}*` : 'All settled ✅',
   ].join('\n')
