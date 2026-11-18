@@ -1,5 +1,5 @@
 // Shared building blocks: sheets, dialogs, form fields, small display pieces.
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { cleanPhoneInput } from '../lib/phone'
 
 /** Bottom sheet on phones, centred dialog on wider screens. Tap the backdrop to close. */
@@ -178,13 +178,21 @@ export function ComboBox({
   newLabel?: string
 }) {
   const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  // Close on a tap outside. (Closing on blur breaks phones: Safari doesn't focus a tapped button, so the list vanished before the tap landed.)
+  useEffect(() => {
+    if (!open) return
+    const away = (e: Event) => !box.current?.contains(e.target as Node) && setOpen(false)
+    document.addEventListener('pointerdown', away)
+    return () => document.removeEventListener('pointerdown', away)
+  }, [open])
   const q = value.trim().toLowerCase()
   const exact = options.some((o) => o.toLowerCase() === q)
   // A complete saved name shows the whole list, so it can be swapped for another.
   const shown = options.filter((o) => exact || !q || o.toLowerCase().includes(q))
   const close = () => setOpen(false)
   return (
-    <div className='relative' onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && close()}>
+    <div ref={box} className='relative'>
       <input
         className='input pr-11'
         value={value}
@@ -199,7 +207,7 @@ export function ComboBox({
           setOpen(true)
         }}
         onFocus={() => setOpen(true)}
-        onKeyDown={(e) => e.key === 'Escape' && close()}
+        onKeyDown={(e) => (e.key === 'Escape' || e.key === 'Tab') && close()}
       />
       <button type='button' tabIndex={-1} className='absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted' aria-label={open ? 'Hide list' : 'Show list'} onClick={() => setOpen((v) => !v)}>
         {open ? '▴' : '▾'}
