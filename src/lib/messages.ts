@@ -41,11 +41,9 @@ export function expenseMessage(match: Match, team: Team, people: Person[]): stri
 
   // What a player's total is made of, e.g. "Match fee ₹500 + Balls ₹150".
   const division = (sh: Share) =>
-    e.lines
-      .filter((l) => (sh.byCategory?.[l.categoryId] ?? 0) > 0)
-      .map((l) => `${l.categoryName} ${money(sh.byCategory[l.categoryId])}`)
-      .join(' + ')
-  const parts = shares.map(division)
+    e.lines.filter((l) => (sh.byCategory?.[l.categoryId] ?? 0) > 0).map((l) => `${l.categoryName} ${money(sh.byCategory[l.categoryId])}`)
+  const bullets = (items: string[]) => items.map((x) => `   ◦ ${x}`)
+  const parts = shares.map((sh) => division(sh).join('|'))
   const sameForAll = shares.length > 0 && parts[0] !== '' && parts.every((p) => p === parts[0]) && shares.every((sh) => sh.total === shares[0].total)
 
   const open = shares.filter((sh) => !sh.settled && sh.pending > 0)
@@ -53,8 +51,9 @@ export function expenseMessage(match: Match, team: Team, people: Person[]): stri
   const toCollect = open.reduce((n, sh) => n + sh.pending, 0)
   const method = (sh: Share) =>
     sh.pending === 0 ? 'from fund' : sh.settledMethod && sh.settledMethod !== 'funds' ? (sh.settledMethod === 'upi' ? 'UPI' : METHOD_LABELS[sh.settledMethod].toLowerCase()) : 'paid'
-  // Only when shares differ does each player need their own breakdown.
-  const extra = (sh: Share) => (sameForAll || !division(sh) ? '' : `\n    ${division(sh)}`)
+  // When shares differ each player is a small block (name line, sub-bullets, blank line between players).
+  const block = (sh: Share, head: string): string[] => (sameForAll ? [head] : [head, ...bullets(division(sh)), ''])
+  const list = (items: string[][]) => (sameForAll ? items.flat() : items.flat().slice(0, -1))
 
   return [
     `💰 *${team.name} vs ${match.opponent}* · ${fmtDate(match.date, false)}`,
@@ -63,9 +62,9 @@ export function expenseMessage(match: Match, team: Team, people: Person[]): stri
     ...e.lines.map((l) => `• ${l.categoryName} ${money(l.total)}`),
     '',
     `*Split* · ${shares.length} player${shares.length === 1 ? '' : 's'}`,
-    sameForAll ? `${money(shares[0].total)} each = ${parts[0]}` : 'Shares differ, so each is shown below.',
-    ...(open.length ? ['', `⏳ *To pay · ${money(toCollect)}*`, ...open.map((sh) => `• ${name(sh.personId)} — ${money(sh.pending)}${sh.fromFunds > 0 ? ` (+${money(sh.fromFunds)} from fund)` : ''}${extra(sh)}`)] : []),
-    ...(done.length ? ['', '✅ *Settled*', ...done.map((sh) => `• ${name(sh.personId)} — ${money(sh.total)} (${method(sh)})${extra(sh)}`)] : []),
+    ...(sameForAll ? [`${money(shares[0].total)} each:`, ...bullets(division(shares[0]))] : ['Shares differ, so each is shown below.']),
+    ...(open.length ? ['', `⏳ *To pay · ${money(toCollect)}*`, ...list(open.map((sh) => block(sh, `• ${name(sh.personId)} — ${money(sh.pending)}${sh.fromFunds > 0 ? ` (+${money(sh.fromFunds)} from fund)` : ''}`)))] : []),
+    ...(done.length ? ['', '✅ *Settled*', ...list(done.map((sh) => block(sh, `• ${name(sh.personId)} — ${money(sh.total)} (${method(sh)})`)))] : []),
     '',
     open.length ? 'Please pay the admin and let them know. Thanks!' : 'All settled ✅',
   ].join('\n')

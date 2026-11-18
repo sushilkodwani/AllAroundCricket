@@ -280,7 +280,7 @@ describe('whatsapp messages', () => {
     const text = expenseMessage(match, team, people)
     expect(text).toContain('• Match fee ₹1,000')
     expect(text).toContain('*Costs* · ₹1,300')
-    expect(text).toContain('₹650 each = Match fee ₹500 + Balls ₹150')
+    expect(text).toContain('₹650 each:\n   ◦ Match fee ₹500\n   ◦ Balls ₹150')
     expect(text).toContain('⏳ *To pay · ₹500*')
     expect(text).toContain('• Amit — ₹500 (+₹150 from fund)')
     expect(text).toContain('✅ *Settled*')
