@@ -62,7 +62,7 @@ export function PlayerStatement({ teamId, personId }: { teamId: string; personId
   if (!data.ready || !data.team) {
     return (
       <Screen title="Statement" back={back}>
-        {data.team ? <p className="p-10 text-center text-sm text-muted">Loading…</p> : <Empty icon="🤷" title="Statement not found" text="It may have been removed, or you’re not in this team." />}
+        <p className="p-10 text-center text-sm text-muted">Loading…</p>
       </Screen>
     )
   }

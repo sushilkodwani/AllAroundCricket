@@ -19,14 +19,6 @@ export function YearSummary({ teamId }: { teamId: string }) {
   const total = rows.reduce((t, r) => ({ shares: t.shares + r.shares, paid: t.paid + r.paid, pending: t.pending + r.pending }), { shares: 0, paid: 0, pending: 0 })
   const completed = data.matches.filter((m) => !m.cancelled && m.lifecycle === 'completed' && m.date.startsWith(year)).length
 
-  if (!data.team) {
-    return (
-      <Screen title="Year summary" back="/funds">
-        <Empty icon="🤷" title="Team not found" text="It may have been removed, or you’re not in it." />
-      </Screen>
-    )
-  }
-
   function share() {
     const lines = [`*${data.team?.name ?? 'Team'} — ${year} summary*`, `${completed} completed match${completed === 1 ? '' : 'es'} · total spent ${money(total.shares)}`, '']
     for (const r of rows) lines.push(`${personName(r.personId)}: ${r.played} played · share ${money(r.shares)}${r.perMatch !== null ? ` (${money(r.perMatch)}/match)` : ''} · paid ${money(r.paid)}${r.pending > 0 ? ` · *${money(r.pending)} due*` : ''}`)
