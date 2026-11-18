@@ -8,7 +8,7 @@ import { computeTeamStats, winPercent } from '../lib/stats'
 import { useApp } from '../state/AppContext'
 import { navigate } from '../state/router'
 import { RESULT_LABELS, RESULT_LETTER, type MatchResult, type Team, type TeamStats } from '../types'
-import { Pill } from './ui'
+import { Pill, TeamLogo } from './ui'
 
 const formColor = (r: MatchResult) => (r === 'won' ? 'bg-ok text-white' : r === 'lost' ? 'bg-bad text-white' : 'bg-alt text-muted')
 
@@ -44,11 +44,18 @@ export function TeamCard({ team }: { team: Team }) {
       aria-label={`Open ${team.name}`}
     >
       <span className="w-1.5 shrink-0" style={{ background: team.color }} />
+      {team.logo && (
+        <span className="pl-3 pt-3">
+          <TeamLogo team={team} size={40} />
+        </span>
+      )}
       <span className="min-w-0 flex-1 space-y-1 px-3 py-3">
         <span className="flex items-start gap-2">
-          <span className="rounded-md px-1.5 py-0.5 text-xs font-bold text-white" style={{ background: team.color }}>
-            {team.shortName}
-          </span>
+          {!team.logo && (
+            <span className="rounded-md px-1.5 py-0.5 text-xs font-bold text-white" style={{ background: team.color }}>
+              {team.shortName}
+            </span>
+          )}
           <span className="min-w-0 flex-1 truncate font-semibold">{team.name}</span>
           <span className="flex shrink-0 flex-col items-end gap-1">
             {team.archived && <Pill>Archived</Pill>}

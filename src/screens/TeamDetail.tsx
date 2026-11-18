@@ -5,7 +5,7 @@ import { PlayersTab } from '../components/PlayersTab'
 import { HeaderButton, Screen } from '../components/Screen'
 import { StatsTab } from '../components/StatsTab'
 import { TeamSheet } from '../components/TeamSheet'
-import { Confirm, Empty, ErrorNote, Segmented, Sheet } from '../components/ui'
+import { Confirm, Empty, ErrorNote, Segmented, Sheet, TeamLogo } from '../components/ui'
 import { deleteTeam, setTeamArchived } from '../lib/domain'
 import { matchStatus, sortMatchesAsc } from '../lib/stats'
 import { useApp, useTeam, type TeamData } from '../state/AppContext'
@@ -38,6 +38,7 @@ export function TeamDetail({ teamId }: { teamId: string }) {
   return (
     <Screen
       title={team.name}
+      icon={team.logo ? <TeamLogo team={team} size={32} rounded="rounded-lg" /> : undefined}
       back="/teams"
       actions={
         isAdmin ? (

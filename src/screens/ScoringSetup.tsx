@@ -149,7 +149,7 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
                   return (
                     <button key={id} className="row active:bg-alt disabled:opacity-40" disabled={taken} aria-pressed={on} onClick={() => side.set(toggle(side.xi, id))}>
                       <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-sm font-bold ${on ? 'border-brand bg-brand text-on-brand' : 'border-line'}`}>{on ? '✓' : ''}</span>
-                      <Avatar name={personName(id)} color={side.color} size={32} />
+                      <Avatar name={personName(id)} personId={id} color={side.color} size={32} />
                       <span className="min-w-0 flex-1 truncate">{personName(id)}</span>
                       <span className="text-xs text-muted">{taken ? 'in our XI' : maskPhone(byId.get(id)?.phoneLast4)}</span>
                     </button>

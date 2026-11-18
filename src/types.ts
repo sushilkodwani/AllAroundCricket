@@ -43,6 +43,8 @@ export interface Person {
   role?: PlayerRole
   bowlStyle?: BowlStyle
   jersey?: number
+  /** Stamp of the profile photo in images/people/<id>.json; absent = no photo. */
+  photo?: string
   createdAt: string
   updatedAt: string
 }
@@ -96,11 +98,20 @@ export interface Team {
   shortName: string
   color: string
   homeGround?: string
+  /** Stamp of the team logo in images/teams/<id>.json; absent = no logo. */
+  logo?: string
   archived: boolean
   createdAt: string
   updatedAt: string
   stats: TeamStats
 }
+/** One picture: a small, already resized image kept as a data URL (base64). */
+export interface ImageFile {
+  schemaVersion: 1
+  dataUrl: string | null
+  updatedAt: string
+}
+
 export interface TeamsFile {
   schemaVersion: 1
   teams: Team[]

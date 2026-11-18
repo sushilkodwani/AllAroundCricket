@@ -39,8 +39,10 @@ export interface StoreStatus {
 const RETRY_MS = 15_000
 const MAX_ATTEMPTS = 5
 
-/** funds.json goes before matches.json (PLAN §14.4); teams.json (derived stats) last. */
+/** Pictures and funds.json first, then matches.json (PLAN §14.4); teams.json (derived stats) last. */
 function priority(path: string): number {
+  // A picture goes before the people / teams stamp that points at it.
+  if (path.startsWith('images/')) return 0
   if (path.endsWith('/funds.json')) return 0
   if (path.endsWith('/matches.json')) return 1
   if (path === 'teams.json') return 9

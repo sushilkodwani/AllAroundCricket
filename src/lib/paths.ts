@@ -10,6 +10,9 @@ export const P = {
   tournaments: 'tournaments.json',
   grounds: 'grounds.json',
   outbox: 'push/outbox.json',
+  /** Each picture is its own small file so people.json / teams.json stay light. */
+  personPhoto: (personId: string) => `images/people/${personId}.json`,
+  teamLogo: (teamId: string) => `images/teams/${teamId}.json`,
   availability: (teamId: string) => `teams/${teamId}/availability.json`,
   /** Ball-by-ball log of one match. Deliberately not matches.json: the notifier watches that. */
   scoring: (teamId: string, matchId: string) => `teams/${teamId}/scoring/${matchId}.json`,

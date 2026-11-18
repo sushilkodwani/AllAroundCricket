@@ -1,6 +1,10 @@
 // Shared building blocks: sheets, dialogs, form fields, small display pieces.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useImage } from '../lib/images'
+import { P } from '../lib/paths'
 import { cleanPhoneInput } from '../lib/phone'
+import { useApp } from '../state/AppContext'
+import type { Team } from '../types'
 
 /** Bottom sheet on phones, centred dialog on wider screens. Tap the backdrop to close. */
 export function Sheet({ title, onClose, children, full }: { title?: string; onClose: () => void; children: ReactNode; full?: boolean }) {
@@ -258,13 +262,18 @@ export function SearchBox({ value, onChange, placeholder, ariaLabel }: { value: 
   )
 }
 
-export function Avatar({ name, color, size = 40 }: { name: string; color?: string; size?: number }) {
+/** Round player badge: their photo when they have one, initials otherwise. */
+export function Avatar({ name, color, size = 40, personId }: { name: string; color?: string; size?: number; personId?: string }) {
+  const { store, people } = useApp()
+  const person = personId ? people.find((p) => p.id === personId) : undefined
+  const photo = useImage(store, personId ? P.personPhoto(personId) : null, person?.photo)
   const initials = name
     .trim()
-    .split(/\s+/)
+    .split(/s+/)
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase() ?? '')
     .join('')
+  if (photo) return <img src={photo} alt="" aria-hidden="true" className="shrink-0 rounded-full object-cover" style={{ width: size, height: size, background: color ?? '#475569' }} />
   return (
     <span
       className="flex shrink-0 items-center justify-center rounded-full font-semibold text-white"
@@ -274,6 +283,14 @@ export function Avatar({ name, color, size = 40 }: { name: string; color?: strin
       {initials || '?'}
     </span>
   )
+}
+
+/** A team's logo, or null when it has none (callers keep their usual badge). */
+export function TeamLogo({ team, size = 40, rounded = 'rounded-xl' }: { team: Pick<Team, 'id' | 'logo' | 'name'>; size?: number; rounded?: string }) {
+  const { store } = useApp()
+  const logo = useImage(store, P.teamLogo(team.id), team.logo)
+  if (!logo) return null
+  return <img src={logo} alt={`${team.name} logo`} className={`shrink-0 bg-white object-cover ${rounded}`} style={{ width: size, height: size }} />
 }
 
 export type Tone = 'neutral' | 'ok' | 'bad' | 'warn' | 'brand'

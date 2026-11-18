@@ -210,7 +210,7 @@ export function SplitExpenses({ teamId, matchId }: { teamId: string; matchId: st
               return (
                 <div key={id} className={`px-4 py-3 ${pays ? '' : 'opacity-60'}`}>
                   <div className="flex items-center gap-3">
-                    <Avatar name={personName(id)} color={team.color} size={36} />
+                    <Avatar name={personName(id)} personId={id} color={team.color} size={36} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
                         <span className="truncate font-medium">{personName(id)}</span>

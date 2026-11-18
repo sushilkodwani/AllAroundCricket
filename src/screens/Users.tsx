@@ -89,7 +89,7 @@ export function Users() {
               return (
                 <div key={p.id} className="flex items-center gap-3 px-4 py-3">
                   <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => sheet.open('user', p.id)}>
-                    <Avatar name={p.name} />
+                    <Avatar name={p.name} personId={p.id} />
                     <span className="min-w-0">
                       <span className="block truncate font-medium">{p.name}</span>
                       <span className="block truncate text-xs text-muted">

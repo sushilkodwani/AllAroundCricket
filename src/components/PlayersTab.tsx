@@ -80,7 +80,7 @@ export function PlayersTab({ data }: { data: TeamData & { team: Team } }) {
             return (
               <SwipeRow key={p.id} disabled={!isAdmin} onAction={() => remove(p)}>
                 <button className="row active:bg-alt" onClick={() => sheet.open('player', p.id)}>
-                  <Avatar name={p.name} color={team.color} />
+                  <Avatar name={p.name} personId={p.id} color={team.color} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2 font-medium">
                       <span className="truncate">{p.name}</span>
@@ -110,7 +110,7 @@ export function PlayersTab({ data }: { data: TeamData & { team: Team } }) {
             <div className="card divide-y divide-line overflow-hidden">
               {removed.map((p) => (
                 <div key={p.id} className="row">
-                  <Avatar name={p.name} />
+                  <Avatar name={p.name} personId={p.id} />
                   <span className="min-w-0 flex-1 truncate text-muted">{p.name}</span>
                   <button
                     className="btn-secondary min-h-[36px]"
@@ -390,7 +390,7 @@ function PlayerSheet({ person, data, onClose, onRemove }: { person: Person; data
     <Sheet title={person.name} onClose={onClose}>
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <Avatar name={person.name} color={data.team.color} size={52} />
+          <Avatar name={person.name} personId={person.id} color={data.team.color} size={52} />
           <div className="min-w-0 text-sm">
             <div className="truncate text-muted">{teams.map((t) => t.name).join(', ') || 'No active team'}</div>
             <div>

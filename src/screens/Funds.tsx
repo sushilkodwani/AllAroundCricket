@@ -150,7 +150,7 @@ export function Funds() {
                 <div className="card divide-y divide-line overflow-hidden">
                   {sec.rows.map((r) => (
                     <button key={r.id} className={`row active:bg-alt ${r.id === me ? 'bg-alt' : ''}`} onClick={() => sheet.open('fund', r.id)}>
-                      <Avatar name={r.name} color={current.color} size={36} />
+                      <Avatar name={r.name} personId={r.id} color={current.color} size={36} />
                       <span className="min-w-0 flex-1 truncate">
                         {r.name}
                         {r.id === me && <span className="text-muted"> (you)</span>}
@@ -171,7 +171,7 @@ export function Funds() {
           <div className="card divide-y divide-line overflow-hidden">
             {rowsFor([...activeIds, ...guestIds]).map((r) => (
               <button key={r.id} className="row active:bg-alt" onClick={() => sheet.replaceWith(`/funds?sheet=fund&arg=${r.id}&mode=contribution`)}>
-                <Avatar name={r.name} color={current.color} size={32} />
+                <Avatar name={r.name} personId={r.id} color={current.color} size={32} />
                 <span className="min-w-0 flex-1 truncate">{r.name}</span>
                 <span className="text-sm text-muted">{money(r.balance)}</span>
               </button>
@@ -302,7 +302,7 @@ function PlayerFundSheet({ team, personId, data, onClose }: { team: Team; person
       {mode === 'view' ? (
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
-            <Avatar name={name} color={team.color} size={48} />
+            <Avatar name={name} personId={personId} color={team.color} size={48} />
             <div>
               <div className="flex items-center gap-2 text-xs text-muted">
                 Balance in {team.shortName}

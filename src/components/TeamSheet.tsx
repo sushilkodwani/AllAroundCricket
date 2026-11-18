@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { createTeam, shortNameFor, updateTeam } from '../lib/domain'
+import { setTeamLogo, useImage } from '../lib/images'
+import { P } from '../lib/paths'
 import { useApp } from '../state/AppContext'
 import { TEAM_COLORS, type Team } from '../types'
+import { PhotoPicker } from './PhotoPicker'
 import { ErrorNote, Field, Sheet } from './ui'
 
-/** Create or edit a team: name, short name (auto from initials), colour, home ground. */
+/** Create or edit a team: name, short name (auto from initials), colour, logo, home ground. */
 export function TeamSheet({ team, onClose, onCreated }: { team?: Team; onClose: () => void; onCreated?: (team: Team) => void }) {
   const { store, allTeams } = useApp()
   const [name, setName] = useState(team?.name ?? '')
@@ -13,6 +16,9 @@ export function TeamSheet({ team, onClose, onCreated }: { team?: Team; onClose: 
   const [color, setColor] = useState(team?.color ?? TEAM_COLORS[allTeams.length % TEAM_COLORS.length].hex)
   const [ground, setGround] = useState(team?.homeGround ?? '')
   const [error, setError] = useState<string | null>(null)
+  const savedLogo = useImage(store, team ? P.teamLogo(team.id) : null, team?.logo)
+  // undefined = unchanged; a data URL = new logo; null = remove.
+  const [logo, setLogo] = useState<string | null | undefined>(undefined)
   if (!store) return null
 
   const shortName = shortEdited ? short : shortNameFor(name)
@@ -20,11 +26,14 @@ export function TeamSheet({ team, onClose, onCreated }: { team?: Team; onClose: 
   function save() {
     try {
       const input = { name, shortName, color, homeGround: ground }
+      const changedLogo = logo !== undefined && (logo ?? null) !== (savedLogo ?? null)
       if (team) {
         updateTeam(store!, team.id, input)
+        if (changedLogo) setTeamLogo(store!, team.id, logo ?? null)
         onClose()
       } else {
         const created = createTeam(store!, input)
+        if (logo) setTeamLogo(store!, created.id, logo)
         if (onCreated) onCreated(created)
         else onClose()
       }
@@ -73,6 +82,7 @@ export function TeamSheet({ team, onClose, onCreated }: { team?: Team; onClose: 
             ))}
           </div>
         </div>
+        <PhotoPicker label="Logo (optional)" round={false} current={logo === undefined ? savedLogo : logo} onChange={setLogo} fallback={<span className="text-lg">{shortName || '?'}</span>} />
         <Field label="Home ground (optional)">
           <input className="input" value={ground} maxLength={60} onChange={(e) => setGround(e.target.value)} />
         </Field>

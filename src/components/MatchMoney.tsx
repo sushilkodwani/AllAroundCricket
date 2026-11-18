@@ -148,7 +148,7 @@ export function MatchMoney({ team, match, data }: { team: Team; match: Match; da
           <div className="card divide-y divide-line overflow-hidden">
             {pending.map((s) => (
               <div key={s.personId} className={`flex items-center gap-3 px-4 py-2.5 ${s.personId === me ? 'bg-alt' : ''}`}>
-                <Avatar name={personName(s.personId)} color={team.color} size={36} />
+                <Avatar name={personName(s.personId)} personId={s.personId} color={team.color} size={36} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
                     <span className="truncate font-medium">{personName(s.personId)}</span>
@@ -182,7 +182,7 @@ export function MatchMoney({ team, match, data }: { team: Team; match: Match; da
               const manual = s.pending > 0 && s.settledMethod !== 'funds'
               return (
                 <div key={s.personId} className={`flex items-center gap-3 px-4 py-2.5 ${s.personId === me ? 'bg-alt' : ''}`}>
-                  <Avatar name={personName(s.personId)} color={team.color} size={36} />
+                  <Avatar name={personName(s.personId)} personId={s.personId} color={team.color} size={36} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
                       <span className="truncate font-medium">{personName(s.personId)}</span>

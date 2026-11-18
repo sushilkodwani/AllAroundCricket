@@ -93,13 +93,16 @@ export function canWrite(actor: Actor, path: string, before: unknown, after: unk
     return touched(b, a, (e) => e.id).every((e) => e.personId === actor.personId)
   }
 
-  // Profile: a player may change their own role, batting hand, bowling style and jersey number.
+  // Profile photo: a player may set or remove their own picture only.
+  if (path === P.personPhoto(actor.personId)) return true
+
+  // Profile: a player may change their own role, batting hand, bowling style, jersey number and photo stamp.
   if (path === P.people && ownProfileOnly(actor.personId, before, after)) return true
 
   return scorerMayWrite(actor.scorerMatchIds ?? [], path, before, after)
 }
 
-const PROFILE_FIELDS = ['role', 'batsLeft', 'bowlStyle', 'jersey', 'updatedAt']
+const PROFILE_FIELDS = ['role', 'batsLeft', 'bowlStyle', 'jersey', 'photo', 'updatedAt']
 
 function ownProfileOnly(personId: string, before: unknown, after: unknown): boolean {
   const b = (before as PeopleFile | null)?.people ?? []

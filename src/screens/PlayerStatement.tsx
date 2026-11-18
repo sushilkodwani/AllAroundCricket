@@ -86,7 +86,7 @@ export function PlayerStatement({ teamId, personId }: { teamId: string; personId
     >
       <div className="flex flex-col gap-4 p-4">
         <div className="flex items-center gap-3">
-          <Avatar name={name} color={team.color} size={48} />
+          <Avatar name={name} personId={personId} color={team.color} size={48} />
           <div className="min-w-0">
             <p className="truncate text-lg font-bold">{name}</p>
             <p className="text-sm text-muted">

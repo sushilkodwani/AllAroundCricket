@@ -133,7 +133,7 @@ export function SquadPicker({ teamId, matchId }: { teamId: string; matchId: stri
               return (
                 <label key={p.id} className="row cursor-pointer active:bg-alt">
                   <input type="checkbox" className="h-5 w-5 shrink-0 accent-[rgb(155,28,31)]" checked={on} onChange={() => toggle(p.id)} />
-                  <Avatar name={p.name} color={team.color} size={36} />
+                  <Avatar name={p.name} personId={p.id} color={team.color} size={36} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
                       <span className="truncate">
@@ -249,7 +249,7 @@ function GuestSheet({
                       onPicked(p.id)
                     }}
                   >
-                    <Avatar name={p.name} size={32} />
+                    <Avatar name={p.name} personId={p.id} size={32} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{p.name}</span>
                       <span className="block truncate text-xs text-muted">{[teams.length ? teams.join(', ') : 'Guest', lastPlayedFor(p.id)].filter(Boolean).join(' · ')}</span>

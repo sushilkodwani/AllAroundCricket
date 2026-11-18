@@ -22,12 +22,15 @@ function StatusBadges() {
  */
 export function Screen({
   title,
+  icon,
   back,
   actions,
   children,
   footer,
 }: {
   title: string
+  /** Small picture before the title (a team logo). */
+  icon?: ReactNode
   /** Where Back goes when there is no in-app history (deep link / reload). */
   back?: string
   actions?: ReactNode
@@ -46,6 +49,7 @@ export function Screen({
           ) : (
             <span className="w-2" />
           )}
+          {icon && <span className="mr-1 flex shrink-0">{icon}</span>}
           <h1 className="min-w-0 flex-1 truncate text-lg font-bold">{title}</h1>
           <StatusBadges />
           {actions}

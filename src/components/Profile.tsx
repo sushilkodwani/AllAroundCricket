@@ -3,9 +3,19 @@
 import { useState } from 'react'
 import { batAverage, batStrikeRate, bestBowling, bowlEconomy, highScore, type Career } from '../lib/career'
 import { updateProfile } from '../lib/domain'
+import { setPersonPhoto, useImage } from '../lib/images'
+import { P } from '../lib/paths'
 import { useApp } from '../state/AppContext'
 import { BOWL_LABELS, ROLE_LABELS, ROLE_SHORT, type BowlStyle, type Person, type PlayerRole } from '../types'
+import { PhotoPicker } from './PhotoPicker'
 import { ChoiceChips, ErrorNote, Field, NumberInput, Pill, Sheet } from './ui'
+
+const initialsOf = (name: string) =>
+  name
+    .split(/s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('')
 
 /** Small role marker for lists: "WK", "AR"… */
 export function RoleTag({ person }: { person?: Person | null }) {
@@ -17,6 +27,8 @@ export const batsText = (p?: Person | null) => (p?.batsLeft ? 'Left-hand bat' : 
 
 export function ProfileCard({ person, name, teamName, color, career, onEdit }: { person?: Person | null; name: string; teamName: string; color?: string; career?: Career; onEdit?: () => void }) {
   const bg = color ?? '#475569'
+  const { store } = useApp()
+  const photo = useImage(store, person ? P.personPhoto(person.id) : null, person?.photo)
   const numbers: [string, string | number][] = career
     ? [
         ['Matches', career.matches],
@@ -32,15 +44,20 @@ export function ProfileCard({ person, name, teamName, color, career, onEdit }: {
   return (
     <div className="card overflow-hidden">
       <div className="flex items-center gap-4 p-4 text-white" style={{ background: bg }}>
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/20 text-2xl font-bold" aria-label={person?.jersey !== undefined ? `Jersey number ${person.jersey}` : undefined}>
-          {person?.jersey !== undefined
-            ? person.jersey
-            : name
-                .split(/\s+/)
-                .slice(0, 2)
-                .map((w) => w[0]?.toUpperCase() ?? '')
-                .join('')}
-        </div>
+        {photo ? (
+          <div className="relative h-16 w-16 shrink-0">
+            <img src={photo} alt={`Photo of ${name}`} className="h-16 w-16 rounded-2xl border-2 border-white/40 object-cover" />
+            {person?.jersey !== undefined && (
+              <span className="absolute -bottom-1.5 -right-1.5 min-w-[24px] rounded-full bg-white px-1.5 text-center text-xs font-bold leading-6" style={{ color: bg }} aria-label={`Jersey number ${person.jersey}`}>
+                {person.jersey}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/20 text-2xl font-bold" aria-label={person?.jersey !== undefined ? `Jersey number ${person.jersey}` : undefined}>
+            {person?.jersey !== undefined ? person.jersey : initialsOf(name)}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-xl font-bold">{name}</p>
           <p className="truncate text-sm opacity-90">{teamName}</p>
@@ -75,6 +92,9 @@ const ROLES = (Object.keys(ROLE_LABELS) as PlayerRole[]).map((value) => ({ value
 
 export function ProfileSheet({ person, onClose }: { person: Person; onClose: () => void }) {
   const { store, toast } = useApp()
+  const saved = useImage(store, P.personPhoto(person.id), person.photo)
+  // undefined = unchanged; a data URL = new picture; null = remove.
+  const [photo, setPhoto] = useState<string | null | undefined>(undefined)
   const [role, setRole] = useState<PlayerRole | undefined>(person.role)
   const [left, setLeft] = useState(!!person.batsLeft)
   const [bowl, setBowl] = useState<BowlStyle | ''>(person.bowlStyle ?? '')
@@ -85,6 +105,7 @@ export function ProfileSheet({ person, onClose }: { person: Person; onClose: () 
     try {
       const ok = updateProfile(store!, person.id, { role, batsLeft: left, bowlStyle: bowl || undefined, jersey: jersey === '' ? undefined : Number(jersey) })
       if (!ok) throw new Error('You can only edit your own profile.')
+      if (photo !== undefined && (photo ?? null) !== (saved ?? null) && !setPersonPhoto(store!, person.id, photo)) throw new Error('You can only change your own photo.')
       toast('Profile saved')
       onClose()
     } catch (e) {
@@ -95,6 +116,7 @@ export function ProfileSheet({ person, onClose }: { person: Person; onClose: () 
   return (
     <Sheet title={`Profile — ${person.name}`} onClose={onClose}>
       <div className="flex flex-col gap-4">
+        <PhotoPicker label="Photo" current={photo === undefined ? saved : photo} onChange={setPhoto} fallback={initialsOf(person.name)} />
         <div>
           <span className="label">Role</span>
           <ChoiceChips options={ROLES} value={role} onChange={(r) => setRole(r === role ? undefined : r)} />

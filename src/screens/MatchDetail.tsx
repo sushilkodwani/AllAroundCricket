@@ -218,7 +218,7 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
             <div className="card divide-y divide-line overflow-hidden">
               {squad.map((id) => (
                 <button key={id} className={`row active:bg-alt ${id === me ? 'bg-alt' : ''}`} onClick={() => navigate(`/teams/${teamId}/players/${id}`)}>
-                  <Avatar name={personName(id)} color={team.color} size={36} />
+                  <Avatar name={personName(id)} personId={id} color={team.color} size={36} />
                   <span className="min-w-0 flex-1 truncate">
                     {personName(id)}
                     {id === me && <span className="text-muted"> (you)</span>}
@@ -299,7 +299,7 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
                     sheet.close()
                   }}
                 >
-                  <Avatar name={personName(id)} color={team.color} size={32} />
+                  <Avatar name={personName(id)} personId={id} color={team.color} size={32} />
                   <span className="min-w-0 flex-1 truncate">{personName(id)}</span>
                   {match.scorerId === id && <span className="text-accent">✓</span>}
                 </button>

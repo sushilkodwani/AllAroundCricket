@@ -103,7 +103,7 @@ export function OpponentDetail({ opponentId }: { opponentId: string }) {
               {players.map((id) => (
                 <div key={id} className="row">
                   <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => navigate(`/opponents/${opponent.id}/players/${id}`)}>
-                    <Avatar name={personName(id)} color={OPP_COLOR} size={36} />
+                    <Avatar name={personName(id)} personId={id} color={OPP_COLOR} size={36} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{personName(id)}</span>
                       {isAdmin && <span className="block text-xs text-muted">{maskPhone(byId.get(id)?.phoneLast4)}</span>}

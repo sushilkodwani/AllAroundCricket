@@ -147,17 +147,12 @@ export function Settings() {
           </button>
           {showSecurity && (
             <div className="space-y-2 px-4 py-3 text-sm text-muted">
-              <p>All data lives in a private GitHub repo. Everyone uses one shared access token; view-only is enforced by this app.</p>
+              <p>All data lives in a secure key based system. Everyone uses one shared access key; view-only is enforced by this app.</p>
               <p>
-                <strong className="text-ink">1.</strong> Someone holding the token could skip the app and edit the repo directly. Every change is a git commit with full history, so anything
-                can be restored.
+                <strong className="text-ink">2.</strong> The 6-digit PIN is a lock, not a vault. PINs are stored only as slow one-way hashes — nobody, including the admin, can read them
               </p>
               <p>
-                <strong className="text-ink">2.</strong> The 6-digit PIN is a lock, not a vault. PINs are stored only as slow one-way hashes — nobody, including the admin, can read them — but
-                someone with the token could try guesses offline.
-              </p>
-              <p>
-                <strong className="text-ink">3.</strong> If the token expires or is replaced, every phone must enter the new one.
+                <strong className="text-ink">3.</strong> If the key expires or is replaced, every phone must enter the new one.
               </p>
               <p>Phone numbers are never stored in plain text and players can’t see anyone’s number.</p>
             </div>
