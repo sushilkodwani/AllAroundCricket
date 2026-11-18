@@ -51,6 +51,9 @@ describe('photos and logos', () => {
     expect(store.get(P.personPhoto('p2'))).toBeNull()
     expect(setTeamLogo(store, teamId, PIC)).toBe(false)
     expect(canWrite({ role: 'viewer', personId: 'p1' }, P.teamLogo(teamId), null, {})).toBe(false)
+    // Only a real small picture (or removal) passes the guard.
+    expect(canWrite({ role: 'viewer', personId: 'p1' }, P.personPhoto('p1'), null, { schemaVersion: 1, dataUrl: 'https://evil.example/x.png', updatedAt: 'x' })).toBe(false)
+    expect(canWrite({ role: 'viewer', personId: 'p1' }, P.personPhoto('p1'), null, { schemaVersion: 1, dataUrl: null, updatedAt: 'x' })).toBe(true)
     // The photo stamp is a profile field; other fields stay locked.
     const before = { schemaVersion: 1, people: [person('p1')] }
     expect(canWrite({ role: 'viewer', personId: 'p1' }, P.people, before, { schemaVersion: 1, people: [{ ...person('p1'), photo: 'x' }] })).toBe(true)

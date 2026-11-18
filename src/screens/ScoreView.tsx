@@ -32,10 +32,12 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
   const { store, isAdmin, people, personName, toast, session } = useApp()
   const route = useRoute()
   const sheet = useSheet()
-  const match = useTeam(teamId).matches.find((m) => m.id === matchId)
-  const path = P.scoring(teamId, matchId)
+  const teamData = useTeam(teamId)
+  const match = teamData.matches.find((m) => m.id === matchId)
+  // Only for a team this user is in (anyone else uses the public link).
+  const path = teamData.team ? P.scoring(teamId, matchId) : null
   const file = useFile<ScoreFile>(path)
-  const loaded = !!store?.has(path)
+  const loaded = !!path && !!store?.has(path)
   const base = `/teams/${teamId}/matches/${matchId}`
   const [busy, setBusy] = useState(false)
   const tab: Tab = (TABS as readonly string[]).includes(route.query.get('tab') ?? '') ? (route.query.get('tab') as Tab) : 'live'
@@ -46,6 +48,7 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
   async function refresh() {
     if (!store || busy) return
     setBusy(true)
+    if (!path) return setBusy(false)
     const before = store.get<ScoreFile>(path)?.updatedAt
     try {
       await store.refresh(path)
@@ -55,6 +58,14 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
     } finally {
       setBusy(false)
     }
+  }
+
+  if (!teamData.team) {
+    return (
+      <Screen title="Scorecard" back="/teams">
+        <Empty icon="🤷" title="Match not found" text="It may have been removed, or you’re not in this team." />
+      </Screen>
+    )
   }
 
   if (!file) {

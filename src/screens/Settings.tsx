@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { DataCard } from '../components/DataCard'
 import { NotificationsCard } from '../components/NotificationsCard'
 import { ChangePinSheet, RecoveryCodeSheet } from '../components/PinSheets'
+import { ProfileSheet, RoleTag } from '../components/Profile'
 import { Screen } from '../components/Screen'
-import { Confirm, ErrorNote, Field, MenuRow, NumberInput, Segmented, Sheet, Toggle } from '../components/ui'
+import { Avatar, Confirm, ErrorNote, Field, MenuRow, NumberInput, Segmented, Sheet, Toggle } from '../components/ui'
 import { addDays, daysBetween, fmtDate, fmtStamp, todayISO } from '../lib/dates'
 import { lowBalanceThreshold, updateConfig } from '../lib/domain'
 import { getPref, setPref } from '../lib/session'
@@ -38,7 +39,9 @@ export function Settings() {
   const [tokenError, setTokenError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const myTeams = (isAdmin ? allTeams.filter((t) => me?.teamIds.includes(t.id)) : teams).map((t) => t.name)
+  const myTeamList = isAdmin ? allTeams.filter((t) => me?.teamIds.includes(t.id)) : teams
+  const myTeams = myTeamList.map((t) => t.name)
+  const myTeamIds = myTeamList.map((t) => t.id)
   const users = people.filter((p) => !p.isGuest && p.id !== config?.adminPersonId)
   const pinSetAt = creds.find((c) => c.personId === session?.personId)?.pinSetAt
 
@@ -52,13 +55,21 @@ export function Settings() {
     <Screen title="Settings">
       <div className="flex flex-col gap-5 p-4">
         <Section title="Account">
-          <div className="px-4 py-3">
-            <div className="font-semibold">{me?.name ?? '—'}</div>
-            <div className="text-sm text-muted">
-              {role === 'admin' ? 'Admin · full access' : '👁 View only'}
-              {myTeams.length > 0 && ` · ${myTeams.join(', ')}`}
+          <div className="flex items-center gap-3 px-4 py-3">
+            {me && <Avatar name={me.name} personId={me.id} color={allTeams.find((t) => me.teamIds.includes(t.id))?.color} size={48} />}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 font-semibold">
+                <span className="truncate">{me?.name ?? '—'}</span>
+                <RoleTag person={me} />
+              </div>
+              <div className="text-sm text-muted">
+                {role === 'admin' ? 'Admin · full access' : '👁 View only'}
+                {myTeams.length > 0 && ` · ${myTeams.join(', ')}`}
+              </div>
             </div>
           </div>
+          {me && <MenuRow label="Edit my profile" hint="Photo, role, batting, bowling, jersey" onClick={() => sheet.open('profile')} />}
+          {me && myTeamIds[0] && <MenuRow label="My stats" hint="Batting, bowling and fielding figures" onClick={() => navigate(`/teams/${myTeamIds[0]}/players/${me.id}`)} />}
           <MenuRow label="Change PIN" hint={pinSetAt ? `PIN set ${fmtStamp(pinSetAt)}` : undefined} onClick={() => sheet.open('pin')} />
           <MenuRow
             label="Ask for PIN when the app opens"
@@ -181,6 +192,8 @@ export function Settings() {
           </div>
         </Sheet>
       )}
+
+      {sheet.name === 'profile' && me && <ProfileSheet person={me} onClose={sheet.close} />}
 
       {sheet.name === 'repo' && store && (
         <Sheet title="Data repo" onClose={sheet.close}>

@@ -1,6 +1,7 @@
 // Who may do what (PLAN §5.5, §5.6, §5.9). View-only is enforced here, in the
 // app: the shared token itself can write, so every write passes canWrite().
-import type { AppConfig, AvailabilityFile, Credential, CredentialsFile, MatchesFile, PeopleFile, Person, SubscriptionsFile, TeamsFile } from '../types'
+import type { AppConfig, AvailabilityFile, Credential, CredentialsFile, ImageFile, MatchesFile, PeopleFile, Person, SubscriptionsFile, TeamsFile } from '../types'
+import { isSafeImage } from './images'
 import { P } from './paths'
 
 export type Role = 'admin' | 'viewer' | 'denied'
@@ -94,7 +95,10 @@ export function canWrite(actor: Actor, path: string, before: unknown, after: unk
   }
 
   // Profile photo: a player may set or remove their own picture only.
-  if (path === P.personPhoto(actor.personId)) return true
+  if (path === P.personPhoto(actor.personId)) {
+    const url = (after as ImageFile | null)?.dataUrl
+    return url === null || isSafeImage(url)
+  }
 
   // Profile: a player may change their own role, batting hand, bowling style, jersey number and photo stamp.
   if (path === P.people && ownProfileOnly(actor.personId, before, after)) return true

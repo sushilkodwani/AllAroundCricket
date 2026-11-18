@@ -5,6 +5,7 @@ import { BarList } from '../components/charts'
 import { ProfileCard, ProfileSheet } from '../components/Profile'
 import { GroundMap } from '../components/scoring'
 import { Screen } from '../components/Screen'
+import { Empty } from '../components/ui'
 import { useScores } from '../components/StatsTab'
 import { batAverage, batStrikeRate, bestBowling, bowlAverage, bowlEconomy, bowlOvers, careerStats, formOf, highScore } from '../lib/career'
 import { fmtDayMonth } from '../lib/dates'
@@ -43,6 +44,13 @@ export function FormStrip({ label, values }: { label: string; values: string[] }
 
 export function PlayerStats({ teamId, personId }: { teamId: string; personId: string }) {
   const data = useTeam(teamId)
+  if (!data.team) {
+    return (
+      <Screen title="Player" back="/teams">
+        <Empty icon="🤷" title="Player not found" text="It may have been removed, or you’re not in this team." />
+      </Screen>
+    )
+  }
   return <PlayerStatsView personId={personId} matches={data.matches} loading={!data.ready} back={`/teams/${teamId}`} teamName={data.team?.name ?? ''} color={data.team?.color} />
 }
 

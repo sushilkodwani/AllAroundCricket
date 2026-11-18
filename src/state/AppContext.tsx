@@ -333,8 +333,10 @@ export interface TeamData {
 }
 
 export function useTeam(teamId: string | null | undefined): TeamData {
-  const { allTeams, store } = useApp()
-  const id = teamId ?? null
+  const { allTeams, teams, store } = useApp()
+  // Only a team this user may see (the admin: every team; a player: their own
+  // active teams). Anything else loads nothing, so screens show "not found".
+  const id = teamId && teams.some((t) => t.id === teamId) ? teamId : null
   const members = useFile<MembersFile>(id ? P.members(id) : null)
   const matches = useFile<MatchesFile>(id ? P.matches(id) : null)
   const funds = useFile<FundsFile>(id ? P.funds(id) : null)
