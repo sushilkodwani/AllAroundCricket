@@ -1,6 +1,7 @@
 // Funds tab (PLAN §16.5, §16.7): each team's fund, every player's balance and
 // dues, and the ledger per player. Viewers see the same screen read-only.
 import { useEffect, useState } from 'react'
+import { FundCharts } from '../components/FundCharts'
 import { PAY_METHODS } from '../components/MatchMoney'
 import { Screen } from '../components/Screen'
 import { Avatar, ChoiceChips, Confirm, Empty, ErrorNote, Field, NumberInput, Pill, Sheet } from '../components/ui'
@@ -164,6 +165,8 @@ export function Funds() {
                 </div>
               </section>
             ))}
+
+            <FundCharts data={data} />
           </>
         )}
       </div>

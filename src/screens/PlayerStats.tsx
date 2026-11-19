@@ -8,6 +8,7 @@ import { Screen } from '../components/Screen'
 import { useScores } from '../components/StatsTab'
 import { batAverage, batStrikeRate, bestBowling, bowlAverage, bowlEconomy, bowlOvers, careerStats, formOf, highScore } from '../lib/career'
 import { fmtDayMonth } from '../lib/dates'
+import { phaseProfile } from '../lib/season'
 import { oversText } from '../lib/scoring'
 import { useApp, useTeam } from '../state/AppContext'
 import { navigate, useSheet } from '../state/router'
@@ -73,6 +74,8 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
     .filter((x) => !!x.m)
     .sort((a, b) => b.m!.date.localeCompare(a.m!.date))
   const form = formOf(c, scored)
+  const phases = phaseProfile(files, personId)
+  const phaseRows = phases.filter((p) => p.bat.balls > 0 || p.bowl.balls > 0)
   // Oldest to newest, so the chart reads left to right like a season.
   const inOrder = [...rows].reverse().slice(-12)
   const trendBat = inOrder.filter((x) => x.l.bat).map((x) => ({ label: fmtDayMonth(x.m!.date), value: x.l.bat!.runs, hollow: x.l.bat!.notOut, note: `vs ${x.m!.opponent}` }))
@@ -112,6 +115,37 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
                 <div className="card p-3">
                   <TrendBars points={trendBowl} slot={2} />
                 </div>
+              </section>
+            )}
+
+            {phaseRows.length > 0 && (
+              <section>
+                <h2 className="section-title">By phase of the innings</h2>
+                <div className="card overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-alt text-xs text-muted">
+                        <th className="px-3 py-1.5 text-left font-semibold">Phase</th>
+                        <th className="px-1.5 py-1.5 text-right font-semibold">Bat SR</th>
+                        <th className="px-1.5 py-1.5 text-right font-semibold">Runs (balls)</th>
+                        <th className="px-1.5 py-1.5 text-right font-semibold">Bowl econ</th>
+                        <th className="px-3 py-1.5 text-right font-semibold">Wkts</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {phaseRows.map((p) => (
+                        <tr key={p.key}>
+                          <td className="px-3 py-2.5 font-medium">{p.label}</td>
+                          <td className="px-1.5 py-2.5 text-right">{p.bat.balls > 0 ? ((p.bat.runs * 100) / p.bat.balls).toFixed(0) : '–'}</td>
+                          <td className="px-1.5 py-2.5 text-right text-muted">{p.bat.balls > 0 ? `${p.bat.runs} (${p.bat.balls})` : '–'}</td>
+                          <td className="px-1.5 py-2.5 text-right">{p.bowl.balls > 0 ? ((p.bowl.runs * 6) / p.bowl.balls).toFixed(2) : '–'}</td>
+                          <td className="px-3 py-2.5 text-right">{p.bowl.balls > 0 ? p.bowl.wickets : '–'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-1 text-xs text-muted">Powerplay, middle and death are worked out from the overs of each innings (6 / 9 / 5 in a 20-over game). Matches shorter than 3 overs are left out.</p>
               </section>
             )}
 

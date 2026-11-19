@@ -3,6 +3,7 @@ import { useEffect, useMemo, type ReactNode } from 'react'
 import { batAverage, batStrikeRate, bestBowling, bowlEconomy, bowlOvers, careerStats, highScore, type Career } from '../lib/career'
 import { fmtDayMonth } from '../lib/dates'
 import { teamRecords } from '../lib/insights'
+import { bestEconomies, bestStands, bestStrikeRates, byGround, byOpponent, firstVsChase } from '../lib/season'
 import { P } from '../lib/paths'
 import { useApp, type TeamData } from '../state/AppContext'
 import { navigate } from '../state/router'
@@ -93,6 +94,8 @@ export function StatsTables({ matches, side, onOpen: open }: { matches: Match[];
           </button>
         ))}
       </div>
+
+      <SeasonInsights files={files} matches={matches} side={side} careers={careers} onOpen={open} />
 
       {records.length > 0 && (
         <section>
@@ -204,5 +207,135 @@ export function StatsTables({ matches, side, onOpen: open }: { matches: Match[];
         </section>
       )}
     </div>
+  )
+}
+
+const pct = (won: number, played: number) => (played > 0 ? `${Math.round((won * 100) / played)}%` : '–')
+const num = (n: number | null) => (n === null ? '–' : String(Math.round(n)))
+
+/** Small table used by the season sections below. */
+function MiniTable({ head, rows }: { head: string[]; rows: (string | number)[][] }) {
+  return (
+    <div className="card overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-alt">
+            {head.map((h, i) => (
+              <Th key={h} left={i === 0}>
+                {h}
+              </Th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {rows.map((r, n) => (
+            <tr key={n}>
+              {r.map((c, i) =>
+                i === 0 ? (
+                  <td key={i} className="py-2.5 pl-3 pr-1.5 font-medium">
+                    {c}
+                  </td>
+                ) : (
+                  <Td key={i}>{c}</Td>
+                ),
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Batting first against chasing, the toss, best rates, best stands, opponents and grounds. */
+function SeasonInsights({ files, matches, side, careers, onOpen }: { files: ScoreFile[]; matches: Match[]; side: SideKey; careers: Career[]; onOpen: (id: string) => void }) {
+  const { personName } = useApp()
+  const finished = files.filter((f) => f.status === 'finished' && f.innings.length === 2)
+  const fc = firstVsChase(files, side)
+  const rates = bestStrikeRates(careers)
+  const econ = bestEconomies(careers)
+  const stands = bestStands(files, side)
+  const opponents = side === 'home' ? byOpponent(files, side) : []
+  const grounds = side === 'home' ? byGround(files, matches) : []
+  if (finished.length === 0 && rates.length === 0 && econ.length === 0) return null
+  return (
+    <>
+      {finished.length > 0 && (
+        <section>
+          <h2 className="section-title">Batting first, chasing and the toss</h2>
+          <MiniTable
+            head={['', 'Played', 'Won', 'Win %', 'Avg runs']}
+            rows={[
+              ['Batting first', fc.battingFirst.played, fc.battingFirst.won, pct(fc.battingFirst.won, fc.battingFirst.played), num(fc.battingFirst.avgRuns)],
+              ['Chasing', fc.chasing.played, fc.chasing.won, pct(fc.chasing.won, fc.chasing.played), num(fc.chasing.avgRuns)],
+              ['Won the toss', fc.tossWon.played, fc.tossWon.won, pct(fc.tossWon.won, fc.tossWon.played), ''],
+              ['Lost the toss', fc.tossLost.played, fc.tossLost.won, pct(fc.tossLost.won, fc.tossLost.played), ''],
+            ]}
+          />
+        </section>
+      )}
+
+      {(rates.length > 0 || econ.length > 0) && (
+        <section>
+          <h2 className="section-title">Best strike rates and economies</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              { title: 'Strike rate (30+ balls)', rows: rates, fmt: (v: number) => v.toFixed(1), unit: 'balls faced' },
+              { title: 'Economy (2+ overs)', rows: econ, fmt: (v: number) => v.toFixed(2), unit: 'balls bowled' },
+            ]
+              .filter((g) => g.rows.length > 0)
+              .map((g) => (
+                <div key={g.title} className="card overflow-hidden">
+                  <p className="border-b border-line bg-alt px-3 py-1.5 text-xs font-semibold text-muted">{g.title}</p>
+                  {g.rows.map((r) => (
+                    <button key={r.id} className="row w-full active:bg-alt" onClick={() => onOpen(r.id)}>
+                      <span className="min-w-0 flex-1 truncate text-left">{personName(r.id)}</span>
+                      <span className="text-right">
+                        <strong>{g.fmt(r.value)}</strong>
+                        <span className="block text-[11px] text-muted">
+                          {r.balls} {g.unit}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+          </div>
+        </section>
+      )}
+
+      {stands.length > 0 && (
+        <section>
+          <h2 className="section-title">Best stand for each wicket</h2>
+          <div className="card divide-y divide-line overflow-hidden">
+            {stands.map((st) => (
+              <button key={st.wicket} className="row w-full active:bg-alt" onClick={() => navigate(`/teams/${st.teamId}/matches/${st.matchId}/live?tab=scorecard`)}>
+                <span className="w-16 shrink-0 text-left text-xs text-muted">Wicket {st.wicket}</span>
+                <span className="min-w-0 flex-1 truncate text-left text-sm">
+                  {personName(st.a)} &amp; {personName(st.b)}
+                </span>
+                <strong>
+                  {st.runs} <span className="text-xs font-normal text-muted">({st.balls})</span>
+                </strong>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {opponents.length > 0 && (
+        <section>
+          <h2 className="section-title">Against each opponent</h2>
+          <MiniTable head={['Team', 'P', 'W', 'L', 'Avg for', 'Avg against']} rows={opponents.map((o) => [o.name, o.played, o.won, o.lost, num(o.avgFor), num(o.avgAgainst)])} />
+        </section>
+      )}
+
+      {grounds.length > 0 && (
+        <section>
+          <h2 className="section-title">Grounds</h2>
+          <MiniTable head={['Ground', 'P', 'Avg 1st inns', 'Bat-first wins']} rows={grounds.map((g) => [g.venue, g.played, num(g.avgFirst), g.batFirstWinPct === null ? '–' : `${g.batFirstWinPct}%`])} />
+        </section>
+      )}
+    </>
   )
 }

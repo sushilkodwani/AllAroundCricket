@@ -5,7 +5,8 @@ import { useState } from 'react'
 import { BarList, ChartCard, LineChart, Manhattan, type Series } from '../components/charts'
 import { BallChip, GroundMap } from '../components/scoring'
 import { ChoiceChips, Empty } from '../components/ui'
-import { battersOf, chaseOf, fieldingOf, kpisOf, phaseRange, phaseStats, spellsOf } from '../lib/analysis'
+import { battersOf, chaseOf, fieldingOf, handSplitOf, kpisOf, matchupsOf, momentumOf, phaseRange, phaseStats, spellsOf, swingOf, zonesOf } from '../lib/analysis'
+import { awardPoints } from '../lib/insights'
 import { economy, fmtRate, strikeRate, type InningsSummary } from '../lib/scorecard'
 import { BALLS, ballRuns, battingSide, bowlingSide, isBall } from '../lib/scoring'
 import { useApp } from '../state/AppContext'
@@ -70,6 +71,7 @@ export function AnalysisTab({ file, summaries }: { file: ScoreFile; summaries: I
   }))
 
   const phases = summaries.map((_, n) => phaseStats(file, n))
+  const swing = swingOf(file)
   const chase = chaseOf(file)
   const chaseSeries: Series[] = chase.length
     ? [
@@ -107,6 +109,27 @@ export function AnalysisTab({ file, summaries }: { file: ScoreFile; summaries: I
       </ChartCard>
 
       {chaseSeries.length > 0 && <LineChart title="The chase" series={chaseSeries} decimals={2} idle="Runs per over scored so far against what is still needed, after each over." fromZero={false} />}
+
+      {swing.length > 0 && (
+        <>
+          <LineChart
+            title="Chase: chance of winning"
+            series={[{ name: `${battingSide(file, file.innings[1]).shortName} chance (%)`, slot: slot(1), values: swing.map((p) => p.chance) }]}
+            idle="A rough estimate for the chasing side after each over, not a prediction."
+            fromZero={false}
+          />
+          <ChartCard title="Ahead or behind the pace" subtitle="Runs the chasing side was ahead (+) or behind (–) the required pace after each over">
+            <div className="flex flex-wrap gap-1.5">
+              {swing.map((p) => (
+                <span key={p.over} className={`inline-flex min-w-[44px] flex-col items-center rounded-lg border px-1.5 py-1 text-xs ${p.ahead >= 0 ? 'border-ok/40 bg-ok/10 text-ok' : 'border-bad/40 bg-bad/10 text-bad'}`}>
+                  <span className="text-[10px] text-muted">ov {p.over}</span>
+                  <strong>{p.ahead > 0 ? `+${p.ahead}` : p.ahead}</strong>
+                </span>
+              ))}
+            </div>
+          </ChartCard>
+        </>
+      )}
 
       <InningsPicker file={file} value={idx} onChange={setPick} />
 
@@ -194,6 +217,20 @@ export function DetailedTab({ file, summaries, lefties }: { file: ScoreFile; sum
   const boundaries = inn.events.filter(isBall).filter((b) => b.shot && (batter === 'all' || b.striker === batter))
   const hitters = [...new Set(inn.events.filter(isBall).filter((b) => b.shot).map((b) => b.striker))]
   const maxOverRuns = Math.max(1, ...spells.flatMap((x) => x.overs.map((o) => o.runs)))
+  const momentum = momentumOf(file, idx)
+  const matchups = matchupsOf(file, idx)
+  const handSplit = handSplitOf(file, idx, lefties)
+  const hasLefties = batters.some((b) => lefties.has(b.id))
+  const zones = zonesOf(file, idx, lefties)
+  const impact = awardPoints(file)
+    .filter((x) => x.total !== 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 8)
+  const maxImpact = Math.max(1, ...impact.map((x) => x.total))
+  const first = (id: string) => personName(id).split(' ')[0]
+  const bowlersInOrder = spells.map((x) => x.id)
+  const momentumSeries: Series[] = [{ name: battingSide(file, inn).shortName, slot, values: momentum.map((m) => m.rolling) }]
+  const droughtSeries: Series[] = [{ name: battingSide(file, inn).shortName, slot, values: momentum.map((m) => m.sinceBoundary) }]
 
   return (
     <>
@@ -221,22 +258,48 @@ export function DetailedTab({ file, summaries, lefties }: { file: ScoreFile; sum
         <p className="mt-2 text-xs text-muted">Dots = balls with no runs. 4s/6s = share of balls that went for a boundary.</p>
       </ChartCard>
 
+      <LineChart title="Momentum" series={momentumSeries} decimals={1} idle="Average runs per over across the last three overs, after each over." fromZero={false} />
+      <LineChart title="Balls since a boundary" series={droughtSeries} idle="Legal balls since the last four or six, at the end of each over." fromZero={false} />
+
+      <ChartCard title="Fall of wickets" subtitle={`${batName} — score when each wicket fell`}>
+        {s.fow.length === 0 ? (
+          <p className="py-3 text-center text-sm text-muted">No wickets fell.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {s.fow.map((w) => (
+              <div key={w.n} className="text-sm">
+                <div className="flex justify-between gap-2">
+                  <span className="min-w-0 truncate">
+                    <span className="text-muted">{w.n}.</span> {personName(w.who)}
+                  </span>
+                  <span className="shrink-0 text-muted">over {w.over}</span>
+                </div>
+                <div className="mt-0.5 flex items-center gap-2">
+                  <span className="h-3 rounded-r" style={{ width: `${(w.score / Math.max(1, s.total)) * 100}%`, minWidth: 3, maxWidth: 'calc(100% - 52px)', background: `var(--series-${slot})` }} />
+                  <span className="font-semibold">
+                    {w.score}/{w.n}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </ChartCard>
+
       <ChartCard title="Bowling spells" subtitle={`${bowlingSide(file, inn).name} — each bar is one over's runs; ● = a wicket in it`}>
         {spells.length === 0 && <p className="py-3 text-center text-sm text-muted">Nothing yet</p>}
         <div className="flex flex-col divide-y divide-line">
           {spells.map((b) => (
             <div key={b.id} className="py-3 first:pt-0 last:pb-0">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate font-medium">{personName(b.id)}</span>
-                <span className="shrink-0 text-sm">
-                  <strong>
-                    {Math.floor(b.balls / BALLS)}.{b.balls % BALLS}-{b.maidens}-{b.runs}-{b.wickets}
-                  </strong>{' '}
-                  <span className="text-muted">
-                    · econ {economy({ runs: b.runs, balls: b.balls })} · {b.dotPct}% dots
-                  </span>
+              <p className="font-medium">{personName(b.id)}</p>
+              <p className="text-sm">
+                <strong>
+                  {Math.floor(b.balls / BALLS)}.{b.balls % BALLS}-{b.maidens}-{b.runs}-{b.wickets}
+                </strong>{' '}
+                <span className="text-muted">
+                  · econ {economy({ runs: b.runs, balls: b.balls })} · {b.dotPct}% dots
                 </span>
-              </div>
+              </p>
               <div className="mt-2 flex items-end gap-1.5" style={{ minHeight: 44 }}>
                 {b.overs.map((o) => (
                   <div key={o.over} className="flex w-6 flex-col items-center gap-0.5">
@@ -256,20 +319,18 @@ export function DetailedTab({ file, summaries, lefties }: { file: ScoreFile; sum
         <div className="flex flex-col divide-y divide-line">
           {batters.map((b) => (
             <div key={b.id} className="py-3 first:pt-0 last:pb-0">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate font-medium">
-                  {personName(b.id)}
-                  {!b.out && <span className="text-muted"> *</span>}
+              <p className="font-medium">
+                {personName(b.id)}
+                {!b.out && <span className="text-muted"> *</span>}
+              </p>
+              <p className="text-sm">
+                <strong>
+                  {b.runs} ({b.balls})
+                </strong>{' '}
+                <span className="text-muted">
+                  · SR {strikeRate(b.runs, b.balls)} · {b.dotPct}% dots · {b.boundaryPct}% 4s/6s
                 </span>
-                <span className="shrink-0 text-sm">
-                  <strong>
-                    {b.runs} ({b.balls})
-                  </strong>{' '}
-                  <span className="text-muted">
-                    · SR {strikeRate(b.runs, b.balls)} · {b.dotPct}% dots · {b.boundaryPct}% 4s/6s
-                  </span>
-                </span>
-              </div>
+              </p>
               <div className="mt-2 flex flex-wrap gap-1">
                 {b.faced.map((ball) => (
                   <BallChip key={ball.id} ball={ball} small />
@@ -286,6 +347,53 @@ export function DetailedTab({ file, summaries, lefties }: { file: ScoreFile; sum
             </div>
           ))}
         </div>
+      </ChartCard>
+
+      <ChartCard title="Batter against bowler" subtitle={`${batName} — runs (balls) against each bowler; W = got them out`}>
+        {matchups.length === 0 ? (
+          <p className="py-3 text-center text-sm text-muted">Nothing yet</p>
+        ) : (
+          <div className="-mx-1 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-muted">
+                  <th className="px-1.5 py-1.5 text-left font-semibold">Batter</th>
+                  {bowlersInOrder.map((id) => (
+                    <th key={id} className="px-1.5 py-1.5 text-right font-semibold">
+                      {first(id)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {batters.map((b) => (
+                  <tr key={b.id}>
+                    <td className="max-w-[110px] truncate px-1.5 py-2 text-left font-medium">{first(b.id)}</td>
+                    {bowlersInOrder.map((id) => {
+                      const m = matchups.find((x) => x.batter === b.id && x.bowler === id)
+                      return (
+                        <td key={id} className={`whitespace-nowrap px-1.5 py-2 text-right ${m?.outs ? 'font-semibold text-bad' : ''}`}>
+                          {m && m.balls > 0 ? `${m.runs} (${m.balls})${m.outs ? ' W' : ''}` : '–'}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </ChartCard>
+
+      <ChartCard title="Left-handers and right-handers" subtitle="Each bowler's balls, runs and wickets against both">
+        {!hasLefties ? (
+          <p className="py-3 text-center text-sm text-muted">No left-handed batters in this innings. Mark a player as left-handed on their profile to see this.</p>
+        ) : (
+          <Table
+            head={['Bowler', 'vs left', 'vs right']}
+            rows={handSplit.map((h) => [personName(h.id), `${h.left.balls}b ${h.left.runs}r ${h.left.wickets}w`, `${h.right.balls}b ${h.right.runs}r ${h.right.wickets}w`])}
+          />
+        )}
       </ChartCard>
 
       <ChartCard title="Wagon wheel" subtitle={`${batName} — where the fours and sixes went`}>
@@ -309,11 +417,60 @@ export function DetailedTab({ file, summaries, lefties }: { file: ScoreFile; sum
         )}
       </ChartCard>
 
+      {zones.length > 0 && (
+        <ChartCard title="Where the boundaries went" subtitle={`${batName} — fours and sixes by fielding region`}>
+          <BarList slot={slot} rows={zones.map((z) => ({ label: z.region, value: z.fours + z.sixes }))} />
+          <p className="mt-2 text-xs text-muted">{zones.map((z) => `${z.region}: ${z.fours}×4, ${z.sixes}×6`).join(' · ')}</p>
+        </ChartCard>
+      )}
+
       {caughtAt.length > 0 && (
         <ChartCard title="Where catches were taken" subtitle={`✕ catches and run-out throws (${caughtAt.length} recorded)`}>
           <GroundMap marks={caughtAt} />
         </ChartCard>
       )}
+
+      <ChartCard title="Player impact" subtitle="Points from batting, bowling and fielding — the same formula as the player-of-the-match suggestion">
+        {impact.length === 0 ? (
+          <p className="py-3 text-center text-sm text-muted">Nothing yet</p>
+        ) : (
+          <>
+            <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+              {[
+                ['Batting', 'var(--series-1)'],
+                ['Bowling', 'var(--series-2)'],
+                ['Fielding', 'rgb(var(--text-muted))'],
+              ].map(([name, c]) => (
+                <span key={name} className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c }} />
+                  {name}
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-col gap-2">
+              {impact.map((x) => (
+                <div key={x.id} className="text-sm">
+                  <div className="flex justify-between gap-2">
+                    <span className="min-w-0 truncate">{personName(x.id)}</span>
+                    <strong>{x.total}</strong>
+                  </div>
+                  <span className="mt-0.5 flex h-3 gap-0.5 overflow-hidden rounded-r" style={{ width: `${(Math.max(0, x.total) / maxImpact) * 100}%`, minWidth: 3 }}>
+                    {[
+                      { n: x.bat, c: 'var(--series-1)' },
+                      { n: x.bowl, c: 'var(--series-2)' },
+                      { n: x.field, c: 'rgb(var(--text-muted))' },
+                    ]
+                      .filter((q) => q.n > 0)
+                      .map((q, k) => (
+                        <span key={k} style={{ flex: q.n, background: q.c }} />
+                      ))}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </ChartCard>
 
       <ChartCard title="Fielding" subtitle={`${bowlingSide(file, inn).name} — catches, run-outs and stumpings`}>
         {fielding.length === 0 ? (

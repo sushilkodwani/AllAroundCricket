@@ -2,6 +2,7 @@
 // team in every chart: our side = series 1 (blue), the opponent = series 2
 // (orange). Text always uses the app's text colours, never a series colour.
 import { useState, type ReactNode } from 'react'
+import { rollingAverage } from '../lib/season'
 
 export interface Series {
   name: string
@@ -186,19 +187,31 @@ export function LineChart({ title, series, decimals = 0, idle, fromZero = true, 
 }
 
 /** One column per match, oldest on the left — a player's runs or wickets over the season. */
-export function TrendBars({ points, slot = 1 }: { points: { label: string; value: number; note?: string; hollow?: boolean }[]; slot?: 1 | 2 }) {
+export function TrendBars({ points, slot = 1, fmt, unit = 'matches' }: { points: { label: string; value: number; note?: string; hollow?: boolean }[]; slot?: 1 | 2; fmt?: (n: number) => string; unit?: string }) {
   if (points.length === 0) return <p className="py-3 text-center text-sm text-muted">Nothing yet</p>
   const max = Math.max(1, ...points.map((p) => p.value))
   const avg = points.reduce((s, p) => s + p.value, 0) / points.length
+  const rolling = rollingAverage(points.map((p) => p.value))
+  // Column centres and heights match the bars below: 28px columns, 8px apart, bars rise from 20px above the bottom.
+  const cx = (i: number) => i * 36 + 14
+  const cy = (v: number) => 96 - (20 + (v / max) * 56)
   return (
     <div className="overflow-x-auto">
       <div className="relative flex items-end gap-2 pb-1" style={{ height: 96, minWidth: points.length * 34 }}>
+        {points.length > 1 && (
+          <svg className="pointer-events-none absolute left-0 top-0" width={points.length * 36} height={96} aria-hidden>
+            <polyline points={rolling.map((v, i) => `${cx(i)},${cy(v)}`).join(' ')} fill="none" stroke="rgb(var(--text))" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+            {rolling.map((v, i) => (
+              <circle key={i} cx={cx(i)} cy={cy(v)} r="2.5" fill="rgb(var(--text))" stroke="rgb(var(--surface))" strokeWidth="1" />
+            ))}
+          </svg>
+        )}
         {/* dashed guide: the average over these matches */}
         <span className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-muted" style={{ bottom: 20 + (avg / max) * 56 }} aria-hidden />
         {points.map((p, i) => (
           <div key={i} className="flex w-7 flex-col items-center justify-end gap-0.5" title={p.note}>
             <span className="text-[10px] font-medium">
-              {p.value}
+              {fmt ? fmt(p.value) : p.value}
               {p.hollow ? '*' : ''}
             </span>
             <span className="w-full rounded-t" style={{ height: Math.max(3, (p.value / max) * 56), background: `var(--series-${slot})` }} />
@@ -206,7 +219,9 @@ export function TrendBars({ points, slot = 1 }: { points: { label: string; value
           </div>
         ))}
       </div>
-      <p className="text-xs text-muted">Dashed line = average ({avg.toFixed(1)}). * = not out.</p>
+      <p className="text-xs text-muted">
+        Solid line = average of the last 3 {unit} (latest {fmt ? fmt(rolling[rolling.length - 1]) : rolling[rolling.length - 1].toFixed(1)}). Dashed line = average over all shown ({fmt ? fmt(avg) : avg.toFixed(1)}).{points.some((p) => p.hollow) ? ' * = not out.' : ''}
+      </p>
     </div>
   )
 }

@@ -2,7 +2,8 @@
 // bowling spells, each batter's innings ball by ball, the chase, and fielding.
 // All worked out from the ball-by-ball log — nothing extra is stored.
 import type { BallEvent, ScoreFile } from '../types'
-import { summarize } from './scorecard'
+import { parScore, winChance } from './insights'
+import { shotRegion, summarize } from './scorecard'
 import { BALLS, BOWLER_WICKETS, ballRuns, bowlerRuns, isBall } from './scoring'
 
 const pct = (n: number, d: number) => (d > 0 ? Math.round((n * 100) / d) : 0)
@@ -250,3 +251,156 @@ export function kpisOf(file: ScoreFile, idx: number): InningsKpis {
   for (const [over, runs] of perOver) if (!best || runs > best.runs) best = { over, runs }
   return { dotPct: pct(dots, legal.length), boundaryPct: pct(fours + sixes, legal.length), boundaryRunsPct: pct(fours * 4 + sixes * 6, total), bestOver: best }
 }
+
+// ---------- batter against bowler ----------
+export interface Matchup {
+  batter: string
+  bowler: string
+  runs: number
+  balls: number
+  /** Times this bowler got this batter out. */
+  outs: number
+}
+
+/** Every batter/bowler pairing in an innings. Runs and balls count only what the batter faced (wides are not faced). */
+export function matchupsOf(file: ScoreFile, idx: number): Matchup[] {
+  const m = new Map<string, Matchup>()
+  for (const { b } of ballsWithOver(file, idx)) {
+    const key = `${b.striker}|${b.bowler}`
+    let x = m.get(key)
+    if (!x) m.set(key, (x = { batter: b.striker, bowler: b.bowler, runs: 0, balls: 0, outs: 0 }))
+    if (b.kind !== 'wd') {
+      x.balls++
+      x.runs += b.bat
+    }
+    if (b.wicket && b.wicket.who === b.striker && BOWLER_WICKETS.includes(b.wicket.kind)) x.outs++
+  }
+  return [...m.values()]
+}
+
+// ---------- momentum ----------
+export interface MomentumPoint {
+  over: number
+  /** Average runs per over across this and the last two overs. */
+  rolling: number
+  /** Legal balls since the last four or six, at the end of the over. */
+  sinceBoundary: number
+}
+
+export function momentumOf(file: ScoreFile, idx: number): MomentumPoint[] {
+  const perOver: number[] = []
+  const since: number[] = []
+  let legal = 0
+  let sinceB = 0
+  let current = 0
+  for (const { b, over } of ballsWithOver(file, idx)) {
+    if (over !== current) {
+      if (current > 0) since.push(sinceB)
+      current = over
+    }
+    perOver[over - 1] = (perOver[over - 1] ?? 0) + ballRuns(b)
+    if (b.kind === 'legal') {
+      legal++
+      sinceB++
+    }
+    if (b.kind !== 'wd' && (b.bat === 4 || b.bat === 6)) sinceB = 0
+  }
+  if (current > 0) since.push(sinceB)
+  void legal
+  return perOver.map((_, i) => {
+    const win = perOver.slice(Math.max(0, i - 2), i + 1)
+    return { over: i + 1, rolling: win.reduce((s, n) => s + (n ?? 0), 0) / win.length, sinceBoundary: since[i] ?? 0 }
+  })
+}
+
+// ---------- left-handers and right-handers ----------
+export interface HandLine {
+  balls: number
+  runs: number
+  wickets: number
+}
+export interface HandSplit {
+  id: string
+  left: HandLine
+  right: HandLine
+}
+
+/** How each bowler fared against left-handed and right-handed batters. */
+export function handSplitOf(file: ScoreFile, idx: number, lefties: Set<string>): HandSplit[] {
+  const m = new Map<string, HandSplit>()
+  const blank = (): HandLine => ({ balls: 0, runs: 0, wickets: 0 })
+  for (const { b } of ballsWithOver(file, idx)) {
+    let x = m.get(b.bowler)
+    if (!x) m.set(b.bowler, (x = { id: b.bowler, left: blank(), right: blank() }))
+    const l = lefties.has(b.striker) ? x.left : x.right
+    l.runs += bowlerRuns(b)
+    if (b.kind === 'legal') l.balls++
+    if (b.wicket && BOWLER_WICKETS.includes(b.wicket.kind)) l.wickets++
+  }
+  return [...m.values()]
+}
+
+// ---------- scoring zones ----------
+export interface ZoneRow {
+  region: string
+  fours: number
+  sixes: number
+}
+
+/** Where recorded boundaries went, by fielding region (mirrored for left-handers). */
+export function zonesOf(file: ScoreFile, idx: number, lefties: Set<string>): ZoneRow[] {
+  const m = new Map<string, ZoneRow>()
+  for (const { b } of ballsWithOver(file, idx)) {
+    if (!b.shot || b.kind === 'wd' || (b.bat !== 4 && b.bat !== 6)) continue
+    const region = shotRegion(b.shot, lefties.has(b.striker))
+    let z = m.get(region)
+    if (!z) m.set(region, (z = { region, fours: 0, sixes: 0 }))
+    if (b.bat === 4) z.fours++
+    else z.sixes++
+  }
+  return [...m.values()].sort((a, b) => b.fours + b.sixes - (a.fours + a.sixes))
+}
+
+// ---------- the chase against par ----------
+export interface SwingPoint {
+  over: number
+  /** Runs ahead of (+) or behind (–) the required pace. */
+  ahead: number
+  /** The chasing side's chance, 0–100 (a rough estimate). */
+  chance: number
+}
+
+/** After each over of the second innings: ahead of or behind the required pace, and the chasing side's chance. */
+export function swingOf(file: ScoreFile): SwingPoint[] {
+  const first = file.innings[0]
+  const second = file.innings[1]
+  if (!first || !second || second.target === undefined) return []
+  const firstBalls = first.events.filter(isBall).filter((b) => b.kind === 'legal').length
+  const firstRate = firstBalls > 0 ? inningsTotalOf(first) / firstBalls : 1
+  const wicketsTotal = file[second.batting].xi.length - 1
+  let total = 0
+  let legal = 0
+  let out = 0
+  let current = 0
+  const points: SwingPoint[] = []
+  const close = () => {
+    const left = second.overs * BALLS - legal
+    points.push({
+      over: current,
+      ahead: total - parScore(second.target!, second.overs, legal),
+      chance: Math.round(winChance({ target: second.target!, total, ballsLeft: left, wicketsLeft: wicketsTotal - out, wicketsTotal, firstRatePerBall: firstRate }) * 100),
+    })
+  }
+  for (const { b, over } of ballsWithOver(file, 1)) {
+    if (over !== current && current > 0) close()
+    current = over
+    total += ballRuns(b)
+    if (b.kind === 'legal') legal++
+    if (b.wicket) out++
+  }
+  if (current > 0) close()
+  return points
+}
+
+/** Runs the batting side made from the ball-by-ball log alone (penalties are ignored here). */
+const inningsTotalOf = (inn: ScoreFile['innings'][number]) => inn.events.filter(isBall).reduce((s, b) => s + ballRuns(b), 0)

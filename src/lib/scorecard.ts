@@ -42,6 +42,8 @@ export interface OverLine {
 }
 
 export interface Partnership {
+  /** Which wicket this stand was for (1 = the opening stand). */
+  wicket: number
   a: string
   b: string
   runs: number
@@ -168,7 +170,7 @@ export function summarize(file: ScoreFile, idx: number): InningsSummary {
     // Partnership: starts whenever the pair in the middle changes.
     if (!pair || !((pair.a === e.striker && pair.b === e.nonStriker) || (pair.a === e.nonStriker && pair.b === e.striker))) {
       if (pair) pair.unbroken = false
-      partnerships.push((pair = { a: e.striker, b: e.nonStriker, runs: 0, balls: 0, aRuns: 0, aBalls: 0, bRuns: 0, bBalls: 0, unbroken: true }))
+      partnerships.push((pair = { wicket: wickets + 1, a: e.striker, b: e.nonStriker, runs: 0, balls: 0, aRuns: 0, aBalls: 0, bRuns: 0, bBalls: 0, unbroken: true }))
     }
     pair.runs += runs
     const strikerIsA = pair.a === e.striker
