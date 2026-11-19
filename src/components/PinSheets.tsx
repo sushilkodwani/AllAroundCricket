@@ -7,7 +7,7 @@ import { PinPad } from './PinPad'
 import { ErrorNote, Sheet } from './ui'
 
 export function ChangePinSheet({ onClose }: { onClose: () => void }) {
-  const { store, session, toast } = useApp()
+  const { store, realSession: session, toast } = useApp()
   const [step, setStep] = useState<'current' | 'new' | 'confirm'>('current')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -70,7 +70,7 @@ export function ChangePinSheet({ onClose }: { onClose: () => void }) {
 }
 
 export function RecoveryCodeSheet({ onClose }: { onClose: () => void }) {
-  const { store, session } = useApp()
+  const { store, realSession: session } = useApp()
   const [code, setCode] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

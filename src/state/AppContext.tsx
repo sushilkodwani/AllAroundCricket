@@ -29,7 +29,14 @@ interface AppState {
   /** Shown on the onboarding screen, e.g. after an admin PIN reset. */
   notice: string | null
   store: Store | null
+  /** Who the app is showing: while the super admin acts as an admin, that admin. */
   session: Session | null
+  /** The person really logged in on this phone (never the admin being acted as). */
+  realSession: Session | null
+  /** The admin the super admin is acting as, or null. */
+  mock: Person | null
+  startMock: (personId: string) => void
+  stopMock: () => void
   status: StoreStatus
   config: AppConfig | null
   admins: AdminRecord[]
@@ -80,6 +87,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<Phase>('boot')
   const [store, setStore] = useState<Store | null>(null)
   const [session, setSession] = useState<Session | null>(null)
+  /** Super admin only, kept in memory: the admin being acted as. A reload ends it. */
+  const [mockId, setMockId] = useState<string | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(UNLOCK_KEY) === '1')
@@ -138,17 +147,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const people = store ? peopleOf(store) : []
   const creds = store ? credsOf(store) : []
   const allTeams = store ? teamsOf(store) : []
-  const role: Role = phase === 'in' && session ? roleOf(session.personId, config, people, admins) : 'denied'
+  const realRole: Role = phase === 'in' && session ? roleOf(session.personId, config, people, admins) : 'denied'
+  // Acting as someone is for the super admin only, and only as an active admin.
+  const actingId = mockId && realRole === 'super' && roleOf(mockId, config, people, admins) === 'admin' ? mockId : undefined
+  const effectiveId = actingId ?? session?.personId
+  const role: Role = phase === 'in' && session ? roleOf(effectiveId, config, people, admins) : 'denied'
+  const viewSession = useMemo(() => (session && actingId ? { ...session, personId: actingId } : session), [session, actingId])
   const isSuper = role === 'super'
   const isAdmin = isAdminRole(role)
-  const me = session ? (people.find((p) => p.id === session.personId) ?? null) : null
+  const me = effectiveId ? (people.find((p) => p.id === effectiveId) ?? null) : null
   const myId = me?.id
 
   // The store enforces who may change what, so it must always know who is acting.
   if (store && phase === 'in' && session) {
     // A player an admin made scorer of a match may write that match's score (PLAN §31).
     const scorerMatchIds = me ? me.teamIds.flatMap((id) => matchesOf(store, id)).filter((m) => m.scorerId === me.id).map((m) => m.id) : undefined
-    store.actor = { role: role === 'denied' ? 'none' : role, personId: session.personId, scorerMatchIds }
+    store.actor = { role: role === 'denied' ? 'none' : role, personId: effectiveId, viaId: actingId ? session.personId : undefined, scorerMatchIds }
   }
 
   const canManage = useCallback((teamId: string | undefined) => isAdmin && !!myId && allTeams.some((t) => t.id === teamId && t.adminId === myId), [isAdmin, myId, allTeams])
@@ -162,6 +176,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const names = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people])
   const personName = useCallback((id: string) => names.get(id) ?? 'Unknown', [names])
+
+  // The admin was suspended or removed while being acted as: back to being the super admin.
+  useEffect(() => {
+    if (mockId && phase === 'in' && !actingId && realRole !== 'denied') setMockId(null)
+  }, [mockId, actingId, phase, realRole])
 
   // ---------- session checks (PLAN §5.6) ----------
   const loaded = !!store && phase === 'in' && !!config && store.has(P.people) && store.has(P.creds)
@@ -216,6 +235,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem(UNLOCK_KEY, '1')
     setUnlocked(true)
     setNotice(null)
+    setMockId(null)
     // This phone's key was just written for this login; the check starts once its hash is known.
     setDeviceHash('')
     void deviceHashOf(next.deviceSecret).then(setDeviceHash)
@@ -234,6 +254,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     forgetEverything()
     sessionStorage.removeItem(UNLOCK_KEY)
+    setMockId(null)
     setStore(null)
     setSession(null)
     setNotice(null)
@@ -241,6 +262,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [store, session])
 
   const switchNumber = useCallback(() => {
+    setMockId(null)
     clearSession()
     setSession(null)
     setNotice(null)
@@ -271,6 +293,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [store, session],
   )
 
+  const startMock = useCallback((personId: string) => setMockId(personId), [])
+  const stopMock = useCallback(() => setMockId(null), [])
+
   const toast = useCallback((message: string, undo?: () => void) => setToastState({ id: Date.now(), message, undo }), [])
 
   useEffect(() => {
@@ -285,7 +310,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     bootError,
     notice,
     store,
-    session,
+    session: viewSession,
+    realSession: session,
+    mock: actingId ? me : null,
+    startMock,
+    stopMock,
     status,
     config,
     admins,

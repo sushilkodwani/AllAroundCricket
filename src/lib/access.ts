@@ -31,6 +31,8 @@ export type Role = 'super' | 'admin' | 'viewer' | 'denied'
 export interface Actor {
   role: 'super' | 'admin' | 'viewer' | 'setup' | 'none'
   personId?: string
+  /** Set while the super admin acts as an admin: who really made the change. */
+  viaId?: string
   /** Matches an admin handed to this person to score. */
   scorerMatchIds?: string[]
 }

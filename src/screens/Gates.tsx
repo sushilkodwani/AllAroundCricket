@@ -108,7 +108,7 @@ export function TokenGate() {
 
 /** Optional per-device "Ask for PIN when the app opens". */
 export function PinGate() {
-  const { store, session, unlock, me, logout } = useApp()
+  const { store, realSession: session, unlock, me, logout } = useApp()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [shake, setShake] = useState(false)

@@ -6,7 +6,7 @@ import { useApp } from '../state/AppContext'
 import { ErrorNote, Sheet } from './ui'
 
 function useTurnOn() {
-  const { store, session, toast } = useApp()
+  const { store, realSession: session, toast } = useApp()
   return async (): Promise<boolean> => {
     if (!store || !session) return false
     setPushOff(false)
@@ -21,7 +21,7 @@ function useTurnOn() {
 }
 
 export function NotificationsCard() {
-  const { store, session, toast } = useApp()
+  const { store, realSession: session, toast } = useApp()
   const support = pushSupport()
   const [enabled, setEnabled] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
@@ -112,18 +112,18 @@ export function NotificationsCard() {
  * reinstall), it subscribes silently instead.
  */
 export function NotifyPrompt() {
-  const { store, session } = useApp()
+  const { store, realSession: session, mock } = useApp()
   const [open, setOpen] = useState(false)
   const turnOn = useTurnOn()
 
   useEffect(() => {
-    if (!store || !session) return
+    if (!store || !session || mock) return
     void ensureSubscriptionSaved(store, session.personId, session.sessionEpoch)
     const t = setTimeout(() => setOpen(shouldPromptForPush()), 1200)
     return () => clearTimeout(t)
-  }, [store, session])
+  }, [store, session, mock])
 
-  if (!open) return null
+  if (!open || mock) return null
   const dismiss = () => {
     notePromptDismissed()
     setOpen(false)

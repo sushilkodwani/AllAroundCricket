@@ -171,7 +171,7 @@ function AddAdminSheet({ onClose }: { onClose: () => void }) {
 }
 
 function AdminSheet({ record, onClose }: { record: AdminRecord; onClose: () => void }) {
-  const { store, people, allTeams, admins, me, creds, toast } = useApp()
+  const { store, people, allTeams, admins, me, creds, toast, startMock } = useApp()
   const [confirm, setConfirm] = useState<null | 'suspend' | 'reset' | 'remove'>(null)
   const [error, setError] = useState<string | null>(null)
   const person = people.find((p) => p.id === record.personId)
@@ -235,6 +235,22 @@ function AdminSheet({ record, onClose }: { record: AdminRecord; onClose: () => v
             </div>
           )}
         </section>
+
+        {record.status === 'active' && (
+          <section>
+            <button
+              className="btn-secondary w-full"
+              onClick={() => {
+                startMock(record.personId)
+                // The route changes, which also closes this sheet.
+                navigate('/teams', { replace: true })
+              }}
+            >
+              🎭 Act as {name}
+            </button>
+            <p className="mt-1 text-xs text-muted">See the app exactly as {name} does and make changes for them. Their access stays the same. A banner at the top lets you stop.</p>
+          </section>
+        )}
 
         <ErrorNote>{error}</ErrorNote>
 

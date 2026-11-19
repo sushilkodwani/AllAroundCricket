@@ -37,6 +37,34 @@ function Placeholder({ title }: { title: string }) {
   )
 }
 
+/** Shown on every screen while the super admin acts as an admin. */
+function MockBar() {
+  const { mock, stopMock } = useApp()
+  useEffect(() => {
+    if (!mock) return
+    document.documentElement.setAttribute('data-mock', '')
+    return () => document.documentElement.removeAttribute('data-mock')
+  }, [mock])
+  if (!mock) return null
+  return (
+    <div className="mock-bar sticky top-0 z-50 flex items-center gap-2 bg-ink px-3 text-sm text-bg" role="status">
+      <span aria-hidden="true">🎭</span>
+      <span className="min-w-0 flex-1 truncate">
+        Acting as <strong>{mock.name}</strong> (admin)
+      </span>
+      <button
+        className="min-h-[32px] shrink-0 rounded-lg border border-bg/60 px-3 font-semibold"
+        onClick={() => {
+          stopMock()
+          navigate('/settings/admins')
+        }}
+      >
+        Stop
+      </button>
+    </div>
+  )
+}
+
 export default function App() {
   const { phase, gate } = useApp()
   const route = useRoute()
@@ -115,6 +143,7 @@ export default function App() {
 
   return (
     <>
+      <MockBar />
       {screen}
       {tabs && <TabBar />}
       <NotifyPrompt />

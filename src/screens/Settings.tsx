@@ -27,7 +27,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export const TOKEN_WARN_DAYS = 14
 
 export function Settings() {
-  const { me, role, isAdmin, isSuper, myTeams, allTeams, admins, people, config, store, session, logout, flushSaves, replaceToken, toast, creds } = useApp()
+  const { me, role, isAdmin, isSuper, myTeams, allTeams, admins, people, config, store, session, logout, flushSaves, replaceToken, toast, creds, mock, stopMock } = useApp()
   const { pref, setPref: setTheme } = useTheme()
   const sheet = useSheet()
   const [pinOnOpen, setPinOnOpen] = useState(() => getPref('pinOnOpen', false))
@@ -74,8 +74,12 @@ export function Settings() {
           </div>
           {me && <MenuRow label="Edit my profile" hint="Photo, role, batting, bowling, jersey" onClick={() => sheet.open('profile')} />}
           {me && playsIn[0] && <MenuRow label="My stats" hint="Batting, bowling and fielding figures" onClick={() => navigate(`/teams/${playsIn[0].id}/players/${me.id}`)} />}
-          <MenuRow label="Change PIN" hint={pinSetAt ? `PIN set ${fmtStamp(pinSetAt)}` : undefined} onClick={() => sheet.open('pin')} />
-          <MenuRow
+          {mock ? (
+            <MenuRow label="Stop acting as this admin" hint="Back to your own super admin screens" onClick={() => { stopMock(); navigate('/settings/admins') }} />
+          ) : (
+            <MenuRow label="Change PIN" hint={pinSetAt ? `PIN set ${fmtStamp(pinSetAt)}` : undefined} onClick={() => sheet.open('pin')} />
+          )}
+          {!mock && <MenuRow
             label="Ask for PIN when the app opens"
             hint="Useful on a shared phone."
             right={
@@ -88,17 +92,21 @@ export function Settings() {
                 }}
               />
             }
-          />
-          {!isSuper && <MenuRow label="Access key" hint="Replace the access key on this device" onClick={() => sheet.open('repo')} />}
-          <button className="row font-medium text-bad active:bg-alt" onClick={() => setConfirmLogout(true)}>
-            Log out
-          </button>
+          />}
+          {!isSuper && !mock && <MenuRow label="Access key" hint="Replace the access key on this device" onClick={() => sheet.open('repo')} />}
+          {!mock && (
+            <button className="row font-medium text-bad active:bg-alt" onClick={() => setConfirmLogout(true)}>
+              Log out
+            </button>
+          )}
         </Section>
 
-        <section>
-          <h2 className="section-title">Notifications</h2>
-          <NotificationsCard />
-        </section>
+        {!mock && (
+          <section>
+            <h2 className="section-title">Notifications</h2>
+            <NotificationsCard />
+          </section>
+        )}
 
         <section>
           <h2 className="section-title">Appearance</h2>

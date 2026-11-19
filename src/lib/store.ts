@@ -392,7 +392,7 @@ export class Store {
   }
 
   private withActor(subject: string): string {
-    return this.actor.personId ? `${subject}\n\nActor: ${this.actor.personId}` : subject
+    return this.actor.personId ? `${subject}\n\nActor: ${this.actor.personId}${this.actor.viaId ? ` (by super admin ${this.actor.viaId})` : ''}` : subject
   }
 
   /** Called when the browser reports the connection is back. */
