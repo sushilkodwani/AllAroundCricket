@@ -17,9 +17,10 @@ const TONE: Record<BallTone, string> = {
 }
 
 /** One delivery as a round chip: • 1 4 6 W wd nb+2 … */
-export function BallChip({ ball, onClick }: { ball: BallEvent; onClick?: () => void }) {
+export function BallChip({ ball, onClick, small }: { ball: BallEvent; onClick?: () => void; small?: boolean }) {
   const token = ballToken(ball)
-  const cls = `flex h-9 min-w-[36px] shrink-0 items-center justify-center rounded-full px-1.5 text-xs font-bold ${TONE[ballTone(ball)]}`
+  const size = small ? 'h-6 min-w-[24px] px-1 text-[10px]' : 'h-9 min-w-[36px] px-1.5 text-xs'
+  const cls = `flex ${size} shrink-0 items-center justify-center rounded-full font-bold ${TONE[ballTone(ball)]}`
   return onClick ? (
     <button className={cls} onClick={onClick} aria-label={`Edit ball: ${token}`}>
       {token}

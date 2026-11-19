@@ -1,7 +1,7 @@
 // A player's page (PLAN §28, §39, §40): profile card, recent form and the
 // career record over a set of matches.
 import { useMemo, type ReactNode } from 'react'
-import { BarList } from '../components/charts'
+import { BarList, TrendBars } from '../components/charts'
 import { ProfileCard, ProfileSheet } from '../components/Profile'
 import { GroundMap } from '../components/scoring'
 import { Screen } from '../components/Screen'
@@ -73,6 +73,10 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
     .filter((x) => !!x.m)
     .sort((a, b) => b.m!.date.localeCompare(a.m!.date))
   const form = formOf(c, scored)
+  // Oldest to newest, so the chart reads left to right like a season.
+  const inOrder = [...rows].reverse().slice(-12)
+  const trendBat = inOrder.filter((x) => x.l.bat).map((x) => ({ label: fmtDayMonth(x.m!.date), value: x.l.bat!.runs, hollow: x.l.bat!.notOut, note: `vs ${x.m!.opponent}` }))
+  const trendBowl = inOrder.filter((x) => x.l.bowl).map((x) => ({ label: fmtDayMonth(x.m!.date), value: x.l.bowl!.wickets, note: `${x.l.bowl!.wickets}/${x.l.bowl!.runs} vs ${x.m!.opponent}` }))
   const outs = c ? (Object.keys(c.dismissals) as WicketKind[]).map((k) => ({ label: WICKET_LABELS[k], value: c.dismissals[k] ?? 0 })).sort((a, b) => b.value - a.value) : []
 
   return (
@@ -94,6 +98,23 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
 
         {c && (
           <>
+            {trendBat.length > 1 && (
+              <section>
+                <h2 className="section-title">Runs in each match (last {trendBat.length})</h2>
+                <div className="card p-3">
+                  <TrendBars points={trendBat} />
+                </div>
+              </section>
+            )}
+            {trendBowl.length > 1 && (
+              <section>
+                <h2 className="section-title">Wickets in each match (last {trendBowl.length})</h2>
+                <div className="card p-3">
+                  <TrendBars points={trendBowl} slot={2} />
+                </div>
+              </section>
+            )}
+
             <section>
               <h2 className="section-title">Batting</h2>
               {c.bat.innings === 0 ? (

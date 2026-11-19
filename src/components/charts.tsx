@@ -185,6 +185,32 @@ export function LineChart({ title, series, decimals = 0, idle, fromZero = true, 
   )
 }
 
+/** One column per match, oldest on the left — a player's runs or wickets over the season. */
+export function TrendBars({ points, slot = 1 }: { points: { label: string; value: number; note?: string; hollow?: boolean }[]; slot?: 1 | 2 }) {
+  if (points.length === 0) return <p className="py-3 text-center text-sm text-muted">Nothing yet</p>
+  const max = Math.max(1, ...points.map((p) => p.value))
+  const avg = points.reduce((s, p) => s + p.value, 0) / points.length
+  return (
+    <div className="overflow-x-auto">
+      <div className="relative flex items-end gap-2 pb-1" style={{ height: 96, minWidth: points.length * 34 }}>
+        {/* dashed guide: the average over these matches */}
+        <span className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-muted" style={{ bottom: 20 + (avg / max) * 56 }} aria-hidden />
+        {points.map((p, i) => (
+          <div key={i} className="flex w-7 flex-col items-center justify-end gap-0.5" title={p.note}>
+            <span className="text-[10px] font-medium">
+              {p.value}
+              {p.hollow ? '*' : ''}
+            </span>
+            <span className="w-full rounded-t" style={{ height: Math.max(3, (p.value / max) * 56), background: `var(--series-${slot})` }} />
+            <span className="text-[9px] text-muted">{p.label}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-muted">Dashed line = average ({avg.toFixed(1)}). * = not out.</p>
+    </div>
+  )
+}
+
 /** Horizontal bars with the value at the tip — for counts with names (shot sizes, wicket types). */
 export function BarList({ rows, slot }: { rows: { label: string; value: number }[]; slot: 1 | 2 }) {
   const max = Math.max(1, ...rows.map((r) => r.value))

@@ -1,13 +1,12 @@
-// What everyone sees (PLAN §26): Live, Scorecard, Commentary, Analysis, Teams.
+// What everyone sees (PLAN §26): Live, Scorecard, Commentary, Analysis, Detailed analysis, Teams.
 // Nothing here polls: the score is fetched when the screen opens and again
 // only when the viewer taps Refresh.
 import { useMemo, useState, type ReactNode } from 'react'
-import { BarList, ChartCard, LineChart, Manhattan, type Series } from '../components/charts'
 import { AwardsList } from '../components/Awards'
 import { RoleTag } from '../components/Profile'
-import { BallChip, GroundMap, PressureStrip } from '../components/scoring'
+import { BallChip, PressureStrip } from '../components/scoring'
 import { HeaderButton, RefreshIcon, Screen } from '../components/Screen'
-import { ChoiceChips, Empty, Pill, Sheet } from '../components/ui'
+import { Empty, Pill, Sheet } from '../components/ui'
 import { fmtDate } from '../lib/dates'
 import { chaseView, milestoneText, milestonesOf } from '../lib/insights'
 import { buildPublicCard, cardUrl, encodeCard } from '../lib/publicCard'
@@ -16,12 +15,13 @@ import { P } from '../lib/paths'
 import { ballNumbers, ballText, economy, fmtRate, howOut, scoreLine, strikeRate, summarize, type InningsSummary } from '../lib/scorecard'
 import { BALLS, ballRuns, battingSide, bowlingSide, isBall, oversText } from '../lib/scoring'
 import { useApp, useFile, useTeam } from '../state/AppContext'
+import { AnalysisTab, DetailedTab, InningsPicker } from './AnalysisTabs'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
 import { WICKET_LABELS, type ScoreFile, type WicketKind } from '../types'
 
-const TABS = ['live', 'scorecard', 'commentary', 'analysis', 'teams'] as const
+const TABS = ['live', 'scorecard', 'commentary', 'analysis', 'detailed', 'teams'] as const
 type Tab = (typeof TABS)[number]
-const TAB_LABEL: Record<Tab, string> = { live: 'Live', scorecard: 'Scorecard', commentary: 'Commentary', analysis: 'Analysis', teams: 'Teams' }
+const TAB_LABEL: Record<Tab, string> = { live: 'Live', scorecard: 'Scorecard', commentary: 'Commentary', analysis: 'Analysis', detailed: 'Detailed analysis', teams: 'Teams' }
 
 const fmtClock = (iso: string) => {
   const d = new Date(iso)
@@ -177,7 +177,8 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
         {tab === 'live' && <LiveTab file={file} s={s} tossText={tossText} />}
         {tab === 'scorecard' && file.innings.map((_, n) => <InningsCard key={n} file={file} idx={n} s={summaries[n]} />)}
         {tab === 'commentary' && <CommentaryTab file={file} summaries={summaries} lefties={lefties} />}
-        {tab === 'analysis' && <AnalysisTab file={file} summaries={summaries} lefties={lefties} />}
+        {tab === 'analysis' && <AnalysisTab file={file} summaries={summaries} />}
+        {tab === 'detailed' && <DetailedTab file={file} summaries={summaries} lefties={lefties} />}
         {tab === 'teams' && (
           <div className="grid gap-3 sm:grid-cols-2">
             {(['home', 'away'] as const).map((k) => (
@@ -431,11 +432,6 @@ function InningsCard({ file, idx, s }: { file: ScoreFile; idx: number; s: Inning
   )
 }
 
-function InningsPicker({ file, value, onChange }: { file: ScoreFile; value: number; onChange: (n: number) => void }) {
-  if (file.innings.length < 2) return null
-  return <ChoiceChips options={file.innings.map((i, n) => ({ value: String(n), label: `${battingSide(file, i).shortName} innings` }))} value={String(value)} onChange={(v) => onChange(Number(v))} />
-}
-
 function CommentaryTab({ file, summaries, lefties }: { file: ScoreFile; summaries: InningsSummary[]; lefties: Set<string> }) {
   const { personName } = useApp()
   const [pick, setPick] = useState<number | null>(null)
@@ -487,136 +483,6 @@ function CommentaryTab({ file, summaries, lefties }: { file: ScoreFile; summarie
           </section>
         )
       })}
-    </>
-  )
-}
-
-function AnalysisTab({ file, summaries, lefties }: { file: ScoreFile; summaries: InningsSummary[]; lefties: Set<string> }) {
-  const { personName } = useApp()
-  const [pick, setPick] = useState<number | null>(null)
-  const [batter, setBatter] = useState('all')
-  const idx = Math.min(pick ?? file.innings.length - 1, file.innings.length - 1)
-  const s = summaries[idx]
-  const inn = file.innings[idx]
-  const slot = (n: number): 1 | 2 => (file.innings[n].batting === 'home' ? 1 : 2)
-
-  const perOver: Series[] = summaries.map((x, n) => ({ name: battingSide(file, file.innings[n]).shortName, slot: slot(n), values: x.overLines.map((o) => o.runs), wickets: x.overLines.map((o) => o.wickets) }))
-  const worm: Series[] = summaries.map((x, n) => ({ name: battingSide(file, file.innings[n]).shortName, slot: slot(n), values: x.overLines.map((o) => o.total), wickets: x.overLines.map((o) => o.wickets) }))
-  const rates: Series[] = summaries.map((x, n) => ({
-    name: battingSide(file, file.innings[n]).shortName,
-    slot: slot(n),
-    values: x.overLines.map((o, i) => {
-      const balls = i === x.overLines.length - 1 ? x.legal - i * BALLS || BALLS : BALLS
-      return (o.total * BALLS) / (i * BALLS + balls)
-    }),
-  }))
-
-  const boundaries = inn.events.filter(isBall).filter((b) => b.shot && (batter === 'all' || b.striker === batter))
-  const hitters = [...new Set(inn.events.filter(isBall).filter((b) => b.shot).map((b) => b.striker))]
-  const wicketRows = (Object.keys(s.wicketKinds) as WicketKind[]).map((k) => ({ label: WICKET_LABELS[k], value: s.wicketKinds[k] ?? 0 })).sort((a, b) => b.value - a.value)
-  const caughtAt = inn.events.filter(isBall).flatMap((b) => (b.wicket?.at ? [b.wicket.at] : []))
-  const maxPair = Math.max(1, ...s.partnerships.map((p) => p.runs))
-  const extrasRuns = inn.events.filter(isBall).reduce((sum, b) => sum + ballRuns(b) - b.bat, 0)
-
-  if (summaries.every((x) => x.legal === 0)) return <Empty icon="📊" title="No analysis yet" text="Charts appear once the first over is under way." />
-
-  return (
-    <>
-      <Manhattan series={perOver} />
-      <LineChart
-        title="Score progression"
-        series={worm}
-        idle="Tap an over to see the score. ● = wicket"
-        pace={file.innings[1]?.target ? { label: 'Pace needed in the chase', to: file.innings[1].target - 1, overs: file.innings[1].overs } : undefined}
-      />
-      <LineChart title="Run rate" series={rates} decimals={2} idle="Runs per over so far, after each over." fromZero={false} />
-
-      <InningsPicker file={file} value={idx} onChange={(n) => (setPick(n), setBatter('all'))} />
-
-      <ChartCard title="How the runs came" subtitle={`${battingSide(file, inn).name} — number of balls by result`}>
-        <BarList
-          slot={slot(idx)}
-          rows={[
-            { label: 'Dot balls', value: s.shots.dots },
-            { label: 'Singles', value: s.shots.ones },
-            { label: 'Twos', value: s.shots.twos },
-            { label: 'Threes', value: s.shots.threes },
-            { label: 'Fours', value: s.shots.fours },
-            { label: 'Sixes', value: s.shots.sixes },
-          ]}
-        />
-        <p className="mt-2 text-xs text-muted">
-          {s.shots.fours * 4 + s.shots.sixes * 6} runs in boundaries · {extrasRuns + s.extras.pen} in extras
-        </p>
-      </ChartCard>
-
-      <ChartCard title="Wickets" subtitle={`${battingSide(file, inn).name} — how they got out`}>
-        <BarList slot={slot(idx)} rows={wicketRows} />
-        {caughtAt.length > 0 && (
-          <>
-            <p className="mt-3 text-xs text-muted">✕ where catches were taken and run-out throws came from ({caughtAt.length} recorded)</p>
-            <GroundMap marks={caughtAt} />
-          </>
-        )}
-      </ChartCard>
-
-      <ChartCard title="Partnerships" subtitle={`${battingSide(file, inn).name} — runs (balls)`}>
-        {s.partnerships.length === 0 && <p className="py-3 text-center text-sm text-muted">Nothing yet</p>}
-        <div className="flex flex-col gap-3">
-          {s.partnerships.map((p, n) => (
-            <div key={n} className="text-sm">
-              <div className="flex justify-between gap-2">
-                <span className="min-w-0 truncate">
-                  <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'var(--series-1)' }} />
-                  {personName(p.a)} <span className="text-muted">{p.aRuns} ({p.aBalls})</span>
-                </span>
-                <span className="min-w-0 truncate text-right">
-                  {personName(p.b)} <span className="text-muted">{p.bRuns} ({p.bBalls})</span>
-                  <span className="ml-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'var(--series-2)' }} />
-                </span>
-              </div>
-              <div className="mt-1 flex items-center gap-2">
-                {/* One bar per partnership, split by who scored what; leftover runs are extras. */}
-                <span className="flex h-3 gap-0.5 overflow-hidden rounded-r" style={{ width: `${(p.runs / maxPair) * 100}%`, minWidth: 3, maxWidth: 'calc(100% - 76px)' }}>
-                  {[
-                    { n: p.aRuns, c: 'var(--series-1)' },
-                    { n: Math.max(0, p.runs - p.aRuns - p.bRuns), c: 'rgb(var(--border))' },
-                    { n: p.bRuns, c: 'var(--series-2)' },
-                  ]
-                    .filter((x) => x.n > 0)
-                    .map((x, k) => (
-                      <span key={k} style={{ flex: x.n, background: x.c }} />
-                    ))}
-                </span>
-                <span className="font-semibold">
-                  {p.runs} ({p.balls}){p.unbroken ? '*' : ''}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </ChartCard>
-
-      <ChartCard title="Wagon wheel" subtitle={`${battingSide(file, inn).name} — where the fours and sixes went`}>
-        {hitters.length === 0 ? (
-          <p className="py-3 text-center text-sm text-muted">No boundary directions recorded in this innings.</p>
-        ) : (
-          <>
-            <ChoiceChips options={[{ value: 'all', label: 'All' }, ...hitters.map((id) => ({ value: id, label: personName(id) }))]} value={batter} onChange={setBatter} />
-            <div className="mt-2 flex gap-4 text-xs text-muted">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-0.5 w-4" style={{ background: 'var(--series-1)' }} />
-                Fours ({boundaries.filter((b) => b.bat === 4).length})
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-0.5 w-4" style={{ background: 'var(--series-2)' }} />
-                Sixes ({boundaries.filter((b) => b.bat === 6).length})
-              </span>
-            </div>
-            <GroundMap left={batter !== 'all' && lefties.has(batter)} shots={boundaries.map((b) => ({ shot: b.shot!, runs: b.bat }))} />
-          </>
-        )}
-      </ChartCard>
     </>
   )
 }
