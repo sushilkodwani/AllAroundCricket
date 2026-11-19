@@ -186,41 +186,65 @@ export function LineChart({ title, series, decimals = 0, idle, fromZero = true, 
   )
 }
 
-/** One column per match, oldest on the left — a player's runs or wickets over the season. */
+/**
+ * One column per match, oldest on the left — a player's runs or wickets, or what each match cost.
+ * Everything is placed by fixed pixel positions (not by text height), so a value above the tallest
+ * bar can never be cut off, and the rolling-average line lines up with the bars on any phone.
+ */
+const TB = { colW: 36, pitch: 44, height: 122, base: 20, plot: 64 }
 export function TrendBars({ points, slot = 1, fmt, unit = 'matches' }: { points: { label: string; value: number; note?: string; hollow?: boolean }[]; slot?: 1 | 2; fmt?: (n: number) => string; unit?: string }) {
   if (points.length === 0) return <p className="py-3 text-center text-sm text-muted">Nothing yet</p>
   const max = Math.max(1, ...points.map((p) => p.value))
   const avg = points.reduce((s, p) => s + p.value, 0) / points.length
   const rolling = rollingAverage(points.map((p) => p.value))
-  // Column centres and heights match the bars below: 28px columns, 8px apart, bars rise from 20px above the bottom.
-  const cx = (i: number) => i * 36 + 14
-  const cy = (v: number) => 96 - (20 + (v / max) * 56)
+  const show = (n: number) => (fmt ? fmt(n) : Number.isInteger(n) ? String(n) : n.toFixed(1))
+  const width = points.length * TB.pitch
+  const cx = (i: number) => i * TB.pitch + TB.colW / 2
+  const y = (v: number) => TB.height - (TB.base + (v / max) * TB.plot) // from the top, for the line
+  const barH = (v: number) => (v > 0 ? Math.max(3, (v / max) * TB.plot) : 2)
   return (
     <div className="overflow-x-auto">
-      <div className="relative flex items-end gap-2 pb-1" style={{ height: 96, minWidth: points.length * 34 }}>
+      <div className="relative" style={{ height: TB.height, width }}>
+        {/* dashed guide: the average over everything shown */}
+        <span className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-muted" style={{ top: y(avg) }} aria-hidden />
+        {points.map((p, i) => (
+          <div key={i} className="absolute top-0" style={{ left: i * TB.pitch, width: TB.colW, height: TB.height }} title={p.note}>
+            <span className="absolute left-0 right-0 rounded-t" style={{ bottom: TB.base, height: barH(p.value), background: `var(--series-${slot})` }} />
+            <span className="absolute left-0 right-0 text-center" style={{ bottom: 2, fontSize: 10, lineHeight: '14px', color: 'rgb(var(--text-muted))' }}>
+              {p.label}
+            </span>
+          </div>
+        ))}
         {points.length > 1 && (
-          <svg className="pointer-events-none absolute left-0 top-0" width={points.length * 36} height={96} aria-hidden>
-            <polyline points={rolling.map((v, i) => `${cx(i)},${cy(v)}`).join(' ')} fill="none" stroke="rgb(var(--text))" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+          <svg className="pointer-events-none absolute left-0 top-0" width={width} height={TB.height} aria-hidden>
+            <polyline points={rolling.map((v, i) => `${cx(i)},${y(v)}`).join(' ')} fill="none" stroke="rgb(var(--text))" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
             {rolling.map((v, i) => (
-              <circle key={i} cx={cx(i)} cy={cy(v)} r="2.5" fill="rgb(var(--text))" stroke="rgb(var(--surface))" strokeWidth="1" />
+              <circle key={i} cx={cx(i)} cy={y(v)} r="2.5" fill="rgb(var(--text))" stroke="rgb(var(--surface))" strokeWidth="1" />
             ))}
           </svg>
         )}
-        {/* dashed guide: the average over these matches */}
-        <span className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-muted" style={{ bottom: 20 + (avg / max) * 56 }} aria-hidden />
+        {/* the values sit above everything else, with a halo so the line never hides them */}
         {points.map((p, i) => (
-          <div key={i} className="flex w-7 flex-col items-center justify-end gap-0.5" title={p.note}>
-            <span className="text-[10px] font-medium">
-              {fmt ? fmt(p.value) : p.value}
-              {p.hollow ? '*' : ''}
-            </span>
-            <span className="w-full rounded-t" style={{ height: Math.max(3, (p.value / max) * 56), background: `var(--series-${slot})` }} />
-            <span className="text-[9px] text-muted">{p.label}</span>
-          </div>
+          <span
+            key={i}
+            className="pointer-events-none absolute text-center font-medium"
+            style={{
+              left: i * TB.pitch,
+              width: TB.colW,
+              bottom: TB.base + barH(p.value) + 3,
+              fontSize: 11,
+              lineHeight: '14px',
+              color: 'rgb(var(--text))',
+              textShadow: '0 0 3px rgb(var(--surface)), 0 0 3px rgb(var(--surface)), 0 0 3px rgb(var(--surface))',
+            }}
+          >
+            {show(p.value)}
+            {p.hollow ? '*' : ''}
+          </span>
         ))}
       </div>
       <p className="text-xs text-muted">
-        Solid line = average of the last 3 {unit} (latest {fmt ? fmt(rolling[rolling.length - 1]) : rolling[rolling.length - 1].toFixed(1)}). Dashed line = average over all shown ({fmt ? fmt(avg) : avg.toFixed(1)}).{points.some((p) => p.hollow) ? ' * = not out.' : ''}
+        Solid line = average of the last 3 {unit} (latest {show(rolling[rolling.length - 1])}). Dashed line = average over all shown ({show(avg)}).{points.some((p) => p.hollow) ? ' * = not out.' : ''}
       </p>
     </div>
   )

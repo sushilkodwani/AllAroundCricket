@@ -93,10 +93,10 @@ export function FundCharts({ data }: { data: TeamData }) {
             </span>
           </div>
           <div className="overflow-x-auto">
-            <div className="flex items-end gap-3" style={{ height: 112, minWidth: flow.length * 52 }}>
+            <div className="flex items-end gap-3" style={{ height: 128, minWidth: flow.length * 52 }}>
               {flow.map((f) => (
                 <div key={f.month} className="flex w-11 flex-col items-center justify-end gap-0.5" title={`In ${money(f.moneyIn)} · Out ${money(f.moneyOut)}`}>
-                  <div className="flex w-full items-end justify-center gap-0.5" style={{ height: 80 }}>
+                  <div className="flex w-full items-end justify-center gap-0.5" style={{ height: 96 }}>
                     {[
                       { v: f.moneyIn, c: 'var(--series-1)' },
                       { v: f.moneyOut, c: 'var(--series-2)' },
