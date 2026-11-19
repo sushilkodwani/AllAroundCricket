@@ -179,6 +179,7 @@ function ownMayWrite(me: string, path: string, before: unknown, after: unknown):
 }
 
 const safeImageFile = (after: unknown) => {
+  if (after === null) return true // the picture file is deleted
   const url = (after as ImageFile | null)?.dataUrl
   return url === null || isSafeImage(url)
 }
@@ -233,7 +234,8 @@ function adminMayWrite(me: string, path: string, before: unknown, after: unknown
 
   if (path === P.people) {
     return changes(list<Person>(before, 'people'), list(after, 'people'), (p) => p.id).every(([was, now]) => {
-      if (!now) return false // people are never deleted
+      // Deleting someone: only a person they look after who is in no team any more.
+      if (!now) return was!.teamIds.length === 0 && managesPerson(me, was, look) && was!.id !== me
       if (!was) return now.teamIds.every(owns) && (now.guestOfTeamIds ?? []).every(owns)
       // Team lists change only for their own teams.
       if (!diff(was.teamIds, now.teamIds).every(owns) || !diff(was.guestOfTeamIds, now.guestOfTeamIds).every(owns)) return false
@@ -244,9 +246,10 @@ function adminMayWrite(me: string, path: string, before: unknown, after: unknown
 
   if (path === P.creds) {
     // New credential records and PIN resets, only for people they look after.
-    return changes(list<Credential>(before, 'credentials'), list(after, 'credentials'), (c) => c.personId).every(
-      ([was, now]) => !!now && managesPerson(me, look.person(now.personId), look) && (!was || was.personId !== me || was.sessionEpoch === now.sessionEpoch),
-    )
+    return changes(list<Credential>(before, 'credentials'), list(after, 'credentials'), (c) => c.personId).every(([was, now]) => {
+      if (!now) return was!.personId !== me && managesPerson(me, look.person(was!.personId), look)
+      return managesPerson(me, look.person(now.personId), look) && (!was || was.personId !== me || was.sessionEpoch === now.sessionEpoch)
+    })
   }
 
   if (path === P.opponents) {

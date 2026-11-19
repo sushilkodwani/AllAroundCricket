@@ -51,7 +51,8 @@ export function Teams() {
   const missing = useMemo(() => {
     if (!store || !isAdmin || !store.has(P.opponents)) return ''
     const known = new Set(opponentsOf(store).map((o) => o.name.toLowerCase()))
-    const names = teams.filter((t) => canManage(t.id)).flatMap((t) => matchesOf(store, t.id)).map((m) => m.opponent)
+    // Only matches without an opponent record (a deleted opponent is not brought back).
+    const names = teams.filter((t) => canManage(t.id)).flatMap((t) => matchesOf(store, t.id)).filter((m) => !m.opponentId).map((m) => m.opponent)
     return [...new Set(names.filter((n) => !known.has(n.toLowerCase())))].join('|')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, isAdmin, canManage, teams, store?.getVersion()])

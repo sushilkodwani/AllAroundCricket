@@ -263,13 +263,9 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
                   Cancel match
                 </button>
               ))}
-            {match.lifecycle === 'scheduled' ? (
-              <button className="btn-danger" onClick={() => setConfirm('delete')}>
-                Delete match
-              </button>
-            ) : (
-              <p className="px-1 text-xs text-muted">A match with submitted expenses can’t be cancelled or deleted, to keep the fund ledger honest.</p>
-            )}
+            <button className="btn-danger" onClick={() => setConfirm('delete')}>
+              Delete match
+            </button>
           </div>
         </Sheet>
       )}
@@ -331,7 +327,12 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
       {confirm === 'delete' && (
         <Confirm
           title="Delete this match?"
-          message={`vs ${match.opponent} on ${fmtDate(match.date)} will be removed${match.expense ? ', along with its draft expense split' : ''}.`}
+          message={[
+            `vs ${match.opponent} on ${fmtDate(match.date)} will be removed`,
+            match.scoring ? ' with its ball-by-ball score' : '',
+            match.expense?.status === 'submitted' ? '. Its expense split is deleted too, and money taken from players’ funds for it goes back to their balances' : match.expense ? ' along with its draft expense split' : '',
+            '.',
+          ].join('')}
           confirmLabel="Delete"
           danger
           onCancel={() => setConfirm(null)}

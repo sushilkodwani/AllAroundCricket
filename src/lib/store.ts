@@ -25,6 +25,8 @@ interface Entry {
   dirty?: string
   /** Checked against the repo during this app session. */
   fresh?: boolean
+  /** The file is to be deleted from the repo (sent with the next flush). */
+  deleted?: boolean
 }
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'offline' | 'error'
@@ -155,6 +157,14 @@ export class Store {
     }
     if (!this.status.online) this.setStatus({ online: true })
     const cur = this.entries.get(path)
+    if (cur?.deleted) {
+      // A delete is waiting to be sent: only learn the current sha (or that it is already gone).
+      if (res.kind === 'ok') this.entries.set(path, { ...cur, sha: res.sha, etag: res.etag })
+      else if (res.kind === 'missing') this.entries.delete(path)
+      this.persist(path)
+      this.notify()
+      return
+    }
     if (res.kind === 'not_modified') {
       if (cur && !cur.fresh) {
         cur.fresh = true
@@ -204,6 +214,24 @@ export class Store {
     }
   }
 
+  /**
+   * Deletes a file from the repo (debounced like a write). Returns false (and
+   * does nothing) when the access guard refuses it.
+   */
+  remove(path: string, message: string): boolean {
+    const cur = this.entries.get(path)
+    if (cur?.deleted) return true
+    if (!canWrite(this.actor, path, cur?.data ?? null, null, this.lookup)) {
+      console.warn(`Delete of ${path} refused for role "${this.actor.role}".`)
+      return false
+    }
+    this.entries.set(path, { data: null, base: cur?.base ?? null, sha: cur?.sha, etag: cur?.etag, dirty: message, fresh: cur?.fresh, deleted: true })
+    this.persist(path)
+    this.notify()
+    this.schedule(this.debounceMs)
+    return true
+  }
+
   private put(path: string, data: unknown, message: string): boolean {
     const cur = this.entries.get(path)
     if (!canWrite(this.actor, path, cur?.data ?? null, data, this.lookup)) {
@@ -225,7 +253,7 @@ export class Store {
 
   private persist(path: string): void {
     const e = this.entries.get(path)
-    const op = e ? this.kv.set(path, { data: e.data, base: e.base, sha: e.sha, etag: e.etag, dirty: e.dirty }) : this.kv.del(path)
+    const op = e ? this.kv.set(path, { data: e.data, base: e.base, sha: e.sha, etag: e.etag, dirty: e.dirty, deleted: e.deleted }) : this.kv.del(path)
     op.catch(() => {})
   }
 
@@ -274,6 +302,11 @@ export class Store {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const e = this.entries.get(path)
       if (!e?.dirty) return true
+      if (e.deleted) {
+        const done = await this.flushDelete(path, e)
+        if (done === 'retry') continue
+        return done
+      }
       const sent = e.data
       try {
         const sha = await this.backend.write(path, sent, this.withActor(e.dirty), e.sha)
@@ -310,6 +343,38 @@ export class Store {
       this.setStatus({ save: 'error', error: 'The file kept changing on another device. Will retry.' })
       this.schedule(RETRY_MS)
       return false
+    }
+    return true
+  }
+
+  /** Sends one delete. 'retry' = the sha was stale and has been refreshed. */
+  private async flushDelete(path: string, e: Entry): Promise<boolean | 'retry'> {
+    try {
+      let sha = e.sha
+      if (!sha) {
+        // Never read on this phone: learn the sha first (or that there is nothing to delete).
+        const res = await this.backend.read(path)
+        sha = res.kind === 'ok' ? res.sha : undefined
+      }
+      if (sha) await this.backend.remove(path, this.withActor(e.dirty!), sha)
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 409 || err.status === 422)) {
+        let res
+        try {
+          res = await this.backend.read(path)
+        } catch (readErr) {
+          return this.failFlush(readErr)
+        }
+        const cur = this.entries.get(path)!
+        this.entries.set(path, { ...cur, sha: res.kind === 'ok' ? res.sha : undefined })
+        return 'retry'
+      }
+      return this.failFlush(err)
+    }
+    // Only forget it if nothing new was written to the path meanwhile.
+    if (this.entries.get(path)?.deleted) {
+      this.entries.delete(path)
+      this.persist(path)
     }
     return true
   }

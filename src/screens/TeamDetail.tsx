@@ -92,7 +92,7 @@ export function TeamDetail({ teamId }: { teamId: string }) {
                 Archive team
               </button>
             )}
-            {data.ready && data.matches.length === 0 && (
+            {data.ready && (
               <button className="btn-danger" onClick={() => setConfirmDelete(true)}>
                 Delete team
               </button>
@@ -122,7 +122,12 @@ export function TeamDetail({ teamId }: { teamId: string }) {
       {confirmDelete && (
         <Confirm
           title={`Delete ${team.name}?`}
-          message="This team has no matches, so it can be deleted completely. Players stay in Users."
+          message={
+            data.matches.length > 0
+              ? `This deletes the team with its ${data.matches.length} match${data.matches.length === 1 ? '' : 'es'}, scores, expenses, fund records and categories. It can’t be undone in the app (archiving hides the team but keeps everything). Players stay in Users. Type the team name to confirm.`
+              : 'The team is deleted completely. Players stay in Users. Type the team name to confirm.'
+          }
+          requireText={team.name}
           confirmLabel="Delete"
           danger
           onCancel={() => setConfirmDelete(false)}

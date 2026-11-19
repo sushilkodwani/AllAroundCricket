@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Screen } from '../components/Screen'
 import { ChoiceChips, Confirm, Empty, ErrorNote, Field, NumberInput, Pill, Sheet, Toggle } from '../components/ui'
 import { money } from '../lib/dates'
-import { categoriesOf, moveCategory, saveCategory, setCategoryArchived } from '../lib/domain'
+import { categoriesOf, deleteCategory, moveCategory, saveCategory, setCategoryArchived } from '../lib/domain'
 import { useApp, useFile } from '../state/AppContext'
 import { P } from '../lib/paths'
 import { useSheet } from '../state/router'
@@ -117,13 +117,13 @@ export function ExpenseCategories({ teamId }: { teamId: string }) {
       {deleting && (
         <Confirm
           title={`Delete ${deleting.name}?`}
-          message="Removed from new matches. Matches that already used it keep it."
+          message="It is deleted for good. Matches that already used it keep their amounts."
           confirmLabel="Delete"
           danger
           onCancel={() => setDeleting(null)}
           onConfirm={() => {
-            setCategoryArchived(store, teamId, deleting.id, true)
-            toast(`${deleting.name} deleted`, () => setCategoryArchived(store, teamId, deleting.id, false))
+            deleteCategory(store, teamId, deleting.id)
+            toast(`${deleting.name} deleted`)
             setDeleting(null)
           }}
         />

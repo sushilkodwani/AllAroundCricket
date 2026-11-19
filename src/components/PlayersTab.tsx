@@ -2,7 +2,7 @@
 // the player sheet, and the share message for a newly added player.
 import { useMemo, useState } from 'react'
 import { fmtDate } from '../lib/dates'
-import { addExistingPlayer, addNewPlayer, changeNumber, lookupPlayer, removePlayer, renamePerson, type PlayerLookup } from '../lib/domain'
+import { addExistingPlayer, addNewPlayer, changeNumber, deletePlayer, lookupPlayer, renamePerson, type PlayerLookup } from '../lib/domain'
 import { maskPhone, normalizePhone } from '../lib/phone'
 import { lastPlayed, playedCount } from '../lib/stats'
 import { RoleTag } from './Profile'
@@ -33,6 +33,8 @@ export function PlayersTab({ data }: { data: TeamData & { team: Team } }) {
   const sheet = useSheet()
   const [query, setQuery] = useState('')
   const [showRemoved, setShowRemoved] = useState(false)
+  const [deleting, setDeleting] = useState<Person | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const { team, members, matches } = data
 
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
@@ -51,10 +53,15 @@ export function PlayersTab({ data }: { data: TeamData & { team: Team } }) {
   const shown = q ? active.filter((p) => p.name.toLowerCase().includes(q)) : active
   const selected = sheet.name === 'player' ? byId.get(sheet.arg ?? '') : undefined
 
-  function remove(p: Person) {
+  async function remove(p: Person) {
     if (!store) return
-    removePlayer(store, team.id, p.id)
-    toast(`${p.name} removed from ${team.name}`, () => addExistingPlayer(store, team.id, p.id))
+    setError(null)
+    try {
+      const { personDeleted } = await deletePlayer(store, team.id, p.id)
+      toast(personDeleted ? `${p.name} deleted` : `${p.name} deleted from ${team.name}`)
+    } catch (e) {
+      setError((e as Error).message)
+    }
   }
 
   return (
@@ -79,7 +86,7 @@ export function PlayersTab({ data }: { data: TeamData & { team: Team } }) {
           {shown.map((p) => {
             const played = playedCount(matches, p.id)
             return (
-              <SwipeRow key={p.id} disabled={!isAdmin} onAction={() => remove(p)}>
+              <SwipeRow key={p.id} disabled={!isAdmin} onAction={() => setDeleting(p)}>
                 <button className="row active:bg-alt" onClick={() => sheet.open('player', p.id)}>
                   <Avatar name={p.name} personId={p.id} color={team.color} />
                   <span className="min-w-0 flex-1">
@@ -100,6 +107,8 @@ export function PlayersTab({ data }: { data: TeamData & { team: Team } }) {
           {shown.length === 0 && <p className="px-4 py-6 text-center text-sm text-muted">No player matches “{query}”.</p>}
         </div>
       )}
+
+      <ErrorNote>{error}</ErrorNote>
 
       {isAdmin && removed.length > 0 && (
         <>
@@ -122,6 +131,9 @@ export function PlayersTab({ data }: { data: TeamData & { team: Team } }) {
                   >
                     Re-add
                   </button>
+                  <button className="btn-ghost min-h-[36px] text-bad" onClick={() => setDeleting(p)}>
+                    Delete
+                  </button>
                 </div>
               ))}
             </div>
@@ -131,7 +143,21 @@ export function PlayersTab({ data }: { data: TeamData & { team: Team } }) {
 
       {sheet.name === 'add' && isAdmin && <AddPlayerSheet team={team} onClose={sheet.close} />}
       {sheet.name === 'bulk' && isAdmin && <BulkAddSheet team={team} onClose={sheet.close} />}
-      {selected && <PlayerSheet person={selected} data={data} onClose={sheet.close} onRemove={() => remove(selected)} />}
+      {selected && <PlayerSheet person={selected} data={data} onClose={sheet.close} onRemove={() => void remove(selected)} />}
+      {deleting && (
+        <Confirm
+          title={`Delete ${deleting.name} from ${team.name}?`}
+          message={`They leave the team list completely. Past scorecards and money records keep their name. If they are in no other team and never played, they are deleted from the app.`}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => {
+            const p = deleting
+            setDeleting(null)
+            void remove(p)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -441,7 +467,7 @@ function PlayerSheet({ person, data, onClose, onRemove }: { person: Person; data
                 Access &amp; PIN
               </button>
               <button className="btn-danger flex-1" onClick={() => setConfirmRemove(true)}>
-                Remove from team
+                Delete from team
               </button>
             </div>
           </>
@@ -450,9 +476,9 @@ function PlayerSheet({ person, data, onClose, onRemove }: { person: Person; data
 
       {confirmRemove && (
         <Confirm
-          title={`Remove ${person.name} from ${data.team.name}?`}
-          message="Past matches keep their name."
-          confirmLabel="Remove"
+          title={`Delete ${person.name} from ${data.team.name}?`}
+          message="They leave the team list completely. Past scorecards and money records keep their name. If they are in no other team and never played, they are deleted from the app."
+          confirmLabel="Delete"
           danger
           onCancel={() => setConfirmRemove(false)}
           onConfirm={() => {

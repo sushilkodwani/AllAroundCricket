@@ -154,6 +154,13 @@ export function createTournament(s: Store, name: string): Tournament {
   return t
 }
 
+/** Deletes a tournament. Its matches stay; they just no longer count towards a table. Only its creator (or the super admin). */
+export function deleteTournament(s: Store, id: string): void {
+  const t = tournamentsOf(s).find((x) => x.id === id)
+  if (!t) return
+  if (!put(s, tournamentsOf(s).filter((x) => x.id !== id), `Delete tournament ${t.name}`)) throw new Error('Only the admin who created this tournament can delete it.')
+}
+
 export function updateTournament(s: Store, id: string, change: Partial<Pick<Tournament, 'name' | 'points' | 'archived'>>): void {
   patch(s, id, (t) => ({ ...t, ...change }), 'Edit tournament')
 }

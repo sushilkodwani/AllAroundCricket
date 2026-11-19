@@ -1,15 +1,15 @@
 // A team we play against (PLAN §29): its players, our matches against it and
 // its players' stats from those matches. Everyone can look; only the admin edits.
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { MatchRow } from '../components/match'
 import { AddPlayerSheet } from '../components/scoring'
 import { Screen } from '../components/Screen'
 import { batsText, RoleTag } from '../components/Profile'
 import { GroundMap } from '../components/scoring'
 import { sideCareers, StatsTables, useScores } from '../components/StatsTab'
-import { Avatar, Empty, Segmented } from '../components/ui'
+import { Avatar, Confirm, Empty, Segmented } from '../components/ui'
 import { batStrikeRate, bestBowling, bowlEconomy, bowlOvers, formOf, highScore } from '../lib/career'
-import { addOpponentPlayers, matchesOf, opponentsOf, removeOpponentPlayer } from '../lib/domain'
+import { addOpponentPlayers, deleteOpponent, matchesOf, opponentsOf, removeOpponentPlayer } from '../lib/domain'
 import { maskPhone } from '../lib/phone'
 import { sortMatchesAsc } from '../lib/stats'
 import { useApp, useTeamsLoaded } from '../state/AppContext'
@@ -47,7 +47,8 @@ export function headToHead(matches: Match[]): { played: number; won: number; los
 }
 
 export function OpponentDetail({ opponentId }: { opponentId: string }) {
-  const { store, isAdmin, people, teams, personName, toast } = useApp()
+  const { store, isAdmin, isSuper, me, people, teams, personName, toast } = useApp()
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const route = useRoute()
   const sheet = useSheet()
   const opponent = store ? opponentsOf(store).find((o) => o.id === opponentId) : undefined
@@ -145,6 +146,33 @@ export function OpponentDetail({ opponentId }: { opponentId: string }) {
       )}
 
       {tab === 'stats' && <StatsTables matches={matches} side="away" onOpen={(id) => navigate(`/opponents/${opponent.id}/players/${id}`)} />}
+
+      {isAdmin && (isSuper || opponent.createdBy === me?.id) && (
+        <div className="px-4 pb-6">
+          <button className="btn-ghost w-full text-bad" onClick={() => setConfirmDelete(true)}>
+            Delete this opponent
+          </button>
+        </div>
+      )}
+      {confirmDelete && (
+        <Confirm
+          title={`Delete ${opponent.name}?`}
+          message={matches.length ? `Your ${matches.length} match${matches.length === 1 ? '' : 'es'} against them stay, with their name. Their saved player list is deleted (the players stay in the app).` : 'Their saved player list is deleted (the players stay in the app).'}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            setConfirmDelete(false)
+            try {
+              deleteOpponent(store, opponent.id)
+              toast(`${opponent.name} deleted`)
+              navigate('/teams', { replace: true })
+            } catch (e) {
+              toast((e as Error).message)
+            }
+          }}
+        />
+      )}
 
       {sheet.name === 'addplayer' && isAdmin && (
         <AddPlayerSheet

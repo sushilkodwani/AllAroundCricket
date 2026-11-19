@@ -2,7 +2,25 @@ import { describe, expect, it } from 'vitest'
 import type { AdminRecord, AppConfig, Credential, Person, Team } from '../types'
 import { canWrite, checkSession, onboardStep, roleOf, type Lookup } from './access'
 import { memoryKV } from './cache'
-import { addAdmin, addMatch, adminsOf, categoriesOf, createTeam, matchesOf, setAdminStatus, teamsOf, transferTeam } from './domain'
+import {
+  addAdmin,
+  addContribution,
+  addMatch,
+  addNewPlayer,
+  addRefund,
+  adminsOf,
+  categoriesOf,
+  createTeam,
+  deletePlayer,
+  deleteTeam,
+  matchesOf,
+  membersOf,
+  peopleOf,
+  setAdminStatus,
+  setSquad,
+  teamsOf,
+  transferTeam,
+} from './domain'
 import { fakeBackend } from './fakeBackend'
 import { P } from './paths'
 import { Store } from './store'
@@ -55,6 +73,46 @@ describe('super admin, admins and their teams (whole flow)', () => {
     expect(raviCred.devices).toBeUndefined()
     // Only active admins can be given a team.
     expect(() => transferTeam(store, lions.id, ravi.id)).toThrow('active admin')
+  })
+
+  it('an admin deletes players and whole teams; files really leave the repo', async () => {
+    const backend = fakeBackend()
+    const store = new Store(backend, memoryKV(), 5)
+    store.actor = { role: 'setup', personId: 'boss' }
+    store.write(P.config, { schemaVersion: 2, appName: 'x', superAdminId: 'boss', phoneSalt: 'AAAAAAAAAAAAAAAAAAAAAA==', recovery: PIN, createdAt: '' }, 'seed')
+    store.write(P.admins, { schemaVersion: 1, admins: [admin('a1')] }, 'seed')
+    store.write(P.people, { schemaVersion: 1, people: [mk('boss', { teamIds: [] }), mk('a1', { teamIds: [] })] }, 'seed')
+    store.write(P.creds, { schemaVersion: 1, credentials: [cred('boss'), cred('a1')] }, 'seed')
+    store.write(P.teams, { schemaVersion: 1, teams: [] }, 'seed')
+    store.write(P.opponents, { schemaVersion: 1, opponents: [] }, 'seed')
+    store.actor = { role: 'admin', personId: 'a1' }
+    const team = createTeam(store, { name: 'Lions', color: '#000' })
+    const fresh = addNewPlayer(store, team.id, 'New Guy', '9876500001', 'hash-1')
+    const vet = addNewPlayer(store, team.id, 'Old Hand', '9876500002', 'hash-2')
+    const match = addMatch(store, team.id, { date: '2026-01-10', time: '10:00', opponent: 'Tigers', matchType: 'friendly' })
+    setSquad(store, team.id, match.id, [vet.id])
+    addContribution(store, team.id, { personId: vet.id, amount: 100, date: '2026-01-01', method: 'cash' })
+    await store.flush()
+
+    // Never played: gone from the team and from the app.
+    expect(await deletePlayer(store, team.id, fresh.id)).toEqual({ personDeleted: true })
+    expect(membersOf(store, team.id).some((m) => m.personId === fresh.id)).toBe(false)
+    expect(peopleOf(store).some((p) => p.id === fresh.id)).toBe(false)
+    // Money in the fund blocks the delete until it is refunded.
+    await expect(deletePlayer(store, team.id, vet.id)).rejects.toThrow('team fund')
+    addRefund(store, team.id, { personId: vet.id, amount: 100, date: '2026-01-02', method: 'cash' })
+    // Played before: off the team list, but kept as a person so the old scorecard keeps the name.
+    expect(await deletePlayer(store, team.id, vet.id)).toEqual({ personDeleted: false })
+    expect(membersOf(store, team.id)).toEqual([])
+    expect(peopleOf(store).find((p) => p.id === vet.id)?.teamIds).toEqual([])
+
+    deleteTeam(store, team.id)
+    await store.flush()
+    expect(teamsOf(store)).toEqual([])
+    for (const path of [P.members(team.id), P.matches(team.id), P.funds(team.id), P.categories(team.id)]) {
+      expect(backend.files.has(path)).toBe(false)
+      expect(store.has(path)).toBe(false)
+    }
   })
 })
 
@@ -185,7 +243,10 @@ describe('write guard', () => {
       expect(canWrite(a1, 'people.json', all, edit('p2', { teamIds: ['t2', 't1'] }), L)).toBe(true)
       expect(canWrite(a1, 'people.json', all, edit('p2', { teamIds: [] }), L)).toBe(false)
       expect(canWrite(a1, 'people.json', all, pf(...people, mk('new', { teamIds: [] })), L)).toBe(true)
-      expect(canWrite(a1, 'people.json', all, pf(...people.filter((p) => p.id !== 'free')), L)).toBe(false)
+      // Deleting a person: only someone in no team; never another club's player or an admin.
+      expect(canWrite(a1, 'people.json', all, pf(...people.filter((p) => p.id !== 'free')), L)).toBe(true)
+      expect(canWrite(a1, 'people.json', all, pf(...people.filter((p) => p.id !== 'p1')), L)).toBe(false)
+      expect(canWrite(a1, 'people.json', all, pf(...people.filter((p) => p.id !== 'a2')), L)).toBe(false)
     })
 
     it('resets PINs only for their own players', () => {

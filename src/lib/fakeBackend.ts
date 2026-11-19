@@ -73,6 +73,17 @@ export function fakeBackend(persist?: { load(): Record<string, FakeFile> | null;
       save()
       return next.sha
     },
+
+    async remove(path, message, sha) {
+      if (backend.offline) throw new NetworkError()
+      const f = files.get(path)
+      if (!f) return
+      if (f.sha !== sha) throw new ApiError(409, 'sha does not match')
+      files.delete(path)
+      backend.commits.push({ path, message })
+      backend.counts.write++
+      save()
+    },
   }
   return backend
 }

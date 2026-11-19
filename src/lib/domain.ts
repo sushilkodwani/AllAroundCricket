@@ -205,13 +205,33 @@ export function setTeamArchived(s: Store, teamId: string, archived: boolean): vo
   putTeams(s, teamsOf(s).map((t) => (t.id === teamId ? { ...t, archived, updatedAt: nowStamp() } : t)), `${archived ? 'Archive' : 'Restore'} team ${team.name}`)
 }
 
-/** Hard delete — only for a team that never had a match. */
+/**
+ * Deletes a team and everything in it: players list, matches, scores, funds,
+ * availability, categories and logo. Players stay as people (they may play
+ * elsewhere); the team is taken off their lists. The team's files must be loaded.
+ */
 export function deleteTeam(s: Store, teamId: string): void {
-  if (matchesOf(s, teamId).length > 0) throw new Error('This team has matches, so it can only be archived.')
+  if (!teamLoaded(s, teamId)) throw new Error('The team is still loading. Try again in a moment.')
   const name = teamName(s, teamId)
-  putMembers(s, teamId, membersOf(s, teamId).map((m) => ({ ...m, status: 'removed' as const, removedAt: nowStamp(), updatedAt: nowStamp() })), `Delete team ${name}`)
-  syncPersonTeams(s, teamId, `Delete team ${name}`)
-  putTeams(s, teamsOf(s).filter((t) => t.id !== teamId), `Delete team ${name}`)
+  const msg = `Delete team ${name}`
+  const scored = matchesOf(s, teamId).filter((m) => m.scoring).map((m) => P.scoring(teamId, m.id))
+  // The team's own files first, while the guard still knows who runs it.
+  for (const path of [...scored, P.members(teamId), P.matches(teamId), P.funds(teamId), P.availability(teamId), P.categories(teamId), P.teamLogo(teamId)]) {
+    if (!s.remove(path, msg)) throw new Error('Only the admin who runs this team can delete it.')
+  }
+  const people = peopleOf(s)
+  if (people.some((p) => p.teamIds.includes(teamId) || p.guestOfTeamIds?.includes(teamId))) {
+    putPeople(
+      s,
+      people.map((p) =>
+        p.teamIds.includes(teamId) || p.guestOfTeamIds?.includes(teamId)
+          ? { ...p, teamIds: p.teamIds.filter((t) => t !== teamId), guestOfTeamIds: p.guestOfTeamIds?.filter((t) => t !== teamId), updatedAt: nowStamp() }
+          : p,
+      ),
+      msg,
+    )
+  }
+  putTeams(s, teamsOf(s).filter((t) => t.id !== teamId), msg)
 }
 
 // ---------- players ----------
@@ -288,6 +308,77 @@ export function addExistingPlayer(s: Store, teamId: string, personId: string, op
   if (opts.grantAccess) patch.access = 'view'
   if (Object.keys(patch).length) patchPerson(s, personId, patch, msg)
   ensureCredential(s, personId)
+}
+
+/**
+ * Where this person still appears: a team they belong to, played or paid in,
+ * an opponent they played for, or an admin role. null = nowhere, safe to delete.
+ * Needs every team's files loaded; answers 'not loaded' otherwise.
+ */
+export function personInUse(s: Store, personId: string): string | null {
+  if (isStaff(s, personId)) return 'is an admin'
+  const p = peopleOf(s).find((x) => x.id === personId)
+  if (p && (p.teamIds.length || p.guestOfTeamIds?.length)) return 'is still in a team'
+  for (const t of teamsOf(s)) {
+    if (!teamLoaded(s, t.id)) return 'not loaded'
+    if (membersOf(s, t.id).some((m) => m.personId === personId)) return `is on the ${t.name} list`
+    if (matchesOf(s, t.id).some((m) => m.squad.includes(personId) || m.expense?.shares.some((sh) => sh.personId === personId))) return `played for ${t.name}`
+    if (fundsOf(s, t.id).some((e) => e.personId === personId)) return `has money records in ${t.name}`
+  }
+  const opp = opponentsOf(s).find((o) => o.playerIds.includes(personId))
+  if (opp) return `played for ${opp.name}`
+  return null
+}
+
+/** Removes a person completely: record, PIN and photo. Only for someone who appears nowhere (see personInUse). */
+function erasePerson(s: Store, personId: string, msg: string): void {
+  const creds = credsOf(s)
+  if (creds.some((c) => c.personId === personId)) putCreds(s, creds.filter((c) => c.personId !== personId), msg)
+  if (peopleOf(s).find((p) => p.id === personId)?.photo) s.remove(P.personPhoto(personId), msg)
+  putPeople(s, peopleOf(s).filter((p) => p.id !== personId), msg)
+}
+
+/**
+ * Takes a player off the team completely (no "removed" entry left behind).
+ * Not while they have a fund balance or unpaid dues in this team — settle or
+ * refund first. Past scorecards and money records keep their name. Someone who
+ * then appears nowhere at all is deleted as a person too. Returns whether that happened.
+ */
+export async function deletePlayer(s: Store, teamId: string, personId: string): Promise<{ personDeleted: boolean }> {
+  const name = personName(s, personId)
+  const funds = fundsOf(s, teamId)
+  const matches = matchesOf(s, teamId)
+  const balance = balanceOf(funds, personId)
+  if (balance !== 0) throw new Error(`${name} has ₹${balance} in the team fund. Refund or adjust it to ₹0 first.`)
+  if (duesOf(matches, personId).length) throw new Error(`${name} still has unpaid match dues. Settle them first.`)
+  const msg = `Delete ${name} from ${teamName(s, teamId)}`
+  putMembers(s, teamId, membersOf(s, teamId).filter((m) => m.personId !== personId), msg)
+  // Out of squads of matches still to be played, and out of their availability answers.
+  const upcoming = matches.filter((m) => m.lifecycle === 'scheduled' && !m.scoring && m.squad.includes(personId))
+  if (upcoming.length) {
+    putMatches(s, teamId, matches.map((m) => (upcoming.includes(m) ? { ...m, squad: m.squad.filter((id) => id !== personId), updatedAt: nowStamp() } : m)), msg)
+  }
+  const answers = availabilityOf(s, teamId)
+  if (answers.some((a) => a.personId === personId)) s.write(P.availability(teamId), { schemaVersion: 1, entries: answers.filter((a) => a.personId !== personId) }, msg)
+  syncPersonTeams(s, teamId, msg)
+  const person = peopleOf(s).find((p) => p.id === personId)
+  if (person?.guestOfTeamIds?.includes(teamId)) patchPerson(s, personId, { guestOfTeamIds: person.guestOfTeamIds.filter((t) => t !== teamId) }, msg)
+  recomputeTeam(s, teamId)
+  // Every team's files are needed to know whether they appear anywhere else.
+  await Promise.all(teamsOf(s).map((t) => loadTeam(s, t.id).catch(() => null)))
+  if (personInUse(s, personId) !== null) return { personDeleted: false }
+  erasePerson(s, personId, msg)
+  return { personDeleted: true }
+}
+
+/** Deletes a person from Users (no team, no history anywhere). Throws with the reason when they are still in use. */
+export async function deletePerson(s: Store, personId: string): Promise<void> {
+  const name = personName(s, personId)
+  await Promise.all(teamsOf(s).map((t) => loadTeam(s, t.id).catch(() => null)))
+  const use = personInUse(s, personId)
+  if (use === 'not loaded') throw new Error('Some teams could not be loaded. Check your connection and try again.')
+  if (use) throw new Error(`${name} ${use}, so they can’t be deleted. Remove them from the team first, or keep them for the records.`)
+  erasePerson(s, personId, `Delete ${name}`)
 }
 
 /** Soft delete: the person stays in past squads as "(left team)". */
@@ -524,6 +615,16 @@ export function addOpponentPlayers(s: Store, opponentId: string, personIds: stri
   putOpponents(s, all.map((o) => (o.id === opponentId ? { ...o, playerIds: [...o.playerIds, ...fresh], updatedAt: nowStamp() } : o)), `Add players to ${opp.name}`)
 }
 
+/**
+ * Deletes an opponent team record. Matches against it keep the opponent's
+ * name; its saved players stay as people. Only whoever added it (or the super admin).
+ */
+export function deleteOpponent(s: Store, opponentId: string): void {
+  const opp = opponentsOf(s).find((o) => o.id === opponentId)
+  if (!opp) return
+  if (!putOpponents(s, opponentsOf(s).filter((o) => o.id !== opponentId), `Delete opponent ${opp.name}`)) throw new Error('Only the admin who added this team can delete it.')
+}
+
 export function removeOpponentPlayer(s: Store, opponentId: string, personId: string): void {
   const all = opponentsOf(s)
   putOpponents(s, all.map((o) => (o.id === opponentId ? { ...o, playerIds: o.playerIds.filter((id) => id !== personId), updatedAt: nowStamp() } : o)), 'Remove opponent player')
@@ -618,12 +719,21 @@ export function setCancelled(s: Store, teamId: string, matchId: string, cancelle
   )
 }
 
-/** Only while scheduled — never after funds were deducted, to keep the ledger honest. */
+/**
+ * Deletes a match with everything that hangs off it: its ball-by-ball score,
+ * availability answers and the fund deductions its expenses made (that money
+ * goes back to the players' balances). Git history keeps the old copy.
+ */
 export function deleteMatch(s: Store, teamId: string, matchId: string): void {
   const match = getMatch(s, teamId, matchId)
   if (!match) return
-  if (match.lifecycle !== 'scheduled') throw new Error('This match has submitted expenses, so it can’t be deleted.')
-  putMatches(s, teamId, matchesOf(s, teamId).filter((m) => m.id !== matchId), `Delete match vs ${match.opponent} on ${match.date}`)
+  const msg = `Delete match vs ${match.opponent} on ${match.date}`
+  const funds = fundsOf(s, teamId)
+  if (funds.some((e) => e.matchId === matchId)) putFunds(s, teamId, funds.filter((e) => e.matchId !== matchId), msg)
+  const answers = availabilityOf(s, teamId)
+  if (answers.some((a) => a.matchId === matchId)) s.write(P.availability(teamId), { schemaVersion: 1, entries: answers.filter((a) => a.matchId !== matchId) }, msg)
+  if (match.scoring) s.remove(P.scoring(teamId, matchId), msg)
+  putMatches(s, teamId, matchesOf(s, teamId).filter((m) => m.id !== matchId), msg)
   recomputeTeam(s, teamId)
 }
 
@@ -658,7 +768,15 @@ export function saveCategory(s: Store, teamId: string, input: { id?: string; nam
   }
 }
 
-/** "Delete" = archive. Matches that already used the category keep their snapshot of it. */
+/** Deletes a category for good. Matches that already used it keep their own copy of its name and amount. */
+export function deleteCategory(s: Store, teamId: string, id: string): void {
+  const cats = categoriesOf(s, teamId)
+  const cat = cats.find((c) => c.id === id)
+  if (!cat) return
+  putCategories(s, teamId, cats.filter((c) => c.id !== id), `Delete category ${cat.name}`)
+}
+
+/** Hide / show a category without deleting it. Matches that already used the category keep their snapshot of it. */
 export function setCategoryArchived(s: Store, teamId: string, id: string, archived: boolean): void {
   const cats = categoriesOf(s, teamId)
   const cat = cats.find((c) => c.id === id)

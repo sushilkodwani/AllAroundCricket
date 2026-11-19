@@ -141,7 +141,6 @@ describe('match lifecycle and the fund ledger', () => {
     expect(pendingDues(matchesOf(store, teamId))).toBe(4158 - 583)
     expect(teamsOf(store)[0].stats).toMatchObject({ settlingMatches: 1, playersToSettle: 10, fundBalance: 617, pendingDues: 3575 })
     expect(() => completeMatch(store, teamId, matchId)).toThrow(/still to settle/)
-    expect(() => deleteMatch(store, teamId, matchId)).toThrow()
     expect(() => setSquad(store, teamId, matchId, ['rahul'])).toThrow(/locked/)
 
     for (const s of m.expense!.shares.filter((x) => !x.settled)) settleShare(store, teamId, matchId, s.personId, { method: 'upi', date: '2026-01-11' })
@@ -150,6 +149,18 @@ describe('match lifecycle and the fund ledger', () => {
     expect(teamsOf(store)[0].stats).toMatchObject({ played: 1, won: 1, settlingMatches: 0, pendingDues: 0, form: ['won'] })
 
     expect(reopenMatch(store, teamId, matchId).lifecycle).toBe('settling')
+  })
+
+  it('deleting a match with submitted expenses gives the fund money back', () => {
+    const { store, teamId, matchId } = setup()
+    addContribution(store, teamId, cash('rahul', 1000))
+    submitExpenses(store, teamId, matchId, { lines: example, payerIds: squad11 })
+    expect(balanceOf(fundsOf(store, teamId), 'rahul')).toBe(617)
+    deleteMatch(store, teamId, matchId)
+    expect(matchesOf(store, teamId)).toEqual([])
+    expect(balanceOf(fundsOf(store, teamId), 'rahul')).toBe(1000)
+    expect(fundsOf(store, teamId).some((e) => e.type === 'match_deduction')).toBe(false)
+    expect(teamsOf(store)[0].stats).toMatchObject({ settlingMatches: 0, pendingDues: 0, fundBalance: 1000 })
   })
 
   it('re-submitting replaces the deductions instead of double-counting', () => {

@@ -36,6 +36,8 @@ export interface Backend {
   read(path: string, etag?: string): Promise<ReadResult>
   /** Creates or updates a file; `sha` must be the current blob sha when the file exists. Returns the new sha. */
   write(path: string, data: unknown, message: string, sha?: string): Promise<string>
+  /** Deletes a file; `sha` must be its current blob sha. A file that is already gone is fine. */
+  remove(path: string, message: string, sha: string): Promise<void>
 }
 
 const API = 'https://api.github.com'
@@ -123,6 +125,12 @@ export function githubBackend(cfg: RepoConfig): Backend {
       if (!res.ok) await fail(res)
       const body = (await res.json()) as { content: { sha: string } }
       return body.content.sha
+    },
+
+    async remove(path, message, sha) {
+      const res = await call(`${repoUrl}/contents/${encodePath(path)}`, { method: 'DELETE', body: JSON.stringify({ message, sha }) })
+      if (res.status === 404) return
+      if (!res.ok) await fail(res)
     },
   }
 }

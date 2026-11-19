@@ -5,7 +5,7 @@ import { Screen } from '../components/Screen'
 import { Avatar, Confirm, Empty, ErrorNote, Field, PhoneInput, Pill, Sheet, Toggle } from '../components/ui'
 import { credentialOf } from '../lib/access'
 import { fmtStamp, money } from '../lib/dates'
-import { changeNumber, convertGuest, matchesOf, renamePerson, resetPin, setAccess } from '../lib/domain'
+import { changeNumber, convertGuest, deletePerson, matchesOf, renamePerson, resetPin, setAccess } from '../lib/domain'
 import { duesTotal } from '../lib/funds'
 import { maskPhone, normalizePhone } from '../lib/phone'
 import { useApp, useTeamsLoaded } from '../state/AppContext'
@@ -137,6 +137,7 @@ export function UserSheet({ person, onClose }: { person: Person; onClose: () => 
   const [phone, setPhone] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [teamForGuest, setTeamForGuest] = useState('')
   const [busy, setBusy] = useState(false)
   if (!store) return null
@@ -241,8 +242,29 @@ export function UserSheet({ person, onClose }: { person: Person; onClose: () => 
 
         <ErrorNote>{error}</ErrorNote>
         {person.isGuest && <Pill>Guests can’t log in</Pill>}
+        {person.teamIds.length === 0 && (
+          <button className="btn-ghost text-bad" disabled={busy} onClick={() => setConfirmDelete(true)}>
+            Delete {person.isGuest ? 'guest' : 'user'}
+          </button>
+        )}
       </div>
 
+      {confirmDelete && (
+        <Confirm
+          title={`Delete ${person.name}?`}
+          message="Their record, PIN and photo are deleted. Only possible for someone who has never played or paid in any team — otherwise they stay so scorecards and money records keep their name."
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            setConfirmDelete(false)
+            void run(async () => {
+              await deletePerson(store, person.id)
+              onClose()
+            }, `${person.name} deleted`)
+          }}
+        />
+      )}
       {confirmReset && (
         <Confirm
           title="Reset PIN?"

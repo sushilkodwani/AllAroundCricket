@@ -11,6 +11,7 @@ import {
   addTournamentTeam,
   createTournament,
   deleteOtherResult,
+  deleteTournament,
   fmtNrr,
   gameFromMatch,
   gameFromOther,
@@ -103,6 +104,7 @@ export function TournamentDetail({ tournamentId }: { tournamentId: string }) {
   const { store, isAdmin: anyAdmin, isSuper, me, teams, toast } = useApp()
   const sheet = useSheet()
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const t = store ? tournamentsOf(store).find((x) => x.id === tournamentId) : undefined
   // Any admin can enter matches; only whoever created the tournament (or the super admin) edits it.
   const isAdmin = anyAdmin && (isSuper || t?.createdBy === me?.id)
@@ -258,11 +260,33 @@ export function TournamentDetail({ tournamentId }: { tournamentId: string }) {
             <button className="btn-ghost mt-2 w-full" onClick={() => updateTournament(store, t.id, { archived: !t.archived })}>
               {t.archived ? 'Reopen tournament' : 'Mark tournament as finished'}
             </button>
+            <button className="btn-ghost mt-1 w-full text-bad" onClick={() => setConfirmDelete(true)}>
+              Delete tournament
+            </button>
           </section>
         )}
       </div>
 
       {sheet.name === 'team' && isAdmin && <AddTeamSheet t={t} onClose={sheet.close} />}
+      {confirmDelete && (
+        <Confirm
+          title={`Delete ${t.name}?`}
+          message="The points table and the results typed in for other teams are deleted. Your matches stay; they just no longer count towards a table."
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            setConfirmDelete(false)
+            try {
+              deleteTournament(store!, t.id)
+              toast(`${t.name} deleted`)
+              navigate('/tournaments', { replace: true })
+            } catch (e) {
+              toast((e as Error).message)
+            }
+          }}
+        />
+      )}
       {sheet.name === 'result' && isAdmin && (
         <ResultSheet
           t={t}
