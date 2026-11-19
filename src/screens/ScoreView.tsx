@@ -8,7 +8,7 @@ import { BallChip, PressureStrip } from '../components/scoring'
 import { HeaderButton, RefreshIcon, Screen } from '../components/Screen'
 import { Empty, Pill, Sheet } from '../components/ui'
 import { fmtDate } from '../lib/dates'
-import { chaseView, milestoneText, milestonesOf } from '../lib/insights'
+import { chaseView, milestoneText, milestonesOf, parScore } from '../lib/insights'
 import { buildPublicCard, cardUrl, encodeCard } from '../lib/publicCard'
 import { drawResultCard, shareResultCard } from '../lib/resultCard'
 import { P } from '../lib/paths'
@@ -76,7 +76,7 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
       : file.status === 'break'
         ? `Innings break — ${bowlingSide(file, inn).name} need ${s.total + 1} to win`
         : s.need
-          ? `${battingSide(file, inn).name} need ${s.need.runs} from ${s.need.balls} balls`
+          ? `${battingSide(file, inn).name} need ${s.need.runs} from ${s.need.balls} balls${inn.target !== undefined ? ` (par score: ${parScore(inn.target, inn.overs, s.legal)})` : ''}`
           : tossText
 
   const shareText = [`${file.home.name} v ${file.away.name}`, ...file.innings.map((i, n) => `${battingSide(file, i).name} ${scoreLine(file, n)}`), status].filter(Boolean).join('\n')

@@ -239,7 +239,7 @@ function adminMayWrite(me: string, path: string, before: unknown, after: unknown
       if (!was) return now.teamIds.every(owns) && (now.guestOfTeamIds ?? []).every(owns)
       // Team lists change only for their own teams.
       if (!diff(was.teamIds, now.teamIds).every(owns) || !diff(was.guestOfTeamIds, now.guestOfTeamIds).every(owns)) return false
-      const rest = ['teamIds', 'guestOfTeamIds', 'updatedAt', 'batsLeft']
+      const rest = ['teamIds', 'guestOfTeamIds', 'updatedAt', 'batsLeft', 'bowlStyle']
       return without(was, rest) === without(now, rest) || managesPerson(me, was, look)
     })
   }
@@ -321,7 +321,7 @@ function scorerMayWrite(matchIds: string[], path: string, before: unknown, after
       if (!now.has(p.id)) return false // no deleting
       const was = old.get(p.id)
       if (!was) return p.access === 'none' && p.isGuest && p.teamIds.length === 0
-      return without(was, ['batsLeft', 'updatedAt']) === without(p, ['batsLeft', 'updatedAt'])
+      return without(was, ['batsLeft', 'bowlStyle', 'updatedAt']) === without(p, ['batsLeft', 'bowlStyle', 'updatedAt'])
     })
   }
 

@@ -95,6 +95,78 @@ export function previousOverBowler(inn: Innings): string | undefined {
   return last
 }
 
+// ---------- how many overs a bowler may bowl ----------
+/** At least this many bowlers share the overs of every innings. */
+export const MIN_BOWLERS = 5
+
+export interface BowlingRule {
+  /** Overs every bowler may bowl. */
+  base: number
+  /** How many bowlers may bowl one over more than that. */
+  extra: number
+  /** The most any single bowler may bowl. */
+  max: number
+}
+
+/**
+ * Five bowlers at least, sharing the overs as evenly as possible: 15 overs → 3 each; 16 → one bowler
+ * may bowl 4 and the rest 3; 17 → two may bowl 4; 18 → three; 19 → four; 20 → 4 each.
+ * (A side with fewer than five players shares among all of them.)
+ */
+export function bowlingRule(overs: number, sideSize: number = MIN_BOWLERS): BowlingRule {
+  const bowlers = Math.max(1, Math.min(MIN_BOWLERS, sideSize))
+  const base = Math.floor(overs / bowlers)
+  const extra = overs % bowlers
+  return { base, extra, max: extra > 0 ? base + 1 : base }
+}
+
+/** The rule in words, for the picker: "At most 4 overs each — only 2 bowlers may bowl 4, the rest 3." */
+export function bowlingRuleText(rule: BowlingRule): string {
+  const ov = (n: number) => `${n} over${n === 1 ? '' : 's'}`
+  if (rule.extra === 0) return `At most ${ov(rule.max)} each.`
+  return `At most ${ov(rule.max)} each — only ${rule.extra} bowler${rule.extra === 1 ? '' : 's'} may bowl ${rule.max}, the rest ${rule.base}.`
+}
+
+/** Overs each bowler has been part of in this innings (an over they started or finished counts). */
+export function oversBowledBy(inn: Innings): Map<string, number> {
+  const seen = new Map<string, Set<number>>()
+  let legal = 0
+  for (const b of ballsOf(inn)) {
+    const over = Math.floor(legal / BALLS)
+    if (!seen.has(b.bowler)) seen.set(b.bowler, new Set())
+    seen.get(b.bowler)!.add(over)
+    if (b.kind === 'legal') legal++
+  }
+  return new Map([...seen].map(([id, s]) => [id, s.size]))
+}
+
+function rawBowlerBlock(inn: Innings, id: string, rule: BowlingRule, bowled: Map<string, number>): string | null {
+  const count = bowled.get(id) ?? 0
+  if (count >= rule.max) return `already bowled the most overs allowed (${rule.max})`
+  if (rule.extra > 0 && count === rule.base) {
+    const atMax = [...bowled.values()].filter((n) => n >= rule.max).length
+    if (atMax >= rule.extra) return `only ${rule.extra} bowler${rule.extra === 1 ? '' : 's'} may bowl ${rule.max} overs`
+  }
+  return null
+}
+
+/**
+ * Why this player may not bowl next, or null when they may. Never leaves the scorer stuck: if the rule
+ * would block everyone who is allowed to bowl, nobody is blocked by it.
+ */
+export function bowlerBlock(file: ScoreFile, inn: Innings, id: string): string | null {
+  const bowl = bowlingSide(file, inn)
+  const rule = bowlingRule(inn.overs, bowl.xi.length)
+  const bowled = oversBowledBy(inn)
+  // The bowler already bowling this over is not taking up a new over.
+  if (id === inn.crease.bowler && !atOverStart(inn)) return null
+  const reason = rawBowlerBlock(inn, id, rule, bowled)
+  if (!reason) return null
+  const last = atOverStart(inn) ? previousOverBowler(inn) : undefined
+  const anyoneElse = bowl.xi.some((other) => other !== id && other !== last && !rawBowlerBlock(inn, other, rule, bowled))
+  return anyoneElse ? reason : null
+}
+
 /** True between overs: the next ball starts a new over, so a bowler must be picked. */
 export const atOverStart = (inn: Innings): boolean => legalBalls(inn) % BALLS === 0
 
@@ -216,6 +288,10 @@ export function setCrease(file: ScoreFile, patch: Crease): ScoreFile {
   if (patch.bowler !== undefined) {
     if (!bowl.xi.includes(patch.bowler)) throw new Error('This player is not in the bowling XI.')
     if (atOverStart(inn) && previousOverBowler(inn) === patch.bowler) throw new Error('A bowler can’t bowl two overs in a row.')
+    if (patch.bowler !== inn.crease.bowler) {
+      const block = bowlerBlock(file, inn, patch.bowler)
+      if (block) throw new Error(`This bowler can’t bowl another over: ${block}.`)
+    }
   }
   return withInnings(file, (i) => ({ ...i, crease }))
 }

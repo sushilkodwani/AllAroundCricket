@@ -23,7 +23,7 @@ export function RoleTag({ person }: { person?: Person | null }) {
   return <span className="rounded bg-alt px-1.5 py-0.5 text-[10px] font-bold uppercase text-muted">{ROLE_SHORT[person.role]}</span>
 }
 
-export const batsText = (p?: Person | null) => (p?.batsLeft ? 'Left-hand bat' : 'Right-hand bat')
+export const batsText = (p?: Person | null) => (p?.batsLeft === undefined ? 'Batting hand not set' : p.batsLeft ? 'Left-hand bat' : 'Right-hand bat')
 
 export function ProfileCard({ person, name, teamName, color, career, onEdit }: { person?: Person | null; name: string; teamName: string; color?: string; career?: Career; onEdit?: () => void }) {
   const bg = color ?? '#475569'
@@ -96,14 +96,14 @@ export function ProfileSheet({ person, onClose }: { person: Person; onClose: () 
   // undefined = unchanged; a data URL = new picture; null = remove.
   const [photo, setPhoto] = useState<string | null | undefined>(undefined)
   const [role, setRole] = useState<PlayerRole | undefined>(person.role)
-  const [left, setLeft] = useState(!!person.batsLeft)
+  const [hand, setHand] = useState<'left' | 'right' | undefined>(person.batsLeft === undefined ? undefined : person.batsLeft ? 'left' : 'right')
   const [bowl, setBowl] = useState<BowlStyle | ''>(person.bowlStyle ?? '')
   const [jersey, setJersey] = useState(person.jersey !== undefined ? String(person.jersey) : '')
   const [error, setError] = useState<string | null>(null)
 
   function save() {
     try {
-      const ok = updateProfile(store!, person.id, { role, batsLeft: left, bowlStyle: bowl || undefined, jersey: jersey === '' ? undefined : Number(jersey) })
+      const ok = updateProfile(store!, person.id, { role, batsLeft: hand === undefined ? undefined : hand === 'left', bowlStyle: bowl || undefined, jersey: jersey === '' ? undefined : Number(jersey) })
       if (!ok) throw new Error('You can only edit your own profile.')
       if (photo !== undefined && (photo ?? null) !== (saved ?? null) && !setPersonPhoto(store!, person.id, photo)) throw new Error('You can only change your own photo.')
       toast('Profile saved')
@@ -128,8 +128,8 @@ export function ProfileSheet({ person, onClose }: { person: Person; onClose: () 
               { value: 'right', label: 'Right-handed' },
               { value: 'left', label: 'Left-handed' },
             ]}
-            value={left ? 'left' : 'right'}
-            onChange={(v) => setLeft(v === 'left')}
+            value={hand}
+            onChange={(v) => setHand(v === hand ? undefined : v)}
           />
         </div>
         <label className="block">

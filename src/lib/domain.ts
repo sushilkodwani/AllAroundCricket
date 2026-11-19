@@ -647,8 +647,14 @@ export async function findOrCreatePlayer(s: Store, name: string, phone: string):
   return { person, existed: false }
 }
 
+/** Saves the batting hand — left (true) or right (false). A saved right-hander is told apart from "not set". */
 export function setBatsLeft(s: Store, personId: string, batsLeft: boolean): void {
-  patchPerson(s, personId, { batsLeft: batsLeft || undefined }, `Set batting hand for ${personName(s, personId)}`)
+  patchPerson(s, personId, { batsLeft }, `Set batting hand for ${personName(s, personId)}`)
+}
+
+/** Saves the bowling style, e.g. when it is asked for while scoring. */
+export function setBowlStyle(s: Store, personId: string, bowlStyle: BowlStyle): void {
+  patchPerson(s, personId, { bowlStyle }, `Set bowling style for ${personName(s, personId)}`)
 }
 
 export function addMatch(s: Store, teamId: string, input: MatchInput): Match {
@@ -1188,8 +1194,9 @@ export function updateProfile(s: Store, personId: string, input: ProfileInput): 
       if (input[key] === undefined) delete next[key]
       else (next[key] as unknown) = input[key]
     }
-    if (input.batsLeft) next.batsLeft = true
-    else delete next.batsLeft
+    // true = left, false = right, undefined = not set.
+    if (input.batsLeft === undefined) delete next.batsLeft
+    else next.batsLeft = input.batsLeft
     return next
   })
   return putPeople(s, people, `Update profile of ${personName(s, personId)}`)

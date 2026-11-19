@@ -5,8 +5,8 @@ import { AwardsEditor } from '../components/Awards'
 import { AddPlayerSheet, BallChip, GroundMap, PressureStrip } from '../components/scoring'
 import { HeaderButton, Screen } from '../components/Screen'
 import { ChoiceChips, Confirm, Empty, Field, NumberInput, Pill, SearchSelect, Segmented, Sheet, Toggle } from '../components/ui'
-import { addOpponentPlayers, setBatsLeft } from '../lib/domain'
-import { milestoneText, milestonesOf } from '../lib/insights'
+import { addOpponentPlayers, setBatsLeft, setBowlStyle } from '../lib/domain'
+import { milestoneText, milestonesOf, parScore } from '../lib/insights'
 import { P } from '../lib/paths'
 import { economy, fmtRate, shotRegion, strikeRate, summarize, type BatLine, type BowlLine } from '../lib/scorecard'
 import { applyScore } from '../lib/scoreDomain'
@@ -20,12 +20,16 @@ import {
   atOverStart,
   availableBatters,
   battingSide,
+  bowlerBlock,
+  bowlingRule,
+  bowlingRuleText,
   bowlingSide,
   canUndo,
   currentIndex,
   editBall,
   endInnings,
   isFreeHit,
+  oversBowledBy,
   oversText,
   other,
   penalty,
@@ -41,7 +45,7 @@ import {
 } from '../lib/scoring'
 import { useApp, useFile, useTeam } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
-import { WICKET_LABELS, type BallEvent, type ScoreFile, type SideKey, type WicketKind } from '../types'
+import { BOWL_LABELS, WICKET_LABELS, type BallEvent, type BowlStyle, type ScoreFile, type SideKey, type WicketKind } from '../types'
 
 type Role = 'striker' | 'nonStriker' | 'bowler'
 const ROLE_LABEL: Record<Role, string> = { striker: 'striker', nonStriker: 'non-striker', bowler: 'bowler' }
@@ -85,6 +89,9 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
   const canScore = isAdmin || data.matches.find((m) => m.id === matchId)?.scorerId === session?.personId
   const [pending, setPending] = useState<BallInput | null>(null)
   const [confirmEnd, setConfirmEnd] = useState(false)
+  // A picked batter or bowler whose profile lacks the batting hand / bowling style: asked before they start.
+  const [ask, setAsk] = useState<{ id: string; role: Role } | null>(null)
+  const skipped = useRef(new Set<string>())
   const prompted = useRef('')
   useWakeLock()
 
@@ -150,6 +157,23 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
     }
   }
 
+  /** Saves the answer to the profile (if allowed), then puts the player in the middle as they were picked to be. */
+  function finishAsk(save?: () => void) {
+    const a = ask
+    if (!a) return
+    if (save) {
+      try {
+        save()
+      } catch (e) {
+        toast((e as Error).message || 'Could not save this to the profile')
+      }
+    } else {
+      skipped.current.add(`${a.role === 'bowler' ? 'bowl' : 'bat'}:${a.id}`)
+    }
+    setAsk(null)
+    if (run((f) => setCrease(f, { [a.role]: a.id }))) hide()
+  }
+
   /** Every delivery goes through here. A four or six first asks where it went. */
   function commit(input: BallInput) {
     const boundary = input.kind !== 'wd' && (input.bat === 4 || input.bat === 6)
@@ -207,6 +231,16 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
           {summary.need && file.status === 'live' && (
             <p className="mt-1 text-sm">
               Need <strong>{summary.need.runs}</strong> from <strong>{summary.need.balls}</strong> balls · RRR {fmtRate(summary.need.rate)}
+              {inn.target !== undefined && (() => {
+                const par = parScore(inn.target, inn.overs, summary.legal)
+                const ahead = summary.total - par
+                return (
+                  <>
+                    {' '}
+                    · Par <strong>{par}</strong> <span className={ahead >= 0 ? 'text-ok' : 'text-bad'}>({ahead > 0 ? `+${ahead}` : ahead})</span>
+                  </>
+                )
+              })()}
             </p>
           )}
           {freeHit && ready && (
@@ -344,7 +378,7 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
       </div>
 
       {/* ----- sheets ----- */}
-      {sheet.name === 'pick' && (sheet.arg === 'striker' || sheet.arg === 'nonStriker' || sheet.arg === 'bowler') && (
+      {sheet.name === 'pick' && !ask && (sheet.arg === 'striker' || sheet.arg === 'nonStriker' || sheet.arg === 'bowler') && (
         <PickSheet
           file={file}
           role={sheet.arg}
@@ -352,10 +386,48 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
           bowlLines={summary.bowlers}
           onClose={sheet.close}
           onPick={(id) => {
-            if (run((f) => setCrease(f, { [sheet.arg as Role]: id }))) hide()
+            const role = sheet.arg as Role
+            const person = people.find((x) => x.id === id)
+            const missing = role === 'bowler' ? !person?.bowlStyle : person?.batsLeft === undefined
+            if (missing && !skipped.current.has(`${role === 'bowler' ? 'bowl' : 'bat'}:${id}`)) {
+              setAsk({ id, role })
+              return
+            }
+            if (run((f) => setCrease(f, { [role]: id }))) hide()
           }}
           onAdd={() => show('addplayer', `${sheet.arg === 'bowler' ? other(inn.batting) : inn.batting}:${sheet.arg}`)}
         />
+      )}
+
+      {ask && (
+        <Sheet title={ask.role === 'bowler' ? `How does ${personName(ask.id)} bowl?` : `Which hand does ${personName(ask.id)} bat with?`} onClose={() => setAsk(null)}>
+          <p className="mb-3 text-sm text-muted">
+            This isn’t on {personName(ask.id)}’s profile yet. It is saved there, so it is only asked once.
+          </p>
+          {ask.role === 'bowler' ? (
+            <div className="grid grid-cols-2 gap-2">
+              {(['rf', 'lf', 'rm', 'lm', 'ro', 'lo', 'rl', 'lw'] as BowlStyle[]).map((k) => (
+                <button key={k} className="min-h-[48px] rounded-xl border border-chip-line bg-chip px-2 text-sm font-medium active:bg-line" onClick={() => finishAsk(() => setBowlStyle(store, ask.id, k))}>
+                  {BOWL_LABELS[k]}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ['Right-handed', false],
+                ['Left-handed', true],
+              ].map(([label, left]) => (
+                <button key={String(label)} className="min-h-[52px] rounded-xl border border-chip-line bg-chip px-2 text-base font-semibold active:bg-line" onClick={() => finishAsk(() => setBatsLeft(store, ask.id, left as boolean))}>
+                  {label as string}
+                </button>
+              ))}
+            </div>
+          )}
+          <button className="btn-ghost mt-3 w-full" onClick={() => finishAsk(undefined)}>
+            Skip for now
+          </button>
+        </Sheet>
       )}
 
       {sheet.name === 'addplayer' && (
@@ -532,7 +604,8 @@ function PickSheet({ file, role, batLines, bowlLines, onPick, onAdd, onClose }: 
   const inn = file.innings[currentIndex(file)]
   const isBowler = role === 'bowler'
   const blocked = isBowler && atOverStart(inn) ? previousOverBowler(inn) : undefined
-  const quota = Math.ceil(inn.overs / 5)
+  const rule = bowlingRule(inn.overs, bowlingSide(file, inn).xi.length)
+  const bowled = oversBowledBy(inn)
   const ids = isBowler ? bowlingSide(file, inn).xi : availableBatters(file, inn)
   return (
     <Sheet title={`Pick the ${ROLE_LABEL[role]}`} onClose={onClose}>
@@ -541,15 +614,16 @@ function PickSheet({ file, role, batLines, bowlLines, onPick, onAdd, onClose }: 
         {ids.map((id) => {
           const bl = bowlLines.find((l) => l.id === id)
           const bt = batLines.find((l) => l.id === id)
-          const done = isBowler && !!bl && bl.balls >= quota * BALLS
+          const limit = isBowler && id !== blocked ? bowlerBlock(file, inn, id) : null
+          const count = bowled.get(id) ?? 0
           return (
-            <button key={id} className="row active:bg-alt disabled:opacity-40" disabled={id === blocked} onClick={() => onPick(id)}>
+            <button key={id} className="row active:bg-alt disabled:opacity-40" disabled={id === blocked || !!limit} onClick={() => onPick(id)}>
               <span className="min-w-0 flex-1 truncate">
                 {personName(id)}
                 {id === inn.crease.bowler && isBowler && <span className="text-muted"> (bowling)</span>}
               </span>
               {id === blocked && <span className="text-xs text-muted">bowled last over</span>}
-              {done && id !== blocked && <Pill tone="warn">{quota} ov done</Pill>}
+              {limit && id !== blocked && <Pill tone="warn">{count >= rule.max ? `${rule.max} ov done` : 'limit reached'}</Pill>}
               {isBowler && bl && <span className="text-sm text-muted">{figures(bl)}</span>}
               {!isBowler && bt?.retiredHurt && <Pill tone="warn">retired hurt</Pill>}
               {!isBowler && bt && (
@@ -564,7 +638,7 @@ function PickSheet({ file, role, batLines, bowlLines, onPick, onAdd, onClose }: 
       <button className="btn-ghost mt-2 w-full" onClick={onAdd}>
         + Add a player (name and number)
       </button>
-      {isBowler && <p className="mt-1 px-1 text-xs text-muted">A bowler can’t bowl two overs in a row. The usual limit is {quota} over{quota === 1 ? '' : 's'} each — shown as a warning, not enforced.</p>}
+      {isBowler && <p className="mt-1 px-1 text-xs text-muted">A bowler can’t bowl two overs in a row. {bowlingRuleText(rule)} At least five bowlers share the overs.</p>}
     </Sheet>
   )
 }
