@@ -60,7 +60,7 @@ export function parseBackup(text: string): Backup {
   } catch {
     throw new Error('This file is not valid JSON.')
   }
-  if (data?.app !== 'AllAroundCricket' || typeof data.files !== 'object' || !data.files) throw new Error('This is not an AllAroundCricket backup file.')
+  if (data?.app !== 'AllAroundCricket' || typeof data.files !== 'object' || !data.files) throw new Error('This is not an All Around Cricket backup file.')
   return data
 }
 

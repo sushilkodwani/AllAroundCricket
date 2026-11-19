@@ -23,7 +23,7 @@ export function PublicScorecard({ code }: { code: string }) {
     <div className="mx-auto min-h-screen max-w-2xl">
       <header className="app-header pt-[env(safe-area-inset-top)]">
         <div className="flex min-h-[52px] items-center px-4">
-          <h1 className="text-lg font-bold">🏏 AllAroundCricket</h1>
+          <h1 className="text-lg font-bold">🏏 All Around Cricket</h1>
         </div>
       </header>
       <main className="flex flex-col gap-3 p-3 pb-10">
@@ -127,7 +127,7 @@ export function PublicScorecard({ code }: { code: string }) {
                 </table>
               </section>
             ))}
-            <p className="px-2 text-center text-xs text-muted">Scored ball by ball with AllAroundCricket. This page shows the score as it was when the link was shared.</p>
+            <p className="px-2 text-center text-xs text-muted">Scored ball by ball with All Around Cricket. This page shows the score as it was when the link was shared.</p>
           </>
         )}
       </main>

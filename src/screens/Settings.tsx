@@ -8,6 +8,7 @@ import { Avatar, Confirm, ErrorNote, Field, MenuRow, NumberInput, Segmented, She
 import { addDays, daysBetween, fmtDate, fmtStamp, todayISO } from '../lib/dates'
 import { updateConfig } from '../lib/domain'
 import { getPref, setPref } from '../lib/session'
+import { DevelopedBy } from '../components/DevelopedBy'
 import { APP_BUILT_AT, APP_VERSION, reloadToLatest } from '../lib/version'
 import { useApp } from '../state/AppContext'
 import { navigate, useSheet } from '../state/router'
@@ -178,6 +179,8 @@ export function Settings() {
             </div>
           )}
         </Section>
+
+        <DevelopedBy className="pb-2 pt-2" />
       </div>
 
       {sheet.name === 'pin' && <ChangePinSheet onClose={sheet.close} />}

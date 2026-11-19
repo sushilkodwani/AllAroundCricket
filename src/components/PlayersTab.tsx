@@ -17,7 +17,7 @@ function shareText(name: string, team: Team, owner: string, repo: string): strin
   // A deployed app has its data repo built in, so players are not asked for it.
   const repoKnown = !!import.meta.env.VITE_DATA_OWNER?.trim() && !!import.meta.env.VITE_DATA_REPO?.trim()
   return [
-    `Hi ${name}! You’ve been added to ${team.name} on AllAroundCricket.`,
+    `Hi ${name}! You’ve been added to ${team.name} on All Around Cricket.`,
     '',
     `1. Open ${link} on your phone and add it to your Home Screen.`,
     repoKnown

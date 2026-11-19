@@ -21,7 +21,7 @@ export function InstallBanner() {
     <div className="mx-4 mt-3 rounded-xl border border-line bg-alt px-4 py-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <strong>Install AllAroundCricket</strong>
+          <strong>Install All Around Cricket</strong>
           <p className="mt-1 text-muted">
             Tap <span aria-label="Share">Share ⬆️</span> → <strong>Add to Home Screen</strong>, then open the app from your Home Screen and set it up there. Notifications need the Home Screen
             app.

@@ -162,7 +162,7 @@ export async function setupRepo(store: Store, input: { name: string; phone: stri
 
   const config: AppConfig = {
     schemaVersion: DATA_SCHEMA,
-    appName: 'AllAroundCricket',
+    appName: 'All Around Cricket',
     superAdminId: personId,
     phoneSalt,
     recovery: await hashRecoveryCode(recoveryCode),
@@ -185,7 +185,7 @@ export async function setupRepo(store: Store, input: { name: string; phone: stri
     credentials: [{ personId, pin: await hashPin(input.pin), pinSetAt: now, sessionEpoch: 1, devices: [device.key], updatedAt: now }],
   }
 
-  const msg = 'Set up AllAroundCricket'
+  const msg = 'Set up All Around Cricket'
   store.actor = { role: 'setup', personId }
   store.write(P.config, config, msg)
   store.write(P.admins, { schemaVersion: 1, admins: [] }, msg)

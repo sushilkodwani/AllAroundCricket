@@ -96,7 +96,7 @@ self.addEventListener('push', (event) => {
     data = { body: event.data ? event.data.text() : '' }
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'AllAroundCricket', {
+    self.registration.showNotification(data.title || 'All Around Cricket', {
       body: data.body || '',
       icon: './icon-192.png',
       badge: './badge-72.png',

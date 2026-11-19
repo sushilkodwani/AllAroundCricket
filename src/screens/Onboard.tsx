@@ -12,6 +12,7 @@ import { normalizePhone } from '../lib/phone'
 import { isWeakPin, verifyRecoveryCode } from '../lib/pin'
 import { clearPinFails, loadRepoRef, lockRemainingMs, registerPinFail, type RepoRef, type Session } from '../lib/session'
 import type { Store } from '../lib/store'
+import { DevelopedBy } from '../components/DevelopedBy'
 import { useApp } from '../state/AppContext'
 import { navigate } from '../state/router'
 import type { Person } from '../types'
@@ -24,7 +25,7 @@ function Brand() {
   return (
     <div className="flex flex-col items-center pb-6 pt-10">
       <img src="./icon.svg" alt="" className="h-20 w-20 rounded-[22%]" />
-      <h1 className="mt-3 text-2xl font-bold">AllAroundCricket</h1>
+      <h1 className="mt-3 text-center text-2xl font-bold">All Around Cricket</h1>
     </div>
   )
 }
@@ -359,6 +360,8 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
           </button>
         </div>
       )}
+
+      <DevelopedBy className="mt-auto pt-10" />
     </div>
   )
 }

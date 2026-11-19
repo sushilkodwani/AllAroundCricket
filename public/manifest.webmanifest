@@ -1,6 +1,6 @@
 {
-  "name": "AllAroundCricket",
-  "short_name": "AllAround",
+  "name": "All Around Cricket",
+  "short_name": "All Around Cricket",
   "description": "Cricket teams, matches, squads, expenses and team funds.",
   "start_url": "./",
   "scope": "./",

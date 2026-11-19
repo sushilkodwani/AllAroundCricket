@@ -1,4 +1,4 @@
-// AllAroundCricket expense notifier — runs in the PRIVATE DATA repo via
+// All Around Cricket expense notifier — runs in the PRIVATE DATA repo via
 // .github/workflows/notify.yml (copied from notifier/ in the app repo).
 //
 // What it does
@@ -109,7 +109,7 @@ let remindedFor = null
 if (process.env.TEST_MESSAGE) {
   // Manual run (workflow_dispatch): one test message to every subscription.
   for (const sub of subscriptions) {
-    const result = await send(sub, { title: 'AllAroundCricket', body: process.env.TEST_MESSAGE, tag: 'test', url: '#/teams' })
+    const result = await send(sub, { title: 'All Around Cricket', body: process.env.TEST_MESSAGE, tag: 'test', url: '#/teams' })
     if (result === 'gone') gone.add(sub.endpoint)
     if (result === 'ok') sent++
   }

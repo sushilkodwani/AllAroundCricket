@@ -1,4 +1,4 @@
-# AllAroundCricket
+# All Around Cricket
 
 An installable phone app (PWA) for running amateur cricket teams: teams and
 players, matches and squads, match expenses and team funds. One admin edits;

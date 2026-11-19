@@ -16,7 +16,7 @@ on:
     inputs:
       message:
         description: 'Send this test message to every subscribed device'
-        default: 'Test notification from AllAroundCricket 🏏'
+        default: 'Test notification from All Around Cricket 🏏'
 
 permissions:
   contents: write

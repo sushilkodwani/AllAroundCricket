@@ -65,7 +65,7 @@ export function UpdatePrompt() {
           🏏
         </div>
         <h2 className="mt-3 text-lg font-semibold">New version available</h2>
-        <p className="mt-2 text-sm text-muted">A new version of AllAroundCricket is ready. Update to get the latest features and fixes.</p>
+        <p className="mt-2 text-sm text-muted">A new version of All Around Cricket is ready. Update to get the latest features and fixes.</p>
         {error && <p className="mt-3 text-sm text-bad">{error}</p>}
         <button className="btn-primary mt-5 w-full" disabled={busy} onClick={update}>
           {busy ? 'Updating…' : 'Update now'}

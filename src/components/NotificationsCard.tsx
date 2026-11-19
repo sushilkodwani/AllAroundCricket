@@ -45,7 +45,7 @@ export function NotificationsCard() {
   }
 
   let body: React.ReactNode
-  if (support === 'needs-install') body = <p className="text-muted">Add AllAroundCricket to your Home Screen to get notifications.</p>
+  if (support === 'needs-install') body = <p className="text-muted">Add All Around Cricket to your Home Screen to get notifications.</p>
   else if (support === 'unsupported') body = <p className="text-muted">This browser doesn’t support notifications.</p>
   else if (support === 'not-configured') body = <p className="text-muted">Notifications aren’t set up for this app yet (the admin needs to add the push key — see the README).</p>
   else if (support === 'dev') body = <p className="text-muted">Notifications work in the installed (production) app, not on the dev server.</p>
@@ -53,7 +53,7 @@ export function NotificationsCard() {
     body = (
       <>
         <p className="font-medium">Blocked in your phone settings</p>
-        <p className="mt-1 text-muted">iPhone: Settings → Notifications → AllAround → Allow. Android: long-press the app icon → App info → Notifications.</p>
+        <p className="mt-1 text-muted">iPhone: Settings → Notifications → All Around Cricket→ Allow. Android: long-press the app icon → App info → Notifications.</p>
       </>
     )
   } else if (enabled) {

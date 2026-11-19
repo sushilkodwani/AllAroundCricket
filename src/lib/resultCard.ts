@@ -36,8 +36,8 @@ export function drawResultCard(file: ScoreFile, nameOf: (id: string) => string, 
   ctx.fillRect(0, 0, W, H)
   ctx.fillStyle = RED
   ctx.fillRect(0, 0, W, 150)
-  text('AllAroundCricket', 80, 95, `700 48px ${FONT}`, '#FFFFFF')
-  text([meta.date, meta.venue].filter(Boolean).join(' · '), W - 80, 95, `400 30px ${FONT}`, '#FFFFFF', 'right', 560)
+  text('All Around Cricket', 80, 95, `700 46px ${FONT}`, '#FFFFFF', 'left', 440)
+  text([meta.date, meta.venue].filter(Boolean).join(' · '), W - 80, 95, `400 30px ${FONT}`, '#FFFFFF', 'right', 480)
 
   let y = 250
   const summaries: InningsSummary[] = file.innings.map((_, i) => summarize(file, i))
