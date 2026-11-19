@@ -18,14 +18,17 @@ export function liveStats(store: ReturnType<typeof useApp>['store'], team: Team)
 }
 
 export function TeamCard({ team }: { team: Team }) {
-  const { store, isAdmin, session } = useApp()
+  const { store, canManage, canSeeMoney, session, personName } = useApp()
+  const isAdmin = canManage(team.id)
+  // Funds and dues stay inside the team (its players, its admin, the super admin).
+  const money_ = canSeeMoney(team.id)
   const s = liveStats(store, team)
   const win = winPercent(s)
   const other = s.tied + s.draw + s.noResult
 
   // Personal line for players — needs the team's matches (loaded in the background).
   let personal: React.ReactNode = null
-  if (!isAdmin && session && store && teamLoaded(store, team.id)) {
+  if (!isAdmin && money_ && session && store && teamLoaded(store, team.id)) {
     const matches = matchesOf(store, team.id)
     const next = s.nextMatch ? matches.find((m) => m.id === s.nextMatch!.id) : undefined
     const owe = duesTotal(matches, session.personId)
@@ -59,13 +62,14 @@ export function TeamCard({ team }: { team: Team }) {
           <span className="min-w-0 flex-1 truncate font-semibold">{team.name}</span>
           <span className="flex shrink-0 flex-col items-end gap-1">
             {team.archived && <Pill>Archived</Pill>}
-            {s.settlingMatches > 0 && <Pill tone="warn">⚠ {s.playersToSettle} player{s.playersToSettle === 1 ? "" : "s"} to settle</Pill>}
+            {money_ && s.settlingMatches > 0 && <Pill tone="warn">⚠ {s.playersToSettle} player{s.playersToSettle === 1 ? "" : "s"} to settle</Pill>}
             {isAdmin && s.awaitingCompletion > 0 && <Pill tone="warn">🕓 {s.awaitingCompletion} awaiting completion</Pill>}
           </span>
         </span>
 
         <span className="block text-sm text-muted">
           👥 {s.activePlayers} player{s.activePlayers === 1 ? '' : 's'} · 🏏 {s.played} played
+          {!isAdmin && ` · Admin: ${personName(team.adminId)}`}
           {win !== null && ` · ${win}% wins`}
         </span>
 
@@ -103,7 +107,7 @@ export function TeamCard({ team }: { team: Team }) {
           </span>
         )}
 
-        {(s.fundBalance > 0 || s.pendingDues > 0) && (
+        {money_ && (s.fundBalance > 0 || s.pendingDues > 0) && (
           <span className="block text-sm">
             💰 Fund {money(s.fundBalance)}
             {s.pendingDues > 0 && <span className="text-warn"> · Dues {money(s.pendingDues)}</span>}

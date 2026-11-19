@@ -3,6 +3,8 @@
 // (the store handles the access guard, debouncing, sync and merging).
 // Validation failures throw an Error whose message is shown to the user.
 import type {
+  AdminRecord,
+  AdminsFile,
   AppConfig,
   CategoryMode,
   Credential,
@@ -49,7 +51,8 @@ export const configOf = (s: Store) => s.get<AppConfig>(P.config)
 export const peopleOf = (s: Store) => s.get<PeopleFile>(P.people)?.people ?? []
 export const credsOf = (s: Store) => s.get<CredentialsFile>(P.creds)?.credentials ?? []
 export const teamsOf = (s: Store) => s.get<TeamsFile>(P.teams)?.teams ?? []
-export const categoriesOf = (s: Store) => s.get<ExpenseCategoriesFile>(P.categories)?.categories ?? []
+export const adminsOf = (s: Store) => s.get<AdminsFile>(P.admins)?.admins ?? []
+export const categoriesOf = (s: Store, teamId: string) => s.get<ExpenseCategoriesFile>(P.categories(teamId))?.categories ?? []
 export const membersOf = (s: Store, teamId: string) => s.get<MembersFile>(P.members(teamId))?.members ?? []
 export const matchesOf = (s: Store, teamId: string) => s.get<MatchesFile>(P.matches(teamId))?.matches ?? []
 export const fundsOf = (s: Store, teamId: string) => s.get<FundsFile>(P.funds(teamId))?.entries ?? []
@@ -63,12 +66,15 @@ const putMatches = (s: Store, teamId: string, matches: Match[], msg: string) =>
   s.write(P.matches(teamId), { schemaVersion: 1, matches }, msg)
 const putFunds = (s: Store, teamId: string, entries: FundEntry[], msg: string) =>
   s.write(P.funds(teamId), { schemaVersion: 1, entries }, msg)
-const putCategories = (s: Store, categories: ExpenseCategory[], msg: string) =>
-  s.write(P.categories, { schemaVersion: 1, categories }, msg)
+const putCategories = (s: Store, teamId: string, categories: ExpenseCategory[], msg: string) =>
+  s.write(P.categories(teamId), { schemaVersion: 1, categories }, msg)
 
-/** The three files a team cannot work without; availability answers are loaded alongside but are optional. */
+/** Who is making the change (the store's actor). */
+const actorId = (s: Store) => s.actor.personId
+
+/** The three files a team cannot work without; availability answers and categories are loaded alongside. */
 const coreTeamPaths = (teamId: string) => [P.members(teamId), P.matches(teamId), P.funds(teamId)]
-export const teamPaths = (teamId: string) => [...coreTeamPaths(teamId), P.availability(teamId)]
+export const teamPaths = (teamId: string) => [...coreTeamPaths(teamId), P.availability(teamId), P.categories(teamId)]
 export const teamLoaded = (s: Store, teamId: string) => coreTeamPaths(teamId).every((p) => s.has(p))
 export const loadTeam = (s: Store, teamId: string) => Promise.all(teamPaths(teamId).map((p) => s.load(p)))
 
@@ -142,9 +148,12 @@ function checkTeamName(s: Store, name: string, exceptId?: string): void {
   if (taken) throw new Error('A team with this name already exists.')
 }
 
+/** A new team belongs to the admin who creates it. It starts with the usual expense categories. */
 export function createTeam(s: Store, input: TeamInput): Team {
   const name = requireName(input.name)
   checkTeamName(s, name)
+  const adminId = actorId(s)
+  if (!adminId) throw new Error('Log in again to create a team.')
   const now = nowStamp()
   const team: Team = {
     id: uuid(),
@@ -152,19 +161,22 @@ export function createTeam(s: Store, input: TeamInput): Team {
     shortName: (input.shortName?.trim() || shortNameFor(name)).slice(0, 4).toUpperCase(),
     color: input.color,
     homeGround: input.homeGround?.trim() || undefined,
+    adminId,
     archived: false,
     createdAt: now,
     updatedAt: now,
     stats: emptyStats(),
   }
+  // teams.json first: the write guard checks who runs the team before its own files are written.
+  if (!putTeams(s, [...teamsOf(s), team], `Create team ${name}`)) throw new Error('You can’t create teams.')
   putMembers(s, team.id, [], `Create team ${name}`)
   putMatches(s, team.id, [], `Create team ${name}`)
   putFunds(s, team.id, [], `Create team ${name}`)
-  putTeams(s, [...teamsOf(s), team], `Create team ${name}`)
+  putCategories(s, team.id, seedCategories(), `Create team ${name}`)
   return team
 }
 
-export function updateTeam(s: Store, teamId: string, input: TeamInput): void {
+export function updateTeam(s: Store, teamId: string, input: TeamInput & { lowBalanceThreshold?: number }): void {
   const name = requireName(input.name)
   checkTeamName(s, name, teamId)
   putTeams(
@@ -177,6 +189,7 @@ export function updateTeam(s: Store, teamId: string, input: TeamInput): void {
             shortName: (input.shortName?.trim() || shortNameFor(name)).slice(0, 4).toUpperCase(),
             color: input.color,
             homeGround: input.homeGround?.trim() || undefined,
+            lowBalanceThreshold: input.lowBalanceThreshold === undefined ? t.lowBalanceThreshold : Math.max(0, Math.round(input.lowBalanceThreshold)),
             updatedAt: nowStamp(),
           }
         : t,
@@ -265,6 +278,8 @@ export function addExistingPlayer(s: Store, teamId: string, personId: string, op
   if (!person) return
   if (!person.phoneHash) throw new Error('Add a mobile number first — team members need one.')
   const msg = `Add ${person.name} to ${teamName(s, teamId)}`
+  // Join first: once they are in this admin's team, the admin may update their record.
+  activate(s, teamId, personId, msg)
   const patch: Partial<Person> = {}
   if (person.isGuest) {
     patch.isGuest = false
@@ -273,7 +288,6 @@ export function addExistingPlayer(s: Store, teamId: string, personId: string, op
   if (opts.grantAccess) patch.access = 'view'
   if (Object.keys(patch).length) patchPerson(s, personId, patch, msg)
   ensureCredential(s, personId)
-  activate(s, teamId, personId, msg)
 }
 
 /** Soft delete: the person stays in past squads as "(left team)". */
@@ -304,18 +318,74 @@ export async function changeNumber(s: Store, personId: string, phone: string): P
   patchPerson(s, personId, { phoneHash, phoneLast4: last4(phone) }, `Change number for ${personName(s, personId)}`)
 }
 
+/** True for the super admin and anyone with an admin record. */
+export const isStaff = (s: Store, personId: string) => configOf(s)?.superAdminId === personId || adminsOf(s).some((a) => a.personId === personId)
+
 export function setAccess(s: Store, personId: string, access: 'view' | 'none'): void {
-  if (configOf(s)?.adminPersonId === personId) return // the admin's access can't be switched off
+  if (isStaff(s, personId)) return // admins are switched on and off by the super admin (suspend)
   patchPerson(s, personId, { access }, `${access === 'view' ? 'Give' : 'Remove'} access for ${personName(s, personId)}`)
 }
 
-/** Removes the PIN and bumps the session epoch, which logs the person out on every phone. */
-export function resetPin(s: Store, personId: string, byPersonId: string): void {
+/** Removes the PIN and the logged-in phones and bumps the session epoch: the person is logged out everywhere. */
+export function resetPin(s: Store, personId: string, byPersonId: string): boolean {
   const now = nowStamp()
   const creds = credsOf(s)
   const existing = creds.find((c) => c.personId === personId)
   const next: Credential = { personId, sessionEpoch: (existing?.sessionEpoch ?? 0) + 1, resetAt: now, resetBy: byPersonId, updatedAt: now }
-  putCreds(s, existing ? creds.map((c) => (c.personId === personId ? next : c)) : [...creds, next], `Reset PIN for ${personId}`)
+  return putCreds(s, existing ? creds.map((c) => (c.personId === personId ? next : c)) : [...creds, next], `Reset PIN for ${personName(s, personId)}`)
+}
+
+// ---------- admins (the super admin's job, PLAN §65) ----------
+const putAdmins = (s: Store, admins: AdminRecord[], msg: string) => s.write(P.admins, { schemaVersion: 1, admins }, msg)
+
+/**
+ * Makes the owner of this number an admin. A number nobody has yet becomes a
+ * new person; an existing player keeps their teams and history.
+ */
+export async function addAdmin(s: Store, name: string, phone: string): Promise<Person> {
+  const config = configOf(s)
+  const by = actorId(s)
+  if (!config || !by) throw new Error('App data is not loaded yet.')
+  const phoneHash = await hashPhone(phone, config.phoneSalt)
+  let person = peopleOf(s).find((p) => p.phoneHash === phoneHash)
+  if (person?.id === config.superAdminId) throw new Error('That is your own number.')
+  if (person && adminsOf(s).some((a) => a.personId === person!.id && a.status === 'active')) throw new Error(`${person.name} is already an admin.`)
+  const now = nowStamp()
+  if (!person) {
+    person = { id: uuid(), name: requireName(name), phoneHash, phoneLast4: last4(phone), access: 'view', isGuest: false, teamIds: [], createdAt: now, updatedAt: now }
+    putPeople(s, [...peopleOf(s), person], `Add admin ${person.name}`)
+  } else if (person.isGuest || person.access !== 'view') {
+    patchPerson(s, person.id, { isGuest: false, access: 'view' }, `Add admin ${person.name}`)
+  }
+  ensureCredential(s, person.id)
+  const others = adminsOf(s).filter((a) => a.personId !== person!.id)
+  putAdmins(s, [...others, { personId: person.id, status: 'active', addedBy: by, addedAt: now, updatedAt: now }], `Add admin ${person.name}`)
+  return person
+}
+
+/** Suspend = view only; their teams stay as they are until handed to someone else. Restore undoes it. */
+export function setAdminStatus(s: Store, personId: string, status: AdminRecord['status']): void {
+  const now = nowStamp()
+  putAdmins(s, adminsOf(s).map((a) => (a.personId === personId ? { ...a, status, updatedAt: now } : a)), `${status === 'active' ? 'Restore' : 'Suspend'} admin ${personName(s, personId)}`)
+  // A suspended admin is logged out everywhere, so their phones pick up the change at once.
+  if (status === 'suspended') resetPin(s, personId, actorId(s) ?? '')
+}
+
+/** No longer an admin at all. Only for someone who runs no team (hand the teams over first). */
+export function removeAdmin(s: Store, personId: string): void {
+  if (teamsOf(s).some((t) => t.adminId === personId)) throw new Error('Hand their teams to another admin first.')
+  putAdmins(s, adminsOf(s).filter((a) => a.personId !== personId), `Remove admin ${personName(s, personId)}`)
+  resetPin(s, personId, actorId(s) ?? '')
+}
+
+/** Hands one team to another admin (or to the super admin). */
+export function transferTeam(s: Store, teamId: string, toPersonId: string): void {
+  const config = configOf(s)
+  const ok = toPersonId === config?.superAdminId || adminsOf(s).some((a) => a.personId === toPersonId && a.status === 'active')
+  if (!ok) throw new Error('Pick an active admin.')
+  const team = teamsOf(s).find((t) => t.id === teamId)
+  if (!team) throw new Error('Team not found.')
+  putTeams(s, teamsOf(s).map((t) => (t.id === teamId ? { ...t, adminId: toPersonId, updatedAt: nowStamp() } : t)), `Hand ${team.name} to ${personName(s, toPersonId)}`)
 }
 
 // ---------- guests (PLAN §20) ----------
@@ -440,7 +510,7 @@ export function ensureOpponent(s: Store, rawName: string): Opponent {
   const found = all.find((o) => o.name.toLowerCase() === name.toLowerCase())
   if (found) return found
   const now = nowStamp()
-  const opp: Opponent = { id: uuid(), name, shortName: shortNameFor(name), playerIds: [], createdAt: now, updatedAt: now }
+  const opp: Opponent = { id: uuid(), name, shortName: shortNameFor(name), playerIds: [], createdBy: actorId(s), createdAt: now, updatedAt: now }
   putOpponents(s, [...all, opp], `Add opponent ${name}`)
   return opp
 }
@@ -572,35 +642,35 @@ export function seedCategories(): ExpenseCategory[] {
   return [mk('Match fee', 'mandatory', 1), mk('Balls', 'mandatory', 2), mk('Breakfast', 'optional', 3)]
 }
 
-export function saveCategory(s: Store, input: { id?: string; name: string; mode: CategoryMode; defaultAmount?: number }): void {
+export function saveCategory(s: Store, teamId: string, input: { id?: string; name: string; mode: CategoryMode; defaultAmount?: number }): void {
   const name = requireName(input.name)
-  const cats = categoriesOf(s)
+  const cats = categoriesOf(s, teamId)
   if (cats.some((c) => !c.archived && c.id !== input.id && c.name.toLowerCase() === name.toLowerCase())) {
     throw new Error('A category with this name already exists.')
   }
   const now = nowStamp()
   const defaultAmount = input.defaultAmount && input.defaultAmount > 0 ? Math.round(input.defaultAmount) : undefined
   if (input.id) {
-    putCategories(s, cats.map((c) => (c.id === input.id ? { ...c, name, mode: input.mode, defaultAmount, updatedAt: now } : c)), `Edit category ${name}`)
+    putCategories(s, teamId, cats.map((c) => (c.id === input.id ? { ...c, name, mode: input.mode, defaultAmount, updatedAt: now } : c)), `Edit category ${name}`)
   } else {
     const order = Math.max(0, ...cats.map((c) => c.order)) + 1
-    putCategories(s, [...cats, { id: uuid(), name, mode: input.mode, defaultAmount, order, archived: false, createdAt: now, updatedAt: now }], `Add category ${name}`)
+    putCategories(s, teamId, [...cats, { id: uuid(), name, mode: input.mode, defaultAmount, order, archived: false, createdAt: now, updatedAt: now }], `Add category ${name}`)
   }
 }
 
 /** "Delete" = archive. Matches that already used the category keep their snapshot of it. */
-export function setCategoryArchived(s: Store, id: string, archived: boolean): void {
-  const cats = categoriesOf(s)
+export function setCategoryArchived(s: Store, teamId: string, id: string, archived: boolean): void {
+  const cats = categoriesOf(s, teamId)
   const cat = cats.find((c) => c.id === id)
   if (!cat) return
   if (!archived && cats.some((c) => !c.archived && c.id !== id && c.name.toLowerCase() === cat.name.toLowerCase())) {
     throw new Error('Another category already uses this name.')
   }
-  putCategories(s, cats.map((c) => (c.id === id ? { ...c, archived, updatedAt: nowStamp() } : c)), `${archived ? 'Delete' : 'Restore'} category ${cat.name}`)
+  putCategories(s, teamId, cats.map((c) => (c.id === id ? { ...c, archived, updatedAt: nowStamp() } : c)), `${archived ? 'Delete' : 'Restore'} category ${cat.name}`)
 }
 
-export function moveCategory(s: Store, id: string, dir: -1 | 1): void {
-  const cats = categoriesOf(s)
+export function moveCategory(s: Store, teamId: string, id: string, dir: -1 | 1): void {
+  const cats = categoriesOf(s, teamId)
   const live = cats.filter((c) => !c.archived).sort((a, b) => a.order - b.order)
   const i = live.findIndex((c) => c.id === id)
   const j = i + dir
@@ -610,6 +680,7 @@ export function moveCategory(s: Store, id: string, dir: -1 | 1): void {
   const now = nowStamp()
   putCategories(
     s,
+    teamId,
     cats.map((c) => (c.id === a.id ? { ...c, order: b.order, updatedAt: now } : c.id === b.id ? { ...c, order: a.order, updatedAt: now } : c)),
     'Reorder categories',
   )
@@ -929,13 +1000,15 @@ export function deleteFundEntry(s: Store, teamId: string, entryId: string): void
 }
 
 // ---------- app config ----------
-export function updateConfig(s: Store, patch: Partial<Pick<AppConfig, 'tokenExpiresOn' | 'lowBalanceThreshold'>>): void {
+/** App-wide settings (super admin). */
+export function updateConfig(s: Store, patch: Partial<Pick<AppConfig, 'tokenExpiresOn'>>): void {
   const config = configOf(s)
   if (!config) return
   s.write(P.config, { ...config, ...patch, updatedAt: nowStamp() }, 'Update app settings')
 }
 
-export const lowBalanceThreshold = (s: Store) => configOf(s)?.lowBalanceThreshold ?? 500
+/** The team's "Low balance" line in Funds (each admin sets their own). */
+export const lowBalanceThreshold = (s: Store, teamId: string) => teamsOf(s).find((t) => t.id === teamId)?.lowBalanceThreshold ?? 500
 export const today = todayISO
 
 // ---------- availability poll (PLAN §30) ----------
@@ -1014,10 +1087,10 @@ export function saveGround(s: Store, input: Omit<Ground, 'id' | 'createdAt' | 'u
   if (/\d{10}/.test(`${input.contact ?? ''}${input.notes ?? ''}`.replace(/[\s-]/g, ''))) throw new Error('Don’t put a phone number here — everyone with the token can read it.')
   const now = nowStamp()
   const clean = { name, mapUrl, pitch: input.pitch, fee: input.fee && input.fee > 0 ? Math.round(input.fee) : undefined, contact: input.contact?.trim() || undefined, notes: input.notes?.trim() || undefined }
-  const grounds = input.id ? all.map((g) => (g.id === input.id ? { ...g, ...clean, updatedAt: now } : g)) : [...all, { id: uuid(), ...clean, createdAt: now, updatedAt: now }]
-  s.write(P.grounds, { schemaVersion: 1, grounds }, `${input.id ? 'Edit' : 'Add'} ground ${name}`)
+  const grounds = input.id ? all.map((g) => (g.id === input.id ? { ...g, ...clean, updatedAt: now } : g)) : [...all, { id: uuid(), ...clean, createdBy: actorId(s), createdAt: now, updatedAt: now }]
+  if (!s.write(P.grounds, { schemaVersion: 1, grounds }, `${input.id ? 'Edit' : 'Add'} ground ${name}`)) throw new Error('Only the admin who added this ground can change it.')
 }
 
 export function deleteGround(s: Store, id: string): void {
-  s.write(P.grounds, { schemaVersion: 1, grounds: groundsOf(s).filter((g) => g.id !== id) }, 'Delete ground')
+  if (!s.write(P.grounds, { schemaVersion: 1, grounds: groundsOf(s).filter((g) => g.id !== id) }, 'Delete ground')) throw new Error('Only the admin who added this ground can delete it.')
 }

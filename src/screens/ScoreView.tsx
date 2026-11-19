@@ -29,7 +29,8 @@ const fmtClock = (iso: string) => {
 }
 
 export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string }) {
-  const { store, isAdmin, people, personName, toast, session } = useApp()
+  const { store, canManage, people, personName, toast, session } = useApp()
+  const isAdmin = canManage(teamId)
   const route = useRoute()
   const sheet = useSheet()
   const match = useTeam(teamId).matches.find((m) => m.id === matchId)

@@ -52,13 +52,21 @@ export function RemindSheet({ teamId, teamName, personIds, onClose }: { teamId: 
 }
 
 export function PlayerStatement({ teamId, personId }: { teamId: string; personId: string }) {
-  const { isAdmin, personName, toast } = useApp()
+  const { canManage, canSeeMoney, personName, toast } = useApp()
+  const isAdmin = canManage(teamId)
   const sheet = useSheet()
   const data = useTeam(teamId)
   const st = useMemo(() => buildStatement(data.funds, data.matches, personId), [data.funds, data.matches, personId])
   const name = personName(personId)
   const back = `/funds`
 
+  if (!canSeeMoney(teamId)) {
+    return (
+      <Screen title="Statement" back={back}>
+        <Empty icon="🔒" title="Only for this team" text="A team’s money is visible to its players and its admin." />
+      </Screen>
+    )
+  }
   if (!data.ready || !data.team) {
     return (
       <Screen title="Statement" back={back}>

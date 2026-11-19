@@ -9,17 +9,34 @@ export interface PinHash {
 }
 
 // ---------- config/app.json ----------
+/** Data format of this app version. Older data is not read (it is reset instead). */
+export const DATA_SCHEMA = 2
+
 export interface AppConfig {
-  schemaVersion: 1
+  schemaVersion: 2
   appName: string
-  adminPersonId: string
+  /** The app owner (super admin): adds, suspends and replaces admins. Set once, at first-time setup. */
+  superAdminId: string
   phoneSalt: string
-  adminRecovery: PinHash
+  /** Recovery code of the super admin, for a forgotten PIN. */
+  recovery: PinHash
   tokenExpiresOn?: string // YYYY-MM-DD
-  /** Funds tab "Low balance" filter threshold in rupees (default 500). */
-  lowBalanceThreshold?: number
   createdAt: string
   updatedAt?: string
+}
+
+// ---------- config/admins.json ----------
+/** Someone the super admin made an admin. An admin runs their own teams. */
+export interface AdminRecord {
+  personId: string
+  status: 'active' | 'suspended'
+  addedBy: string
+  addedAt: string
+  updatedAt: string
+}
+export interface AdminsFile {
+  schemaVersion: 1
+  admins: AdminRecord[]
 }
 
 // ---------- people.json ----------
@@ -54,11 +71,21 @@ export interface PeopleFile {
 }
 
 // ---------- auth/credentials.json ----------
+/** A phone this person logged in on. Only a hash of the phone's secret is stored. */
+export interface DeviceKey {
+  id: string
+  /** SHA-256 (base64) of the random secret kept on that phone. */
+  hash: string
+  at: string
+}
+
 export interface Credential {
   personId: string
   pin?: PinHash
   pinSetAt?: string
   sessionEpoch: number
+  /** Phones logged in as this person (newest last). A session is valid only on one of these. */
+  devices?: DeviceKey[]
   resetAt?: string
   resetBy?: string
   updatedAt: string
@@ -100,6 +127,10 @@ export interface Team {
   homeGround?: string
   /** Stamp of the team logo in images/teams/<id>.json; absent = no logo. */
   logo?: string
+  /** The admin who runs this team. Only they change it; the super admin can hand it to another admin. */
+  adminId: string
+  /** Funds tab "Low balance" filter threshold in rupees (default 500). */
+  lowBalanceThreshold?: number
   archived: boolean
   createdAt: string
   updatedAt: string
@@ -202,7 +233,7 @@ export interface MatchesFile {
   matches: Match[]
 }
 
-// ---------- config/expense-categories.json ----------
+// ---------- teams/<id>/categories.json (each team has its own) ----------
 export interface ExpenseCategory {
   id: string
   name: string
@@ -284,6 +315,8 @@ export interface Ground {
   /** Who to call — a name, never a phone number (numbers stay out of the repo). */
   contact?: string
   notes?: string
+  /** The admin who added it; only they edit or delete it. */
+  createdBy?: string
   createdAt: string
   updatedAt: string
 }
@@ -300,6 +333,8 @@ export interface Opponent {
   shortName: string
   /** People who have played for this opponent (records in people.json, no login). */
   playerIds: string[]
+  /** The admin who added it; only they rename or delete it (anyone scoring may add players). */
+  createdBy?: string
   createdAt: string
   updatedAt: string
 }
@@ -457,6 +492,8 @@ export interface Tournament {
   teams: TournamentTeam[]
   otherResults: OtherResult[]
   archived: boolean
+  /** The admin who created it; only they change it. */
+  createdBy?: string
   createdAt: string
   updatedAt: string
 }

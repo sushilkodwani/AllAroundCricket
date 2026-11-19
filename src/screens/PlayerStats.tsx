@@ -48,7 +48,7 @@ export function PlayerStats({ teamId, personId }: { teamId: string; personId: st
 
 /** A player's page over any set of matches (one of our teams, or every match against an opponent). */
 export function PlayerStatsView({ personId, matches, loading, back, teamName, color }: { personId: string; matches: Match[]; loading?: boolean; back: string; teamName: string; color?: string }) {
-  const { people, personName, isAdmin, session } = useApp()
+  const { people, personName, isSuper, isAdmin, canManage, session, store } = useApp()
   const sheet = useSheet()
   const { files, scored, ready } = useScores(matches)
   const stamp = files.map((f) => f.updatedAt).join('|')
@@ -56,7 +56,8 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
   const c = useMemo(() => careerStats(files).get(personId), [stamp, personId])
   const person = people.find((p) => p.id === personId)
   const name = personName(personId)
-  const canEdit = !!person && (isAdmin || session?.personId === personId)
+  // Their own profile; the admin of a team they are in (or a player in no team); the super admin.
+  const canEdit = !!person && !!store && (isSuper || session?.personId === personId || (isAdmin && !store.lookup.isStaff(person.id) && (person.teamIds.length === 0 ? !person.guestOfTeamIds?.length : person.teamIds.some(canManage)) ) || (isAdmin && !!person.guestOfTeamIds?.some(canManage)))
 
   if (loading || !ready) {
     return (

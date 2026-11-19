@@ -16,9 +16,10 @@ import { RemindSheet } from './PlayerStatement'
 type Filter = 'all' | 'low' | 'dues'
 
 export function Funds() {
-  const { teams, isAdmin, people, session, store, personName } = useApp()
+  const { teams, myTeams, isSuper, canManage, people, session, store, personName } = useApp()
   const sheet = useSheet()
-  const visible = teams.filter((t) => !t.archived || (isAdmin && getPref('showArchived', false)))
+  // Money stays inside a team: its players and admin see it (the super admin sees every team's).
+  const visible = (isSuper ? teams : myTeams).filter((t) => !t.archived || (canManage(t.id) && getPref('showArchived', false)))
   const [teamId, setTeamId] = useState<string>(() => getPref('fundsTeam', ''))
   const [filter, setFilter] = useState<Filter>('all')
   const current = visible.find((t) => t.id === teamId) ?? visible[0]
@@ -37,7 +38,8 @@ export function Funds() {
   }
 
   const me = session?.personId ?? ''
-  const threshold = lowBalanceThreshold(store)
+  const isAdmin = canManage(current.id)
+  const threshold = lowBalanceThreshold(store, current.id)
   const { members, matches, funds } = data
   const activeIds = members.filter((m) => m.status === 'active').map((m) => m.personId)
   const leftIds = members.filter((m) => m.status === 'removed').map((m) => m.personId)
@@ -196,7 +198,8 @@ function entryLabel(e: FundEntry, opponent?: string): string {
 }
 
 function PlayerFundSheet({ team, personId, data, onClose }: { team: Team; personId: string; data: TeamData; onClose: () => void }) {
-  const { store, isAdmin, personName, toast } = useApp()
+  const { store, canManage, personName, toast } = useApp()
+  const isAdmin = canManage(team.id)
   const startMode = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('mode') === 'contribution' ? 'contribution' : 'view'
   const [mode, setMode] = useState<Mode>(isAdmin ? startMode : 'view')
   const [amount, setAmount] = useState('')

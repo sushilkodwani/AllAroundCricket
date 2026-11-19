@@ -12,12 +12,13 @@ import { useApp, useTeamsLoaded } from '../state/AppContext'
 import { navigate } from '../state/router'
 
 export function Matches() {
-  const { teams, store, isAdmin, session } = useApp()
+  const { myTeams, store, isAdmin, session } = useApp()
   const [mine, setMine] = useState(false)
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
   const showArchived = isAdmin && getPref('showArchived', false)
-  const visible = teams.filter((t) => showArchived || !t.archived)
+  // The teams this person plays in or runs; other clubs' matches are on their team page.
+  const visible = myTeams.filter((t) => showArchived || !t.archived)
   useTeamsLoaded(visible.map((t) => t.id))
 
   const loading = !!store && visible.some((t) => !teamLoaded(store, t.id))

@@ -149,7 +149,7 @@ export function createTournament(s: Store, name: string): Tournament {
   if (!clean) throw new Error('Enter a name.')
   if (tournamentsOf(s).some((t) => !t.archived && t.name.toLowerCase() === clean.toLowerCase())) throw new Error('A tournament with this name already exists.')
   const now = nowStamp()
-  const t: Tournament = { id: uuid(), name: clean, points: { win: 2, tie: 1, nr: 1 }, teams: [], otherResults: [], archived: false, createdAt: now, updatedAt: now }
+  const t: Tournament = { id: uuid(), name: clean, points: { win: 2, tie: 1, nr: 1 }, teams: [], otherResults: [], archived: false, createdBy: s.actor.personId, createdAt: now, updatedAt: now }
   put(s, [...tournamentsOf(s), t], `Create tournament ${clean}`)
   return t
 }

@@ -22,8 +22,9 @@ type Tab = 'players' | 'matches' | 'stats'
 
 /** Matches of the teams this person can see that were played against the opponent. */
 export function useOpponentMatches(opponent: Opponent | undefined): Match[] {
-  const { teams, store } = useApp()
-  const ids = teams.map((t) => t.id)
+  const { teams, myTeams, store } = useApp()
+  // “With us” = the teams this person plays in or runs (everyone's, when they have none).
+  const ids = (myTeams.length ? myTeams : teams).map((t) => t.id)
   useTeamsLoaded(ids)
   const key = ids.join(',')
   const version = store?.getVersion() ?? 0

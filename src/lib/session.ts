@@ -10,6 +10,12 @@ export interface RepoRef {
 export interface Session extends RepoRef {
   personId: string
   sessionEpoch: number
+  /**
+   * This phone's login key. The credentials file holds only a hash of the
+   * secret, so editing personId on this phone cannot borrow someone else's login.
+   */
+  deviceId: string
+  deviceSecret: string
 }
 
 const SESSION_KEY = 'aac.session'
@@ -24,7 +30,11 @@ function read<T>(key: string): T | null {
   }
 }
 
-export const loadSession = () => read<Session>(SESSION_KEY)
+/** A saved login; one from before device keys existed counts as none (the person logs in again). */
+export function loadSession(): Session | null {
+  const s = read<Session>(SESSION_KEY)
+  return s && typeof s.deviceId === 'string' && typeof s.deviceSecret === 'string' ? s : null
+}
 
 export function saveSession(s: Session): void {
   localStorage.setItem(SESSION_KEY, JSON.stringify(s))

@@ -16,7 +16,8 @@ import { goBack, useSheet } from '../state/router'
 import type { Person } from '../types'
 
 export function SquadPicker({ teamId, matchId }: { teamId: string; matchId: string }) {
-  const { people, teams, store, allTeams, isAdmin } = useApp()
+  const { people, teams, store, allTeams, canManage } = useApp()
+  const isAdmin = canManage(teamId)
   const sheet = useSheet()
   const data = useTeam(teamId)
   const team = teams.find((t) => t.id === teamId)
@@ -193,7 +194,7 @@ function GuestSheet({
   onPicked: (personId: string) => void
   lastPlayedFor: (personId: string) => string | undefined
 }) {
-  const { people, store, allTeams, config } = useApp()
+  const { people, store, allTeams } = useApp()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [busy, setBusy] = useState(false)
@@ -201,7 +202,7 @@ function GuestSheet({
 
   const q = name.trim().toLowerCase()
   const suggestions = people
-    .filter((p) => !exclude.has(p.id) && p.id !== config?.adminPersonId)
+    .filter((p) => !exclude.has(p.id))
     .filter((p) => p.guestOfTeamIds?.includes(teamId) || p.teamIds.some((t) => t !== teamId))
     .filter((p) => !q || p.name.toLowerCase().includes(q))
     .sort((a, b) => a.name.localeCompare(b.name))

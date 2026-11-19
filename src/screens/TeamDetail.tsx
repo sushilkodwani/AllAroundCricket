@@ -15,7 +15,8 @@ import type { Team } from '../types'
 type Tab = 'players' | 'matches' | 'stats'
 
 export function TeamDetail({ teamId }: { teamId: string }) {
-  const { isAdmin, teams, store, toast } = useApp()
+  const { canManage, teams, store, toast } = useApp()
+  const isAdmin = canManage(teamId)
   const route = useRoute()
   const sheet = useSheet()
   const data = useTeam(teamId)
@@ -29,7 +30,7 @@ export function TeamDetail({ teamId }: { teamId: string }) {
   if (!team) {
     return (
       <Screen title="Team" back="/teams">
-        <Empty icon="🤷" title="Team not found" text="It may have been removed, or you’re no longer in it." />
+        <Empty icon="🤷" title="Team not found" text="It may have been removed or archived." />
       </Screen>
     )
   }
@@ -67,6 +68,9 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           <div className="flex flex-col gap-2">
             <button className="btn-secondary" onClick={() => navigate(withQuery(route, { sheet: 'editteam' }), { replace: true })}>
               Edit team
+            </button>
+            <button className="btn-secondary" onClick={() => navigate(`/teams/${team.id}/categories`)}>
+              Expense categories
             </button>
             {team.archived ? (
               <button
@@ -139,7 +143,8 @@ export function TeamDetail({ teamId }: { teamId: string }) {
 }
 
 function MatchesTab({ data }: { data: TeamData & { team: Team } }) {
-  const { isAdmin } = useApp()
+  const { canManage } = useApp()
+  const isAdmin = canManage(data.team.id)
   const sheet = useSheet()
   const [showCancelled, setShowCancelled] = useState(false)
   const { team, matches } = data

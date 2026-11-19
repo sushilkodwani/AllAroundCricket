@@ -20,7 +20,8 @@ export function StatusChip({ status }: { status: MatchStatus }) {
 
 /** One match in a list. Tapping opens match detail. */
 export function MatchRow({ match, team, showTeam }: { match: Match; team?: Team; showTeam?: boolean }) {
-  const { isAdmin, session } = useApp()
+  const { canManage, session } = useApp()
+  const isAdmin = canManage(match.teamId)
   const chip = dateChip(match.date)
   const status = matchStatus(match)
   const playing = !isAdmin && !!session && match.squad.includes(session.personId)

@@ -8,10 +8,12 @@
 // - Every repo write carries the last known sha. If another device wrote first
 //   the store re-reads the file and does an id-based 3-way merge (merge.ts).
 // - Every write passes the access guard first (access.ts).
-import { canWrite, type Actor } from './access'
+import type { AdminsFile, AppConfig, PeopleFile, TeamsFile } from '../types'
+import { canWrite, type Actor, type Lookup } from './access'
 import type { KV } from './cache'
 import { ApiError, NetworkError, type Backend } from './github'
 import { mergeFile } from './merge'
+import { P } from './paths'
 
 interface Entry {
   data: unknown
@@ -204,7 +206,7 @@ export class Store {
 
   private put(path: string, data: unknown, message: string): boolean {
     const cur = this.entries.get(path)
-    if (!canWrite(this.actor, path, cur?.data ?? null, data)) {
+    if (!canWrite(this.actor, path, cur?.data ?? null, data, this.lookup)) {
       console.warn(`Write to ${path} refused for role "${this.actor.role}".`)
       return false
     }
@@ -212,6 +214,13 @@ export class Store {
     this.persist(path)
     this.notify()
     return true
+  }
+
+  /** What the write guard needs to know, read from the current data. */
+  readonly lookup: Lookup = {
+    teamAdmin: (id) => this.get<TeamsFile>(P.teams)?.teams.find((t) => t.id === id)?.adminId,
+    person: (id) => this.get<PeopleFile>(P.people)?.people.find((p) => p.id === id),
+    isStaff: (id) => this.get<AppConfig>(P.config)?.superAdminId === id || !!this.get<AdminsFile>(P.admins)?.admins.some((a) => a.personId === id),
   }
 
   private persist(path: string): void {

@@ -43,7 +43,7 @@ export function Tournaments() {
             + New tournament
           </button>
         )}
-        {all.length === 0 && <Empty icon="🏆" title="No tournaments yet" text={isAdmin ? 'Create one, then put matches in it from the match form. The points table builds itself.' : 'Your admin has not set up a tournament yet.'} />}
+        {all.length === 0 && <Empty icon="🏆" title="No tournaments yet" text={isAdmin ? 'Create one, then put matches in it from the match form. The points table builds itself.' : 'No admin has set up a tournament yet.'} />}
         {[live, archived].map(
           (list, n) =>
             list.length > 0 && (
@@ -100,10 +100,12 @@ export function Tournaments() {
 }
 
 export function TournamentDetail({ tournamentId }: { tournamentId: string }) {
-  const { store, isAdmin, teams, toast } = useApp()
+  const { store, isAdmin: anyAdmin, isSuper, me, teams, toast } = useApp()
   const sheet = useSheet()
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
   const t = store ? tournamentsOf(store).find((x) => x.id === tournamentId) : undefined
+  // Any admin can enter matches; only whoever created the tournament (or the super admin) edits it.
+  const isAdmin = anyAdmin && (isSuper || t?.createdBy === me?.id)
 
   const teamIds = teams.map((x) => x.id)
   useTeamsLoaded(teamIds)

@@ -6,7 +6,7 @@ import { ProfileSheet, RoleTag } from '../components/Profile'
 import { Screen } from '../components/Screen'
 import { Avatar, Confirm, ErrorNote, Field, MenuRow, NumberInput, Segmented, Sheet, Toggle } from '../components/ui'
 import { addDays, daysBetween, fmtDate, fmtStamp, todayISO } from '../lib/dates'
-import { lowBalanceThreshold, updateConfig } from '../lib/domain'
+import { updateConfig } from '../lib/domain'
 import { getPref, setPref } from '../lib/session'
 import { APP_BUILT_AT, APP_VERSION, reloadToLatest } from '../lib/version'
 import { useApp } from '../state/AppContext'
@@ -26,7 +26,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export const TOKEN_WARN_DAYS = 14
 
 export function Settings() {
-  const { me, role, isAdmin, teams, allTeams, people, config, store, session, logout, flushSaves, replaceToken, toast, creds } = useApp()
+  const { me, role, isAdmin, isSuper, myTeams, allTeams, admins, people, config, store, session, logout, flushSaves, replaceToken, toast, creds } = useApp()
   const { pref, setPref: setTheme } = useTheme()
   const sheet = useSheet()
   const [pinOnOpen, setPinOnOpen] = useState(() => getPref('pinOnOpen', false))
@@ -34,15 +34,18 @@ export function Settings() {
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [showSecurity, setShowSecurity] = useState(false)
   const [expiry, setExpiry] = useState(config?.tokenExpiresOn ?? '')
-  const [threshold, setThreshold] = useState(String(store ? lowBalanceThreshold(store) : 500))
   const [newToken, setNewToken] = useState('')
   const [tokenError, setTokenError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const myTeamList = isAdmin ? allTeams.filter((t) => me?.teamIds.includes(t.id)) : teams
-  const myTeams = myTeamList.map((t) => t.name)
-  const myTeamIds = myTeamList.map((t) => t.id)
-  const users = people.filter((p) => !p.isGuest && p.id !== config?.adminPersonId)
+  // Teams this person plays in (their stats live there) and teams they run.
+  const playsIn = myTeams.filter((t) => me?.teamIds.includes(t.id))
+  const runs = myTeams.filter((t) => t.adminId === me?.id)
+  const myTeamNames = [...new Set([...playsIn, ...runs].map((t) => t.name))]
+  const runIds = new Set(runs.map((t) => t.id))
+  const staff = new Set([config?.superAdminId, ...admins.map((a) => a.personId)])
+  const users = people.filter((p) => !p.isGuest && !staff.has(p.id) && (isSuper || p.teamIds.some((id) => runIds.has(id))))
+  const activeAdmins = admins.filter((a) => a.status === 'active').length
   const pinSetAt = creds.find((c) => c.personId === session?.personId)?.pinSetAt
 
   async function hardRefresh() {
@@ -63,13 +66,13 @@ export function Settings() {
                 <RoleTag person={me} />
               </div>
               <div className="text-sm text-muted">
-                {role === 'admin' ? 'Admin · full access' : '👁 View only'}
-                {myTeams.length > 0 && ` · ${myTeams.join(', ')}`}
+                {role === 'super' ? 'Super admin' : role === 'admin' ? 'Admin' : '👁 View only'}
+                {myTeamNames.length > 0 && ` · ${myTeamNames.join(', ')}`}
               </div>
             </div>
           </div>
           {me && <MenuRow label="Edit my profile" hint="Photo, role, batting, bowling, jersey" onClick={() => sheet.open('profile')} />}
-          {me && myTeamIds[0] && <MenuRow label="My stats" hint="Batting, bowling and fielding figures" onClick={() => navigate(`/teams/${myTeamIds[0]}/players/${me.id}`)} />}
+          {me && playsIn[0] && <MenuRow label="My stats" hint="Batting, bowling and fielding figures" onClick={() => navigate(`/teams/${playsIn[0].id}/players/${me.id}`)} />}
           <MenuRow label="Change PIN" hint={pinSetAt ? `PIN set ${fmtStamp(pinSetAt)}` : undefined} onClick={() => sheet.open('pin')} />
           <MenuRow
             label="Ask for PIN when the app opens"
@@ -85,7 +88,7 @@ export function Settings() {
               />
             }
           />
-          {!isAdmin && <MenuRow label="Data repo" hint="Replace the access key on this device" onClick={() => sheet.open('repo')} />}
+          {!isSuper && <MenuRow label="Data repo" hint="Replace the access key on this device" onClick={() => sheet.open('repo')} />}
           <button className="row font-medium text-bad active:bg-alt" onClick={() => setConfirmLogout(true)}>
             Log out
           </button>
@@ -109,30 +112,14 @@ export function Settings() {
           />
         </section>
 
-        {isAdmin && (
+        {isSuper && (
           <>
-            <Section title="Admin">
-              <MenuRow label="Users" hint={`${users.length} player${users.length === 1 ? '' : 's'} · access and PIN resets`} onClick={() => navigate('/settings/users')} />
-              <MenuRow label="Expense categories" hint="What gets split after a match" onClick={() => navigate('/settings/categories')} />
-            <MenuRow label="Grounds" hint="Venues with map link, pitch and fee" onClick={() => navigate('/settings/grounds')} />
-              <MenuRow label="Funds" hint={`Low balance below ₹${store ? lowBalanceThreshold(store) : 500}`} onClick={() => sheet.open('funds')} />
+            <Section title="Super admin">
+              <MenuRow label="Admins" hint={`${activeAdmins} active · add, suspend, hand over teams`} onClick={() => navigate('/settings/admins')} />
               <MenuRow
                 label="Data repo"
-                hint={config?.tokenExpiresOn ? `Token expires ${fmtDate(config.tokenExpiresOn)}` : 'Token expiry date not set'}
+                hint={config?.tokenExpiresOn ? `Access key expires ${fmtDate(config.tokenExpiresOn)}` : 'Access key expiry date not set'}
                 onClick={() => sheet.open('repo')}
-              />
-              <MenuRow
-                label="Show archived teams"
-                right={
-                  <Toggle
-                    label="Show archived teams"
-                    checked={showArchived}
-                    onChange={(v) => {
-                      setPref('showArchived', v)
-                      setShowArchived(v)
-                    }}
-                  />
-                }
               />
               <MenuRow label="Recovery code" hint="Create a new one (needs your PIN)" onClick={() => sheet.open('recovery')} />
             </Section>
@@ -142,6 +129,28 @@ export function Settings() {
               <DataCard />
             </section>
           </>
+        )}
+
+        {isAdmin && (
+          <Section title="Admin">
+            {runs.length === 0 && <p className="px-4 py-3 text-sm text-muted">Create a team from the Teams tab. Its players, matches, expenses and funds are yours to run.</p>}
+            <MenuRow label="Users" hint={`${users.length} player${users.length === 1 ? '' : 's'}${isSuper ? ' in all teams' : ' in your teams'} · access and PIN resets`} onClick={() => navigate('/settings/users')} />
+            <MenuRow label="Grounds" hint="Venues with map link, pitch and fee" onClick={() => navigate('/settings/grounds')} />
+            <p className="px-4 py-3 text-xs text-muted">Expense categories and the low-balance line are set per team: open the team, then its ⋯ menu.</p>
+            <MenuRow
+              label="Show archived teams"
+              right={
+                <Toggle
+                  label="Show archived teams"
+                  checked={showArchived}
+                  onChange={(v) => {
+                    setPref('showArchived', v)
+                    setShowArchived(v)
+                  }}
+                />
+              }
+            />
+          </Section>
         )}
 
         <Section title="General">
@@ -158,9 +167,9 @@ export function Settings() {
           </button>
           {showSecurity && (
             <div className="space-y-2 px-4 py-3 text-sm text-muted">
-              <p>All data lives in a secure key based system. Everyone uses one shared access key; view-only is enforced by this app.</p>
+              <p>All data lives in a secure key based system. Everyone uses one shared access key; who may change what (super admin, admins, players) is enforced by this app.</p>
               <p>
-                <strong className="text-ink">2.</strong> The 6-digit PIN is a lock, not a vault. PINs are stored only as slow one-way hashes — nobody, including the admin, can read them
+                <strong className="text-ink">2.</strong> The 6-digit PIN is a lock, not a vault. PINs are stored only as slow one-way hashes — nobody, not even an admin, can read them
               </p>
               <p>
                 <strong className="text-ink">3.</strong> If the key expires or is replaced, every phone must enter the new one.
@@ -174,25 +183,6 @@ export function Settings() {
       {sheet.name === 'pin' && <ChangePinSheet onClose={sheet.close} />}
       {sheet.name === 'recovery' && <RecoveryCodeSheet onClose={sheet.close} />}
 
-      {sheet.name === 'funds' && store && (
-        <Sheet title="Funds" onClose={sheet.close}>
-          <div className="flex flex-col gap-4">
-            <Field label="Low balance threshold (₹)" hint="Players below this show up under the “Low balance” filter in Funds.">
-              <NumberInput value={threshold} onChange={setThreshold} maxLength={6} ariaLabel="Low balance threshold" />
-            </Field>
-            <button
-              className="btn-primary"
-              onClick={() => {
-                updateConfig(store, { lowBalanceThreshold: Number(threshold) || 0 })
-                sheet.close()
-              }}
-            >
-              Save
-            </button>
-          </div>
-        </Sheet>
-      )}
-
       {sheet.name === 'profile' && me && <ProfileSheet person={me} onClose={sheet.close} />}
 
       {sheet.name === 'repo' && store && (
@@ -201,9 +191,9 @@ export function Settings() {
             <p className="text-sm text-muted">
               {session?.owner}/{session?.repo}
             </p>
-            {isAdmin && (
+            {isSuper && (
             <>
-            <Field label="Token expiry date" hint={`You’ll see a reminder from ${TOKEN_WARN_DAYS} days before this date.`}>
+            <Field label="Access key expiry date" hint={`You’ll see a reminder from ${TOKEN_WARN_DAYS} days before this date.`}>
               <input className="input" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
             </Field>
             <div className="flex gap-2">
@@ -269,8 +259,8 @@ export function Settings() {
 
 /** Banner for the admin when the shared token is about to expire (PLAN §5.8). */
 export function TokenExpiryBanner() {
-  const { isAdmin, config } = useApp()
-  if (!isAdmin || !config?.tokenExpiresOn) return null
+  const { isSuper, config } = useApp()
+  if (!isSuper || !config?.tokenExpiresOn) return null
   const days = daysBetween(todayISO(), config.tokenExpiresOn)
   if (days > TOKEN_WARN_DAYS) return null
   return (

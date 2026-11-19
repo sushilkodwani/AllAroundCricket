@@ -5,9 +5,9 @@ import { P } from '../lib/paths'
 import { useApp } from '../state/AppContext'
 import { TEAM_COLORS, type Team } from '../types'
 import { PhotoPicker } from './PhotoPicker'
-import { ErrorNote, Field, Sheet } from './ui'
+import { ErrorNote, Field, NumberInput, Sheet } from './ui'
 
-/** Create or edit a team: name, short name (auto from initials), colour, logo, home ground. */
+/** Create or edit a team: name, short name (auto from initials), colour, logo, home ground, low-balance line. */
 export function TeamSheet({ team, onClose, onCreated }: { team?: Team; onClose: () => void; onCreated?: (team: Team) => void }) {
   const { store, allTeams } = useApp()
   const [name, setName] = useState(team?.name ?? '')
@@ -15,6 +15,7 @@ export function TeamSheet({ team, onClose, onCreated }: { team?: Team; onClose: 
   const [shortEdited, setShortEdited] = useState(!!team)
   const [color, setColor] = useState(team?.color ?? TEAM_COLORS[allTeams.length % TEAM_COLORS.length].hex)
   const [ground, setGround] = useState(team?.homeGround ?? '')
+  const [threshold, setThreshold] = useState(String(team?.lowBalanceThreshold ?? 500))
   const [error, setError] = useState<string | null>(null)
   const savedLogo = useImage(store, team ? P.teamLogo(team.id) : null, team?.logo)
   // undefined = unchanged; a data URL = new logo; null = remove.
@@ -28,7 +29,7 @@ export function TeamSheet({ team, onClose, onCreated }: { team?: Team; onClose: 
       const input = { name, shortName, color, homeGround: ground }
       const changedLogo = logo !== undefined && (logo ?? null) !== (savedLogo ?? null)
       if (team) {
-        updateTeam(store!, team.id, input)
+        updateTeam(store!, team.id, { ...input, lowBalanceThreshold: Number(threshold) || 0 })
         if (changedLogo) setTeamLogo(store!, team.id, logo ?? null)
         onClose()
       } else {
@@ -86,6 +87,11 @@ export function TeamSheet({ team, onClose, onCreated }: { team?: Team; onClose: 
         <Field label="Home ground (optional)">
           <input className="input" value={ground} maxLength={60} onChange={(e) => setGround(e.target.value)} />
         </Field>
+        {team && (
+          <Field label="Low balance line (₹)" hint="Players below this show up under the “Low balance” filter in Funds.">
+            <NumberInput value={threshold} onChange={setThreshold} maxLength={6} ariaLabel="Low balance threshold" />
+          </Field>
+        )}
         <ErrorNote>{error}</ErrorNote>
         <button className="btn-primary" disabled={!name.trim()}>
           {team ? 'Save' : 'Create team'}

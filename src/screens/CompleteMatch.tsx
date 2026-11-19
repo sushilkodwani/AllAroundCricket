@@ -12,7 +12,8 @@ import { navigate } from '../state/router'
 import type { MatchResult } from '../types'
 
 export function CompleteMatch({ teamId, matchId }: { teamId: string; matchId: string }) {
-  const { store, isAdmin, toast } = useApp()
+  const { store, canManage, toast } = useApp()
+  const isAdmin = canManage(teamId)
   const data = useTeam(teamId)
   const match = data.matches.find((m) => m.id === matchId)
   const base = `/teams/${teamId}/matches/${matchId}`

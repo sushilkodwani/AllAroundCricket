@@ -11,7 +11,7 @@ export const RESULTS = (Object.keys(RESULT_LABELS) as MatchResult[]).map((value)
 
 /** Add or edit a match. Any date — past or future. Past dates also offer result + scores. */
 export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Team; matches: Match[]; match?: Match; onClose: () => void; onSaved: (m: Match, isNew: boolean) => void }) {
-  const { store } = useApp()
+  const { store, teams } = useApp()
   const [date, setDate] = useState(match?.date ?? todayISO())
   const [time, setTime] = useState(match?.time ?? '')
   const [opponent, setOpponent] = useState(match?.opponent ?? '')
@@ -27,9 +27,10 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
   const tournaments = (store ? tournamentsOf(store) : []).filter((t) => !t.archived || t.id === match?.tournamentId)
 
   // Suggestions come from this team's earlier matches.
-  // …and from every saved opponent team, whose players are remembered for scoring.
+  // …from every saved opponent team, whose players are remembered for scoring…
+  // …and from the other teams in the app (other admins' teams), so they can be played too.
   const saved = store ? opponentsOf(store) : []
-  const savedKey = saved.map((o) => o.name).join('|')
+  const savedKey = [...saved.map((o) => o.name), ...teams.filter((t) => t.id !== team.id && !t.archived).map((t) => t.name)].join('|')
   const opponents = useMemo(() => [...new Set([...savedKey.split('|').filter(Boolean), ...matches.map((m) => m.opponent)])].sort(), [matches, savedKey])
   const groundKey = (store ? groundsOf(store) : []).map((g) => g.name).join('|')
   const venues = useMemo(() => [...new Set([team.homeGround, ...groundKey.split('|'), ...matches.map((m) => m.venue)].filter((v): v is string => !!v))].sort(), [matches, team.homeGround, groundKey])

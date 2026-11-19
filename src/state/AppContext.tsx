@@ -3,15 +3,15 @@
 // person is allowed to see. Screens read data through useApp()/useFile() and
 // change it through the functions in lib/domain.ts.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { checkSession, credentialOf, roleOf, type Role } from '../lib/access'
-import { CORE_PATHS, createBackend, openStore } from '../lib/connect'
-import { categoriesOf, configOf, credsOf, loadTeam, matchesOf, peopleOf, teamsOf } from '../lib/domain'
+import { checkSession, credentialOf, isAdminRole, roleOf, type Role } from '../lib/access'
+import { CORE_PATHS, createBackend, deviceHashOf, forgetDevice, isOldData, OLD_DATA, openStore } from '../lib/connect'
+import { adminsOf, configOf, credsOf, loadTeam, matchesOf, peopleOf, teamsOf } from '../lib/domain'
 import { describeRepoError } from '../lib/github'
 import { P } from '../lib/paths'
 import { disablePush } from '../lib/push'
 import { clearSession, forgetEverything, getPref, loadSession, saveSession, type Session } from '../lib/session'
 import type { Store, StoreStatus } from '../lib/store'
-import type { AppConfig, Credential, ExpenseCategory, FundEntry, FundsFile, Match, MatchesFile, MembersFile, Membership, Person, Team } from '../types'
+import type { AdminRecord, AppConfig, Credential, FundEntry, FundsFile, Match, MatchesFile, MembersFile, Membership, Person, Team } from '../types'
 
 export type Phase = 'boot' | 'out' | 'in' | 'error'
 export type Gate = null | 'no_access' | 'token' | 'locked'
@@ -32,16 +32,25 @@ interface AppState {
   session: Session | null
   status: StoreStatus
   config: AppConfig | null
+  admins: AdminRecord[]
   people: Person[]
   creds: Credential[]
   /** Every team in the repo. */
   allTeams: Team[]
-  /** Teams this person may see: all for the admin, own active teams for a viewer. */
+  /** Teams anyone may look at: every active team, plus archived ones this person runs (all of them for the super admin). */
   teams: Team[]
-  categories: ExpenseCategory[]
+  /** Teams this person plays in or runs — the Matches and Funds tabs. */
+  myTeams: Team[]
   me: Person | null
   role: Role
+  /** The app owner. */
+  isSuper: boolean
+  /** Super admin or admin: may create teams, opponents, grounds and tournaments. */
   isAdmin: boolean
+  /** Runs this team (only its own admin changes a team). */
+  canManage: (teamId: string | undefined) => boolean
+  /** Funds and expenses of a team: its players, its admin and the super admin. */
+  canSeeMoney: (teamId: string | undefined) => boolean
   personName: (id: string) => string
   login: (store: Store, session: Session) => void
   logout: () => Promise<void>
@@ -76,6 +85,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(UNLOCK_KEY) === '1')
   const [toastState, setToastState] = useState<ToastState | null>(null)
   const [bootCount, setBootCount] = useState(0)
+  /** Hash of this phone's login secret, compared with the credentials file. */
+  const [deviceHash, setDeviceHash] = useState('')
 
   // Re-render whenever the store's data or status changes.
   useSyncExternalStore(store?.subscribe ?? noSubscribe, store?.getVersion ?? (() => 0))
@@ -89,22 +100,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return
     }
     setSession(saved)
-    openStore(saved)
-      .then(async (s) => {
+    Promise.all([openStore(saved), deviceHashOf(saved.deviceSecret)])
+      .then(async ([s, hash]) => {
         if (cancelled) return
+        setDeviceHash(hash)
         setStore(s)
-        if (CORE_PATHS.every((p) => s.has(p))) {
+        if (CORE_PATHS.every((p) => s.has(p)) && !isOldData(configOf(s))) {
           setPhase('in')
           void s.refreshAll(CORE_PATHS).catch(() => {})
           return
         }
         try {
           await s.refreshAll(CORE_PATHS)
+          if (isOldData(configOf(s))) throw new Error(OLD_DATA)
           if (!cancelled) setPhase('in')
         } catch (e) {
           // Never wipe the login on a failed load — offer a retry instead.
           if (!cancelled) {
-            setBootError(describeRepoError(e))
+            setBootError((e as Error).message === OLD_DATA ? OLD_DATA : describeRepoError(e))
             setPhase('error')
           }
         }
@@ -121,39 +134,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ---------- derived ----------
   const config = store ? configOf(store) : null
+  const admins = store ? adminsOf(store) : []
   const people = store ? peopleOf(store) : []
   const creds = store ? credsOf(store) : []
   const allTeams = store ? teamsOf(store) : []
-  const categories = store ? categoriesOf(store) : []
-  const role: Role = phase === 'in' && session ? roleOf(session.personId, config, people) : 'denied'
-  const isAdmin = role === 'admin'
+  const role: Role = phase === 'in' && session ? roleOf(session.personId, config, people, admins) : 'denied'
+  const isSuper = role === 'super'
+  const isAdmin = isAdminRole(role)
   const me = session ? (people.find((p) => p.id === session.personId) ?? null) : null
+  const myId = me?.id
 
-  // The store enforces view-only, so it must always know who is acting.
+  // The store enforces who may change what, so it must always know who is acting.
   if (store && phase === 'in' && session) {
-    // A player the admin made scorer of a match may write that match's score (PLAN §31).
-    const scorerMatchIds = role === 'viewer' && me ? me.teamIds.flatMap((id) => matchesOf(store, id)).filter((m) => m.scorerId === me.id).map((m) => m.id) : undefined
+    // A player an admin made scorer of a match may write that match's score (PLAN §31).
+    const scorerMatchIds = me ? me.teamIds.flatMap((id) => matchesOf(store, id)).filter((m) => m.scorerId === me.id).map((m) => m.id) : undefined
     store.actor = { role: role === 'denied' ? 'none' : role, personId: session.personId, scorerMatchIds }
   }
 
-  const teams = useMemo(
-    () => (isAdmin ? allTeams : allTeams.filter((t) => !t.archived && me?.teamIds.includes(t.id))),
-    [allTeams, isAdmin, me],
+  const canManage = useCallback((teamId: string | undefined) => isAdmin && !!myId && allTeams.some((t) => t.id === teamId && t.adminId === myId), [isAdmin, myId, allTeams])
+  const canSeeMoney = useCallback(
+    (teamId: string | undefined) => !!teamId && (isSuper || canManage(teamId) || !!me?.teamIds.includes(teamId) || !!me?.guestOfTeamIds?.includes(teamId)),
+    [isSuper, canManage, me],
   )
+
+  const teams = useMemo(() => allTeams.filter((t) => !t.archived || isSuper || (isAdmin && t.adminId === myId)), [allTeams, isSuper, isAdmin, myId])
+  const myTeams = useMemo(() => teams.filter((t) => t.adminId === myId || me?.teamIds.includes(t.id)), [teams, myId, me])
 
   const names = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people])
   const personName = useCallback((id: string) => names.get(id) ?? 'Unknown', [names])
 
   // ---------- session checks (PLAN §5.6) ----------
   const loaded = !!store && phase === 'in' && !!config && store.has(P.people) && store.has(P.creds)
-  const check = loaded && session ? checkSession(session, config, people, creds) : 'ok'
+  const check = loaded && session && deviceHash ? checkSession(session, deviceHash, config, people, creds, admins) : 'ok'
 
   useEffect(() => {
-    if (check !== 'pin_reset' || !store) return
-    // Admin reset the PIN (or it was never set): end the login, keep repo + token.
+    if ((check !== 'pin_reset' && check !== 'signed_out') || !store) return
+    // PIN reset by an admin, or this phone is no longer one of the person's logged-in phones:
+    // end the login, keep repo + token.
     clearSession()
     setSession(null)
-    setNotice('Your PIN was reset by the admin. Set a new PIN to continue.')
+    setNotice(check === 'pin_reset' ? 'Your PIN was reset by your admin. Set a new PIN to continue.' : 'This phone was logged out. Enter your PIN to continue.')
     setPhase('out')
   }, [check, store])
 
@@ -196,6 +216,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem(UNLOCK_KEY, '1')
     setUnlocked(true)
     setNotice(null)
+    // This phone's key was just written for this login; the check starts once its hash is known.
+    setDeviceHash('')
+    void deviceHashOf(next.deviceSecret).then(setDeviceHash)
     setStore(s)
     setSession(next)
     setPhase('in')
@@ -203,8 +226,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     if (store) {
-      // This phone stops receiving notifications for the person logging out.
+      // This phone stops receiving notifications for the person logging out, and its login key stops working.
       if (session) await disablePush(store, session.personId).catch(() => {})
+      if (session) await forgetDevice(store, session.personId, session.deviceId).catch(() => {})
       await store.flush().catch(() => false)
       await store.clear()
     }
@@ -264,14 +288,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     session,
     status,
     config,
+    admins,
     people,
     creds,
     allTeams,
     teams,
-    categories,
+    myTeams,
     me,
     role,
+    isSuper,
     isAdmin,
+    canManage,
+    canSeeMoney,
     personName,
     login,
     logout,

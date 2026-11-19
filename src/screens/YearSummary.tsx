@@ -10,7 +10,7 @@ import { useApp, useTeam } from '../state/AppContext'
 import { navigate } from '../state/router'
 
 export function YearSummary({ teamId }: { teamId: string }) {
-  const { personName, toast } = useApp()
+  const { personName, toast, canSeeMoney } = useApp()
   const data = useTeam(teamId)
   const years = useMemo(() => activeYears(data.funds, data.matches), [data.funds, data.matches])
   const [pick, setPick] = useState<string | null>(null)
@@ -18,6 +18,14 @@ export function YearSummary({ teamId }: { teamId: string }) {
   const rows = useMemo(() => yearSummary(data.funds, data.matches, year).sort((a, b) => b.shares - a.shares || personName(a.personId).localeCompare(personName(b.personId))), [data.funds, data.matches, year, personName])
   const total = rows.reduce((t, r) => ({ shares: t.shares + r.shares, paid: t.paid + r.paid, pending: t.pending + r.pending }), { shares: 0, paid: 0, pending: 0 })
   const completed = data.matches.filter((m) => !m.cancelled && m.lifecycle === 'completed' && m.date.startsWith(year)).length
+
+  if (!canSeeMoney(teamId)) {
+    return (
+      <Screen title="Year summary" back="/funds">
+        <Empty icon="🔒" title="Only for this team" text="A team’s money is visible to its players and its admin." />
+      </Screen>
+    )
+  }
 
   function share() {
     const lines = [`*${data.team?.name ?? 'Team'} — ${year} summary*`, `${completed} completed match${completed === 1 ? '' : 'es'} · total spent ${money(total.shares)}`, '']

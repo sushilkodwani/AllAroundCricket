@@ -29,6 +29,12 @@ export async function pbkdf2(secret: string, salt: Uint8Array, iterations: numbe
   return new Uint8Array(bits)
 }
 
+/** SHA-256 of a text, base64. */
+export async function sha256(text: string): Promise<string> {
+  if (typeof crypto === 'undefined' || !crypto.subtle) throw new Error('Secure crypto is unavailable. Open the app over HTTPS.')
+  return toB64(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))))
+}
+
 /** Compare without stopping at the first difference. */
 export function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false

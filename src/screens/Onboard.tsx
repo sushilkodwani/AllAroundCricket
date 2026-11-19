@@ -1,12 +1,12 @@
-// Onboarding (once per device), first-time admin setup, and the PIN steps that
+// Onboarding (once per device), first-time setup by the app owner (super admin), and the PIN steps that
 // follow both (PLAN §5.5, §5.7, §5.10). The number and the PIN live only in
 // this component's memory while it is on screen.
 import { useEffect, useRef, useState } from 'react'
 import { PinPad } from '../components/PinPad'
 import { ErrorNote, Field, PhoneInput } from '../components/ui'
-import { credentialOf, onboardStep } from '../lib/access'
-import { connectRepo, demoAvailable, findPersonByPhone, isSetUp, recoverAdminPin, setOwnPin, setupRepo, verifyOwnPin } from '../lib/connect'
-import { configOf, credsOf } from '../lib/domain'
+import { adminRecordOf, onboardStep } from '../lib/access'
+import { connectRepo, demoAvailable, findPersonByPhone, isSetUp, logInDevice, recoverSuperPin, setOwnPin, setupRepo, verifyOwnPin } from '../lib/connect'
+import { adminsOf, configOf, credsOf } from '../lib/domain'
 import { normalizePhone } from '../lib/phone'
 import { isWeakPin, verifyRecoveryCode } from '../lib/pin'
 import { clearPinFails, loadRepoRef, lockRemainingMs, registerPinFail, type RepoRef, type Session } from '../lib/session'
@@ -104,10 +104,10 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
       }
       if (!isSetUp(s)) {
         setEmptyRepo(true)
-        throw new Error('This app has not been set up yet. If you are the admin, use “First time setup” below.')
+        throw new Error('This app has not been set up yet. If you are the app owner, use “First time setup” below.')
       }
       const found = await findPersonByPhone(s, p.phone)
-      const next = onboardStep(found, configOf(s)!, credsOf(s))
+      const next = onboardStep(found, configOf(s)!, credsOf(s), adminsOf(s))
       if (next === 'no_access' || !found) {
         await s.clear() // nothing is kept for a number without access
         throw new Error(NO_ACCESS)
@@ -141,19 +141,19 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
     try {
       if (mode === 'setup') {
         const out = await setupRepo(s, { name, phone: phone.current, pin })
-        pending.current = { ...ref(), personId: out.personId, sessionEpoch: 1 }
+        pending.current = { ...ref(), personId: out.personId, sessionEpoch: out.sessionEpoch, deviceId: out.deviceId, deviceSecret: out.deviceSecret }
         setRecoveryCode(out.recoveryCode)
         setStep('recovery')
       } else if (usedRecovery.current) {
-        const out = await recoverAdminPin(s, usedRecovery.current, pin)
+        const out = await recoverSuperPin(s, usedRecovery.current, pin)
         usedRecovery.current = ''
         clearPinFails(person.current!.id)
-        pending.current = { ...ref(), personId: person.current!.id, sessionEpoch: out.sessionEpoch }
+        pending.current = { ...ref(), personId: person.current!.id, sessionEpoch: out.sessionEpoch, deviceId: out.deviceId, deviceSecret: out.deviceSecret }
         setRecoveryCode(out.recoveryCode)
         setStep('recovery')
       } else {
-        const sessionEpoch = await setOwnPin(s, person.current!.id, pin)
-        login(s, { ...ref(), personId: person.current!.id, sessionEpoch })
+        const device = await setOwnPin(s, person.current!.id, pin)
+        login(s, { ...ref(), personId: person.current!.id, ...device })
         navigate('/teams', { replace: true })
       }
     } catch (e) {
@@ -174,8 +174,8 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
     try {
       if (await verifyOwnPin(s, who.id, pin)) {
         clearPinFails(who.id)
-        const cred = credentialOf(credsOf(s), who.id)!
-        login(s, { ...ref(), personId: who.id, sessionEpoch: cred.sessionEpoch })
+        const device = await logInDevice(s, who.id)
+        login(s, { ...ref(), personId: who.id, ...device })
         navigate('/teams', { replace: true })
       } else {
         const wait = registerPinFail(who.id)
@@ -193,7 +193,7 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
     setBusy(true)
     try {
       const config = configOf(store.current!)!
-      if (!(await verifyRecoveryCode(recoveryInput, config.adminRecovery))) throw new Error('That recovery code is not right.')
+      if (!(await verifyRecoveryCode(recoveryInput, config.recovery))) throw new Error('That recovery code is not right.')
       usedRecovery.current = recoveryInput
       setRecoveryInput('')
       setStep('set_pin')
@@ -204,7 +204,8 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
     }
   }
 
-  const isAdminPerson = !!person.current && configOf(store.current!)?.adminPersonId === person.current.id
+  const isSuperPerson = !!person.current && configOf(store.current!)?.superAdminId === person.current.id
+  const isAdminPerson = !!person.current && !!store.current && !!adminRecordOf(adminsOf(store.current), person.current.id)
   const locked = lockMs > 0
 
   return (
@@ -219,10 +220,10 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
             void submitForm()
           }}
         >
-          <h2 className="text-lg font-semibold">{mode === 'setup' ? 'First time setup (admin)' : 'Get started'}</h2>
+          <h2 className="text-lg font-semibold">{mode === 'setup' ? 'First time setup (app owner)' : 'Get started'}</h2>
           {notice && mode === 'join' && <p className="rounded-xl bg-warn/15 px-3 py-2 text-sm text-warn">{notice}</p>}
           {mode === 'setup' && (
-            <p className="text-sm text-muted">Do this once for a new, empty private data repo. You become the admin — the only person who can edit.</p>
+            <p className="text-sm text-muted">Do this once for a new, empty private data repo. You become the super admin: you add the admins (by mobile number), and each admin runs their own teams. Admins and players never do this — they only need the access key and their number.</p>
           )}
 
           <Field label="Mobile number (10 digits)" hint="No country code. It is never stored or shown as-is.">
@@ -265,7 +266,7 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
           {mode === 'join' ? (
             emptyRepo && (
               <button type="button" className="text-sm font-medium text-accent" onClick={() => navigate('/setup')}>
-                First time setup (admin)
+                First time setup (app owner)
               </button>
             )
           ) : (
@@ -295,7 +296,7 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
           <PinPad label="PIN" resetKey={padKey} shake={shake} disabled={busy || locked} onComplete={enterPin} />
           {busy && <p className="text-sm text-muted">Checking…</p>}
           {locked ? <ErrorNote>Too many wrong tries. Wait {Math.ceil(lockMs / 1000)} seconds.</ErrorNote> : <ErrorNote>{error}</ErrorNote>}
-          {isAdminPerson ? (
+          {isSuperPerson ? (
             <button
               className="mt-2 text-sm font-medium text-accent"
               onClick={() => {
@@ -303,10 +304,10 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
                 setStep('forgot')
               }}
             >
-              Forgot admin PIN
+              Forgot PIN
             </button>
           ) : (
-            <p className="mt-2 text-sm text-muted">Forgot PIN? Ask your admin to reset it.</p>
+            <p className="mt-2 text-sm text-muted">Forgot PIN? {isAdminPerson ? 'Ask the super admin to reset it.' : 'Ask your team admin to reset it.'}</p>
           )}
         </div>
       )}
@@ -319,7 +320,7 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
             void submitRecovery()
           }}
         >
-          <h2 className="text-lg font-semibold">Reset the admin PIN</h2>
+          <h2 className="text-lg font-semibold">Reset your PIN</h2>
           <Field label="Recovery code" hint="The 12-character code shown when you set up the app.">
             <input className="input uppercase tracking-widest" value={recoveryInput} onChange={(e) => setRecoveryInput(e.target.value)} placeholder="XXXX-XXXX-XXXX" autoCapitalize="characters" autoComplete="off" />
           </Field>
@@ -335,7 +336,7 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
 
       {step === 'recovery' && (
         <div className="flex flex-col gap-4">
-          <h2 className="text-lg font-semibold">Your admin recovery code</h2>
+          <h2 className="text-lg font-semibold">Your recovery code</h2>
           <p className="text-sm text-muted">Write this down. It’s the only way to reset your own PIN. It is shown only once.</p>
           <div className="card select-all py-5 text-center font-mono text-2xl font-bold tracking-widest" data-testid="recovery-code">
             {recoveryCode}

@@ -16,17 +16,20 @@ import { navigate, useSheet } from '../state/router'
 import { TokenExpiryBanner } from './Settings'
 
 export function Teams() {
-  const { teams, isAdmin, refresh, store } = useApp()
+  const { teams, myTeams, isAdmin, canManage, refresh, store } = useApp()
   const sheet = useSheet()
   const [refreshing, setRefreshing] = useState(false)
-  const showArchived = isAdmin && getPref('showArchived', false)
+  const showArchived = getPref('showArchived', false)
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
 
-  const visible = teams.filter((t) => showArchived || !t.archived)
+  // Archived teams only for their own admin (or the super admin), when they ask for them.
+  const visible = teams.filter((t) => !t.archived || (showArchived && (isAdmin)))
+  const mineIds = new Set(myTeams.map((t) => t.id))
   const matchesQuery = (...names: string[]) => !q || names.some((n) => n.toLowerCase().includes(q))
-  // Team files load in the background so cards can show fresh next/last match and the personal line.
-  useTeamsLoaded(visible.map((t) => t.id))
+  // Own teams' files load in the background so their cards show fresh next/last match and the personal line.
+  // Other teams' cards use the summary in teams.json until opened.
+  useTeamsLoaded(visible.filter((t) => mineIds.has(t.id)).map((t) => t.id))
 
   // Nearest upcoming match first, then by name.
   const sorted = visible.filter((t) => matchesQuery(t.name, t.shortName)).sort((a, b) => {
@@ -37,7 +40,10 @@ export function Teams() {
     return ka.localeCompare(kb) || a.name.localeCompare(b.name)
   })
 
-  // Teams we play against, below our own. A name that is also one of our teams is not repeated.
+  const ownTeams = sorted.filter((t) => mineIds.has(t.id))
+  const clubTeams = sorted.filter((t) => !mineIds.has(t.id))
+
+  // Teams we play against, below the app's own. A name that is also a team in the app is not repeated.
   const mine = new Set(teams.map((t) => t.name.toLowerCase()))
   const others = (store ? opponentsOf(store) : []).filter((o) => !mine.has(o.name.toLowerCase()) && matchesQuery(o.name, o.shortName)).sort((a, b) => a.name.localeCompare(b.name))
 
@@ -45,10 +51,10 @@ export function Teams() {
   const missing = useMemo(() => {
     if (!store || !isAdmin || !store.has(P.opponents)) return ''
     const known = new Set(opponentsOf(store).map((o) => o.name.toLowerCase()))
-    const names = teams.flatMap((t) => matchesOf(store, t.id)).map((m) => m.opponent)
+    const names = teams.filter((t) => canManage(t.id)).flatMap((t) => matchesOf(store, t.id)).map((m) => m.opponent)
     return [...new Set(names.filter((n) => !known.has(n.toLowerCase())))].join('|')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, isAdmin, teams, store?.getVersion()])
+  }, [store, isAdmin, canManage, teams, store?.getVersion()])
   useEffect(() => {
     if (store) for (const name of missing.split('|').filter(Boolean)) ensureOpponent(store, name)
   }, [store, missing])
@@ -81,7 +87,7 @@ export function Teams() {
         <Empty
           icon='🏏'
           title='No teams yet'
-          text={isAdmin ? 'Create your first team, then add players and matches.' : 'Your admin hasn’t added you to a team yet.'}
+          text={isAdmin ? 'Create your first team, then add players and matches. You run every team you create.' : 'Your admin hasn’t added you to a team yet.'}
           action={
             isAdmin ? (
               <button className='btn-primary' onClick={() => sheet.open('team')}>
@@ -94,11 +100,15 @@ export function Teams() {
         <div className='flex flex-col gap-3 p-4'>
           <SearchBox value={query} onChange={setQuery} placeholder='Search teams' />
           {q && sorted.length === 0 && others.length === 0 && <p className='py-8 text-center text-sm text-muted'>No team matches “{query.trim()}”.</p>}
-          {sorted.length > 0 && <h2 className='section-title !pb-0'>{visible.length === 1 && !q ? 'My team' : 'My teams'}</h2>}
-          {sorted.map((t) => (
+          {ownTeams.length > 0 && <h2 className='section-title !pb-0'>{ownTeams.length === 1 && !q ? 'My team' : 'My teams'}</h2>}
+          {ownTeams.map((t) => (
             <TeamCard key={t.id} team={t} />
           ))}
-          {others.length > 0 && <h2 className='section-title !pb-0 !pt-3'>Other teams ({others.length})</h2>}
+          {clubTeams.length > 0 && <h2 className='section-title !pb-0 !pt-3'>Other teams in the app ({clubTeams.length})</h2>}
+          {clubTeams.map((t) => (
+            <TeamCard key={t.id} team={t} />
+          ))}
+          {others.length > 0 && <h2 className='section-title !pb-0 !pt-3'>Opponents ({others.length})</h2>}
           {others.map((o) => (
             <OtherTeamCard key={o.id} opponent={o} />
           ))}

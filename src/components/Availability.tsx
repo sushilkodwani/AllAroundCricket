@@ -16,7 +16,8 @@ export function useAvailability(teamId: string, matchId: string): Map<string, Av
 }
 
 export function AvailabilityCard({ match, data }: { match: Match; data: TeamData }) {
-  const { store, session, isAdmin, personName, toast } = useApp()
+  const { store, session, canManage, personName, toast } = useApp()
+  const isAdmin = canManage(match.teamId)
   const answers = useAvailability(match.teamId, match.id)
   const me = session?.personId ?? ''
   const active = data.members.filter((m) => m.status === 'active').map((m) => m.personId)

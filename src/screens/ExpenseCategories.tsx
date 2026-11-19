@@ -1,10 +1,10 @@
-// Settings → Expense categories (PLAN §16.6). Edits apply to new splits only;
+// Team → Expense categories (PLAN §16.6). Each team has its own list, run by its admin. Edits apply to new splits only;
 // "delete" archives, so matches that used a category keep it.
 import { useState } from 'react'
 import { Screen } from '../components/Screen'
 import { ChoiceChips, Confirm, Empty, ErrorNote, Field, NumberInput, Pill, Sheet, Toggle } from '../components/ui'
 import { money } from '../lib/dates'
-import { moveCategory, saveCategory, setCategoryArchived } from '../lib/domain'
+import { categoriesOf, moveCategory, saveCategory, setCategoryArchived } from '../lib/domain'
 import { useApp, useFile } from '../state/AppContext'
 import { P } from '../lib/paths'
 import { useSheet } from '../state/router'
@@ -21,17 +21,20 @@ const MODE_HELP: Record<CategoryMode, string> = {
   manual: 'Not added automatically; pick it with “+ Add category” when needed.',
 }
 
-export function ExpenseCategories() {
-  const { store, isAdmin, categories, toast } = useApp()
-  useFile(P.categories)
+export function ExpenseCategories({ teamId }: { teamId: string }) {
+  const { store, canManage, allTeams, toast } = useApp()
+  useFile(P.categories(teamId))
+  const team = allTeams.find((t) => t.id === teamId)
+  const categories = store ? categoriesOf(store, teamId) : []
+  const back = `/teams/${teamId}`
   const sheet = useSheet()
   const [showDeleted, setShowDeleted] = useState(false)
   const [deleting, setDeleting] = useState<ExpenseCategory | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  if (!isAdmin || !store) {
+  if (!canManage(teamId) || !store || !team) {
     return (
-      <Screen title="Expense categories" back="/settings">
+      <Screen title="Expense categories" back={back}>
         <Empty icon="🔒" title="Admins only" />
       </Screen>
     )
@@ -42,9 +45,9 @@ export function ExpenseCategories() {
   const editing = sheet.name === 'cat' ? categories.find((c) => c.id === sheet.arg) : undefined
 
   return (
-    <Screen title="Expense categories" back="/settings">
+    <Screen title="Expense categories" back={back}>
       <div className="flex flex-col gap-3 p-4">
-        <p className="text-sm text-muted">These are the costs split among the squad after a match. Changes apply to new splits only.</p>
+        <p className="text-sm text-muted">{team.name}: these are the costs split among the squad after a match. Changes apply to new splits only.</p>
         <button className="btn-primary" onClick={() => sheet.open('cat')}>
           + Add category
         </button>
@@ -63,10 +66,10 @@ export function ExpenseCategories() {
                   </span>
                   <Pill tone={c.mode === 'mandatory' ? 'brand' : 'neutral'}>{MODE_LABELS[c.mode]}</Pill>
                 </button>
-                <button className="flex h-11 w-9 items-center justify-center text-muted disabled:opacity-30" disabled={i === 0} aria-label={`Move ${c.name} up`} onClick={() => moveCategory(store, c.id, -1)}>
+                <button className="flex h-11 w-9 items-center justify-center text-muted disabled:opacity-30" disabled={i === 0} aria-label={`Move ${c.name} up`} onClick={() => moveCategory(store, teamId, c.id, -1)}>
                   ↑
                 </button>
-                <button className="flex h-11 w-9 items-center justify-center text-muted disabled:opacity-30" disabled={i === live.length - 1} aria-label={`Move ${c.name} down`} onClick={() => moveCategory(store, c.id, 1)}>
+                <button className="flex h-11 w-9 items-center justify-center text-muted disabled:opacity-30" disabled={i === live.length - 1} aria-label={`Move ${c.name} down`} onClick={() => moveCategory(store, teamId, c.id, 1)}>
                   ↓
                 </button>
                 <button className="flex h-11 w-9 items-center justify-center text-bad" aria-label={`Delete ${c.name}`} onClick={() => setDeleting(c)}>
@@ -92,7 +95,7 @@ export function ExpenseCategories() {
                       className="btn-secondary min-h-[36px]"
                       onClick={() => {
                         try {
-                          setCategoryArchived(store, c.id, false)
+                          setCategoryArchived(store, teamId, c.id, false)
                           setError(null)
                         } catch (e) {
                           setError((e as Error).message)
@@ -109,7 +112,7 @@ export function ExpenseCategories() {
         )}
       </div>
 
-      {sheet.name === 'cat' && <CategorySheet category={editing} onClose={sheet.close} />}
+      {sheet.name === 'cat' && <CategorySheet teamId={teamId} category={editing} onClose={sheet.close} />}
 
       {deleting && (
         <Confirm
@@ -119,8 +122,8 @@ export function ExpenseCategories() {
           danger
           onCancel={() => setDeleting(null)}
           onConfirm={() => {
-            setCategoryArchived(store, deleting.id, true)
-            toast(`${deleting.name} deleted`, () => setCategoryArchived(store, deleting.id, false))
+            setCategoryArchived(store, teamId, deleting.id, true)
+            toast(`${deleting.name} deleted`, () => setCategoryArchived(store, teamId, deleting.id, false))
             setDeleting(null)
           }}
         />
@@ -129,7 +132,7 @@ export function ExpenseCategories() {
   )
 }
 
-function CategorySheet({ category, onClose }: { category?: ExpenseCategory; onClose: () => void }) {
+function CategorySheet({ teamId, category, onClose }: { teamId: string; category?: ExpenseCategory; onClose: () => void }) {
   const { store } = useApp()
   const [name, setName] = useState(category?.name ?? '')
   const [mode, setMode] = useState<CategoryMode>(category?.mode ?? 'optional')
@@ -142,7 +145,7 @@ function CategorySheet({ category, onClose }: { category?: ExpenseCategory; onCl
         onSubmit={(e) => {
           e.preventDefault()
           try {
-            saveCategory(store!, { id: category?.id, name, mode, defaultAmount: Number(amount) || undefined })
+            saveCategory(store!, teamId, { id: category?.id, name, mode, defaultAmount: Number(amount) || undefined })
             onClose()
           } catch (err) {
             setError((err as Error).message)

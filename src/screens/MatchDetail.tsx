@@ -17,7 +17,9 @@ import { GroundInfo } from './Grounds'
 import { ScoutCard } from './OpponentDetail'
 
 export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: string }) {
-  const { isAdmin, teams, store, session, personName, toast, people } = useApp()
+  const { canManage, canSeeMoney, teams, store, session, personName, toast, people } = useApp()
+  const seesMoney = canSeeMoney(teamId)
+  const isAdmin = canManage(teamId)
   const route = useRoute()
   const sheet = useSheet()
   const data = useTeam(teamId)
@@ -173,8 +175,8 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
           </div>
         )}
 
-        <MatchMoney team={team} match={match} data={data} />
-        {match.expense?.status === 'submitted' && !match.cancelled && (
+        {seesMoney && <MatchMoney team={team} match={match} data={data} />}
+        {seesMoney && match.expense?.status === 'submitted' && !match.cancelled && (
           <button className="btn-secondary" onClick={() => share(expenseMessage(match, team, people))}>
             📤 Share expenses on WhatsApp
           </button>

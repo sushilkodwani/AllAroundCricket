@@ -11,7 +11,7 @@ function setup() {
   const backend = fakeBackend()
   const kv = memoryKV()
   const store = new Store(backend, kv, 5)
-  store.actor = { role: 'admin', personId: 'admin-1' }
+  store.actor = { role: 'super', personId: 'admin-1' }
   return { backend, kv, store }
 }
 
@@ -67,7 +67,7 @@ describe('Store', () => {
     await store.flush()
 
     const reopened = new Store(backend, kv, 5)
-    reopened.actor = { role: 'admin', personId: 'admin-1' }
+    reopened.actor = { role: 'super', personId: 'admin-1' }
     await reopened.hydrate()
     expect(reopened.get(PEOPLE)).toEqual(file(person('a', 'Asha')))
     expect(reopened.status.pending).toBe(1)

@@ -28,7 +28,8 @@ function shareText(name: string, team: Team, owner: string, repo: string): strin
 }
 
 export function PlayersTab({ data }: { data: TeamData & { team: Team } }) {
-  const { people, isAdmin, store, toast } = useApp()
+  const { people, canManage, store, toast } = useApp()
+  const isAdmin = canManage(data.team.id)
   const sheet = useSheet()
   const [query, setQuery] = useState('')
   const [showRemoved, setShowRemoved] = useState(false)
@@ -363,7 +364,8 @@ function BulkAddSheet({ team, onClose }: { team: Team; onClose: () => void }) {
 }
 
 function PlayerSheet({ person, data, onClose, onRemove }: { person: Person; data: TeamData & { team: Team }; onClose: () => void; onRemove: () => void }) {
-  const { store, isAdmin, allTeams, toast } = useApp()
+  const { store, canManage, allTeams, toast } = useApp()
+  const isAdmin = canManage(data.team.id)
   const [name, setName] = useState(person.name)
   const [phone, setPhone] = useState('')
   const [error, setError] = useState<string | null>(null)

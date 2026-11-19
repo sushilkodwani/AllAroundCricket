@@ -32,7 +32,9 @@ export function GroundInfo({ ground }: { ground: Ground }) {
 }
 
 export function Grounds() {
-  const { store, isAdmin } = useApp()
+  const { store, isAdmin, isSuper, me } = useApp()
+  // Every admin may add grounds (all teams share the list); only whoever added one changes it.
+  const mayEdit = (g?: { createdBy?: string }) => isAdmin && (!g || isSuper || g.createdBy === me?.id)
   const sheet = useSheet()
   const grounds = store ? [...groundsOf(store)].sort((a, b) => a.name.localeCompare(b.name)) : []
   const editing = sheet.name === 'ground' ? grounds.find((g) => g.id === sheet.arg) : undefined
@@ -50,18 +52,18 @@ export function Grounds() {
         ) : (
           <div className="card divide-y divide-line overflow-hidden">
             {grounds.map((g) => (
-              <button key={g.id} className="row active:bg-alt" disabled={!isAdmin} onClick={() => sheet.open('ground', g.id)}>
+              <button key={g.id} className="row active:bg-alt" disabled={!mayEdit(g)} onClick={() => sheet.open('ground', g.id)}>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{g.name}</span>
                   <span className="block truncate text-xs text-muted">{[g.pitch ? PITCH_LABELS[g.pitch] : null, g.fee ? money(g.fee) : null, g.mapUrl ? 'map link' : null].filter(Boolean).join(' · ') || 'No details yet'}</span>
                 </span>
-                {isAdmin && <span className="text-muted">›</span>}
+                {mayEdit(g) && <span className="text-muted">›</span>}
               </button>
             ))}
           </div>
         )}
       </div>
-      {sheet.name === 'ground' && isAdmin && <GroundSheet ground={editing} onClose={sheet.close} />}
+      {sheet.name === 'ground' && mayEdit(editing) && <GroundSheet ground={editing} onClose={sheet.close} />}
     </Screen>
   )
 }

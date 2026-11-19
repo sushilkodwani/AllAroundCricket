@@ -1,4 +1,5 @@
-// Settings → Users (admin): access, PIN resets, numbers, and guests (PLAN §7.7, §20.5).
+// Settings → Users: access, PIN resets, numbers, and guests (PLAN §7.7, §20.5).
+// An admin sees the players and guests of the teams they run; the super admin sees everyone.
 import { useMemo, useState } from 'react'
 import { Screen } from '../components/Screen'
 import { Avatar, Confirm, Empty, ErrorNote, Field, PhoneInput, Pill, Sheet, Toggle } from '../components/ui'
@@ -29,17 +30,20 @@ export function pinStatus(cred: Credential | undefined): string {
 }
 
 export function Users() {
-  const { people, config, creds, allTeams, store, toast, isAdmin } = useApp()
+  const { people, config, admins, creds, allTeams, store, toast, isAdmin, isSuper, me } = useApp()
   const sheet = useSheet()
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
-  useTeamsLoaded(filter === 'guests' ? allTeams.map((t) => t.id) : [])
+  useTeamsLoaded(filter === 'guests' ? allTeams.filter((t) => isSuper || t.adminId === me?.id).map((t) => t.id) : [])
 
   const teamName = (id: string) => allTeams.find((t) => t.id === id)?.name ?? ''
   const list = useMemo(() => {
     const q = query.trim().toLowerCase()
+    const staff = new Set([config?.superAdminId, ...admins.map((a) => a.personId)])
+    const mine = new Set(allTeams.filter((t) => t.adminId === me?.id).map((t) => t.id))
     return people
-      .filter((p) => p.id !== config?.adminPersonId)
+      .filter((p) => !staff.has(p.id))
+      .filter((p) => isSuper || [...p.teamIds, ...(p.guestOfTeamIds ?? [])].some((id) => mine.has(id)))
       .filter((p) => (filter === 'guests' ? p.isGuest : !p.isGuest))
       .filter((p) => {
         if (filter === 'access') return p.access === 'view'
@@ -50,7 +54,7 @@ export function Users() {
       })
       .filter((p) => !q || p.name.toLowerCase().includes(q))
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [people, config, creds, filter, query])
+  }, [people, config, admins, allTeams, me, isSuper, creds, filter, query])
 
   if (!isAdmin || !store) return <Screen title="Users" back="/settings"><Empty icon="🔒" title="Admins only" /></Screen>
 
@@ -81,7 +85,7 @@ export function Users() {
         </div>
 
         {list.length === 0 ? (
-          <Empty icon="👥" title={filter === 'guests' ? 'No guests yet' : 'No users here'} text={filter === 'all' ? 'Players appear here when you add them to a team.' : undefined} />
+          <Empty icon="👥" title={filter === 'guests' ? 'No guests yet' : 'No users here'} text={filter === 'all' ? 'Players appear here when you add them to one of your teams.' : undefined} />
         ) : (
           <div className="card divide-y divide-line overflow-hidden">
             {list.map((p) => {
@@ -128,7 +132,7 @@ export function Users() {
 }
 
 export function UserSheet({ person, onClose }: { person: Person; onClose: () => void }) {
-  const { store, creds, allTeams, session, toast, people } = useApp()
+  const { store, creds, allTeams, session, toast, people, canManage } = useApp()
   const [name, setName] = useState(person.name)
   const [phone, setPhone] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -139,7 +143,7 @@ export function UserSheet({ person, onClose }: { person: Person; onClose: () => 
 
   const cred = credentialOf(creds, person.id)
   const teams = allTeams.filter((t) => person.teamIds.includes(t.id))
-  const activeTeams = allTeams.filter((t) => !t.archived)
+  const activeTeams = allTeams.filter((t) => !t.archived && canManage(t.id))
 
   async function run(fn: () => Promise<void> | void, done?: string) {
     setError(null)
@@ -247,9 +251,9 @@ export function UserSheet({ person, onClose }: { person: Person; onClose: () => 
           danger
           onCancel={() => setConfirmReset(false)}
           onConfirm={() => {
-            resetPin(store, person.id, session!.personId)
+            const ok = resetPin(store, person.id, session!.personId)
             setConfirmReset(false)
-            toast(`PIN reset for ${person.name}`)
+            toast(ok ? `PIN reset for ${person.name}` : `Only ${person.name}’s team admin can reset this PIN`)
           }}
         />
       )}

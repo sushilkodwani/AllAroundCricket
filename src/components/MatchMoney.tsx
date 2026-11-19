@@ -23,7 +23,8 @@ export function describeSettled(s: PlayerShare): string {
 }
 
 export function MatchMoney({ team, match, data }: { team: Team; match: Match; data: TeamData }) {
-  const { isAdmin, store, session, personName, toast } = useApp()
+  const { canManage, store, session, personName, toast } = useApp()
+  const isAdmin = canManage(team.id)
   const sheet = useSheet()
   const [confirm, setConfirm] = useState<'reopen' | 'complete' | null>(null)
   const [error, setError] = useState<string | null>(null)

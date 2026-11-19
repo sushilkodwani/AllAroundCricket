@@ -7,14 +7,19 @@ import { Avatar, Confirm, Empty, ErrorNote, NumberInput, Pill, Sheet, Toggle } f
 import { fmtDayMonth, money } from '../lib/dates'
 import { availableFor, isGuestIn, newDraft, saveDraft, submitExpenses } from '../lib/domain'
 import { carrySettlements, computeSplit, participantsOf, validateSplit } from '../lib/split'
-import { useApp, useTeam } from '../state/AppContext'
+import { P } from '../lib/paths'
+import { useApp, useFile, useTeam } from '../state/AppContext'
 import { navigate, useSheet } from '../state/router'
-import type { ExpenseLine } from '../types'
+import type { ExpenseCategoriesFile, ExpenseLine } from '../types'
 
 const shortCat = (name: string) => (name.length > 9 ? `${name.slice(0, 8)}…` : name)
 
 export function SplitExpenses({ teamId, matchId }: { teamId: string; matchId: string }) {
-  const { store, isAdmin, categories, personName, teams, toast } = useApp()
+  const { store, canManage, personName, teams, toast } = useApp()
+  const isAdmin = canManage(teamId)
+  const catFile = useFile<ExpenseCategoriesFile>(P.categories(teamId))
+  const catsReady = !!store?.has(P.categories(teamId))
+  const categories = useMemo(() => catFile?.categories ?? [], [catFile])
   const sheet = useSheet()
   const data = useTeam(teamId)
   const match = data.matches.find((m) => m.id === matchId)
@@ -30,11 +35,11 @@ export function SplitExpenses({ teamId, matchId }: { teamId: string; matchId: st
 
   // Start from the saved draft / submitted split, or a fresh draft from the categories.
   useEffect(() => {
-    if (lines !== null || !match || !data.ready) return
+    if (lines !== null || !match || !data.ready || (!match.expense && !catsReady)) return
     const start = match.expense ?? newDraft(match, categories)
     setLines(start.lines)
     setPayerIds(start.payerIds.filter((id) => match.squad.includes(id)))
-  }, [lines, match, data.ready, categories])
+  }, [lines, match, data.ready, categories, catsReady])
 
   const submitted = match?.expense?.status === 'submitted'
 
@@ -281,7 +286,7 @@ export function SplitExpenses({ teamId, matchId }: { teamId: string; matchId: st
               </button>
             ))}
           </div>
-          <p className="mt-3 text-xs text-muted">Manage categories in Settings → Expense categories.</p>
+          <p className="mt-3 text-xs text-muted">Manage categories from the team’s menu → Expense categories.</p>
         </Sheet>
       )}
 

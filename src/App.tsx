@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { NotifyPrompt } from './components/NotificationsCard'
 import { Screen, TabBar } from './components/Screen'
 import { Empty } from './components/ui'
+import { Admins } from './screens/Admins'
 import { CompleteMatch } from './screens/CompleteMatch'
 import { ExpenseCategories } from './screens/ExpenseCategories'
 import { Funds } from './screens/Funds'
@@ -99,6 +100,7 @@ export default function App() {
   else if (a === 'opponents' && b && !c) screen = <OpponentDetail opponentId={b} />
   else if (a === 'opponents' && b && c === 'scout' && !d) screen = <OpponentScout opponentId={b} />
   else if (a === 'teams' && b && c === 'year' && !d) screen = <YearSummary teamId={b} />
+  else if (a === 'teams' && b && c === 'categories' && !d) screen = <ExpenseCategories teamId={b} />
   else if (a === 'settings' && b === 'grounds') screen = <Grounds />
   else if (a === 'opponents' && b && c === 'players' && d && !e) screen = <OpponentPlayerStats opponentId={b} personId={d} />
   else if (a === 'tournaments' && !b) screen = <Tournaments />
@@ -107,7 +109,7 @@ export default function App() {
   else if (a === 'matches') screen = <Matches />
   else if (a === 'funds') screen = <Funds />
   else if (a === 'settings' && b === 'users') screen = <Users />
-  else if (a === 'settings' && b === 'categories') screen = <ExpenseCategories />
+  else if (a === 'settings' && b === 'admins') screen = <Admins />
   else if (a === 'settings') screen = <Settings />
   else screen = <Placeholder title="Not found" />
 

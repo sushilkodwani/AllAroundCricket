@@ -12,7 +12,8 @@ import { navigate, useSheet } from '../state/router'
 import type { ScoreFile, SideKey } from '../types'
 
 export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: string }) {
-  const { isAdmin, store, people, personName, toast, session } = useApp()
+  const { canManage, store, people, personName, toast, session } = useApp()
+  const isAdmin = canManage(teamId)
   const sheet = useSheet()
   const data = useTeam(teamId)
   const match = data.matches.find((m) => m.id === matchId)

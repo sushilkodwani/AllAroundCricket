@@ -1,22 +1,22 @@
 // Connecting to a data repo, first-time setup, and everything PIN-related
 // (PLAN §5). PIN writes are immediate and awaited — never debounced.
-import type { AppConfig, Credential, CredentialsFile, PeopleFile, Person } from '../types'
-import { credentialOf } from './access'
+import { DATA_SCHEMA, type AppConfig, type Credential, type CredentialsFile, type DeviceKey, type PeopleFile, type Person } from '../types'
+import { credentialOf, MAX_DEVICES } from './access'
 import { openCache } from './cache'
 import { nowStamp } from './dates'
-import { configOf, credsOf, peopleOf, seedCategories } from './domain'
+import { configOf, credsOf, peopleOf } from './domain'
 import { demoBackend, DEMO_OWNER } from './fakeBackend'
 import { describeRepoError, githubBackend, type Backend } from './github'
 import { P } from './paths'
 import { hashPhone, last4 } from './phone'
 import { generateRecoveryCode, hashPin, hashRecoveryCode, needsRehash, verifyPin, verifyRecoveryCode } from './pin'
-import { toB64, randomBytes } from './bytes'
+import { randomBytes, sha256, toB64 } from './bytes'
 import type { RepoRef } from './session'
 import { Store } from './store'
 import { uuid } from './uuid'
 
 /** The small files every launch needs. */
-export const CORE_PATHS = [P.config, P.people, P.creds, P.teams, P.categories, P.opponents, P.tournaments, P.grounds]
+export const CORE_PATHS = [P.config, P.admins, P.people, P.creds, P.teams, P.opponents, P.tournaments, P.grounds]
 
 /** On the dev server, owner "demo" selects a fake repo kept in this browser. */
 export const demoAvailable = import.meta.env.DEV
@@ -37,6 +37,11 @@ export async function openStore(ref: RepoRef): Promise<Store> {
   return store
 }
 
+export const OLD_DATA = 'This data repo was made by an older version of the app. The app owner needs to reset it and set the app up again.'
+
+/** True when the repo holds data in an older format, which this version does not read. */
+export const isOldData = (config: AppConfig | null) => !!config && config.schemaVersion !== DATA_SCHEMA
+
 /** Checks the token can write to the repo, then loads the core files. Throws a readable Error. */
 export async function connectRepo(ref: RepoRef): Promise<Store> {
   let canPush: boolean
@@ -52,6 +57,7 @@ export async function connectRepo(ref: RepoRef): Promise<Store> {
   } catch (e) {
     throw new Error(describeRepoError(e))
   }
+  if (isOldData(configOf(store))) throw new Error(OLD_DATA)
   return store
 }
 
@@ -61,6 +67,24 @@ export async function findPersonByPhone(store: Store, phone: string): Promise<Pe
   const phoneHash = await hashPhone(phone, config.phoneSalt)
   return peopleOf(store).find((p) => p.phoneHash === phoneHash)
 }
+
+// ---------- this phone's login key ----------
+/** What a phone keeps after logging in (besides repo and token). */
+export interface DeviceLogin {
+  sessionEpoch: number
+  deviceId: string
+  deviceSecret: string
+}
+
+/** A fresh login key: the secret stays on the phone, only its hash goes into the repo. */
+async function newDeviceKey(): Promise<{ key: DeviceKey; secret: string }> {
+  const secret = toB64(randomBytes(32))
+  return { key: { id: uuid(), hash: await sha256(secret), at: nowStamp() }, secret }
+}
+
+export const deviceHashOf = (secret: string) => sha256(secret)
+
+const withDevice = (c: Credential, key: DeviceKey): Credential => ({ ...c, devices: [...(c.devices ?? []), key].slice(-MAX_DEVICES) })
 
 async function writeOwnCredential(store: Store, personId: string, fn: (c: Credential) => Credential, message: string): Promise<Credential> {
   // Start from the newest copy so a PIN is never written over someone else's change.
@@ -75,20 +99,35 @@ async function writeOwnCredential(store: Store, personId: string, fn: (c: Creden
   return next
 }
 
-/** Sets a new PIN for the person. Returns their session epoch for the device to remember. */
-export async function setOwnPin(store: Store, personId: string, pin: string): Promise<number> {
+/** Sets a new PIN for the person and logs this phone in. */
+export async function setOwnPin(store: Store, personId: string, pin: string): Promise<DeviceLogin> {
   const hash = await hashPin(pin)
+  const device = await newDeviceKey()
   const now = nowStamp()
   const cred = await writeOwnCredential(
     store,
     personId,
     (c) => {
       const { resetAt: _x, resetBy: _y, ...keep } = c
-      return { ...keep, pin: hash, pinSetAt: now, updatedAt: now }
+      return withDevice({ ...keep, pin: hash, pinSetAt: now, updatedAt: now }, device.key)
     },
     'Set PIN',
   )
-  return cred.sessionEpoch
+  return { sessionEpoch: cred.sessionEpoch, deviceId: device.key.id, deviceSecret: device.secret }
+}
+
+/** After the right PIN: adds this phone to the person's logged-in phones. */
+export async function logInDevice(store: Store, personId: string): Promise<DeviceLogin> {
+  const device = await newDeviceKey()
+  const cred = await writeOwnCredential(store, personId, (c) => withDevice({ ...c, updatedAt: nowStamp() }, device.key), 'Log in on a phone')
+  return { sessionEpoch: cred.sessionEpoch, deviceId: device.key.id, deviceSecret: device.secret }
+}
+
+/** Log out: this phone's key stops working. Best effort — a phone offline at logout is simply forgotten later. */
+export async function forgetDevice(store: Store, personId: string, deviceId: string): Promise<void> {
+  const mine = credentialOf(credsOf(store), personId)
+  if (!mine?.devices?.some((d) => d.id === deviceId)) return
+  await writeOwnCredential(store, personId, (c) => ({ ...c, devices: (c.devices ?? []).filter((d) => d.id !== deviceId), updatedAt: nowStamp() }), 'Log out on a phone')
 }
 
 /** Checks a PIN against the stored hash; quietly re-hashes if the cost setting was raised since. */
@@ -105,28 +144,31 @@ export async function verifyOwnPin(store: Store, personId: string, pin: string):
 
 export async function changeOwnPin(store: Store, personId: string, currentPin: string, newPin: string): Promise<void> {
   if (!(await verifyOwnPin(store, personId, currentPin))) throw new Error('Current PIN is wrong.')
-  await setOwnPin(store, personId, newPin)
+  const hash = await hashPin(newPin)
+  const now = nowStamp()
+  await writeOwnCredential(store, personId, (c) => ({ ...c, pin: hash, pinSetAt: now, updatedAt: now }), 'Change PIN')
 }
 
-// ---------- first-time setup (admin, once per data repo) ----------
+// ---------- first-time setup (the super admin, once per data repo) ----------
 export const isSetUp = (store: Store) => !!configOf(store)
 
-export async function setupRepo(store: Store, input: { name: string; phone: string; pin: string }): Promise<{ personId: string; recoveryCode: string }> {
+export async function setupRepo(store: Store, input: { name: string; phone: string; pin: string }): Promise<DeviceLogin & { personId: string; recoveryCode: string }> {
   if (isSetUp(store)) throw new Error('This repo is already set up — use normal onboarding.')
   const now = nowStamp()
   const personId = uuid()
   const phoneSalt = toB64(randomBytes(16))
   const recoveryCode = generateRecoveryCode()
+  const device = await newDeviceKey()
 
   const config: AppConfig = {
-    schemaVersion: 1,
+    schemaVersion: DATA_SCHEMA,
     appName: 'AllAroundCricket',
-    adminPersonId: personId,
+    superAdminId: personId,
     phoneSalt,
-    adminRecovery: await hashRecoveryCode(recoveryCode),
+    recovery: await hashRecoveryCode(recoveryCode),
     createdAt: now,
   }
-  const admin: Person = {
+  const owner: Person = {
     id: personId,
     name: input.name.trim().replace(/\s+/g, ' ').slice(0, 40),
     phoneHash: await hashPhone(input.phone, phoneSalt),
@@ -137,21 +179,25 @@ export async function setupRepo(store: Store, input: { name: string; phone: stri
     createdAt: now,
     updatedAt: now,
   }
-  const people: PeopleFile = { schemaVersion: 1, people: [admin] }
+  const people: PeopleFile = { schemaVersion: 1, people: [owner] }
   const creds: CredentialsFile = {
     schemaVersion: 1,
-    credentials: [{ personId, pin: await hashPin(input.pin), pinSetAt: now, sessionEpoch: 1, updatedAt: now }],
+    credentials: [{ personId, pin: await hashPin(input.pin), pinSetAt: now, sessionEpoch: 1, devices: [device.key], updatedAt: now }],
   }
 
+  const msg = 'Set up AllAroundCricket'
   store.actor = { role: 'setup', personId }
-  store.write(P.config, config, 'Set up AllAroundCricket')
-  store.write(P.people, people, 'Set up AllAroundCricket')
-  store.write(P.creds, creds, 'Set up AllAroundCricket')
-  store.write(P.teams, { schemaVersion: 1, teams: [] }, 'Set up AllAroundCricket')
-  store.write(P.categories, { schemaVersion: 1, categories: seedCategories() }, 'Set up AllAroundCricket')
+  store.write(P.config, config, msg)
+  store.write(P.admins, { schemaVersion: 1, admins: [] }, msg)
+  store.write(P.people, people, msg)
+  store.write(P.creds, creds, msg)
+  store.write(P.teams, { schemaVersion: 1, teams: [] }, msg)
+  store.write(P.opponents, { schemaVersion: 1, opponents: [] }, msg)
+  store.write(P.grounds, { schemaVersion: 1, grounds: [] }, msg)
+  store.write(P.tournaments, { schemaVersion: 1, tournaments: [] }, msg)
   if (!(await store.flush())) throw new Error(store.status.error ?? 'Could not create the app files. Check your connection and try again.')
-  store.actor = { role: 'admin', personId }
-  return { personId, recoveryCode }
+  store.actor = { role: 'super', personId }
+  return { personId, recoveryCode, sessionEpoch: 1, deviceId: device.key.id, deviceSecret: device.secret }
 }
 
 /** Writes a fresh recovery code (the old one stops working). Returns the code to show once. */
@@ -159,21 +205,21 @@ async function rotateRecoveryCode(store: Store): Promise<string> {
   const config = configOf(store)
   if (!config) throw new Error('App data is not loaded yet.')
   const code = generateRecoveryCode()
-  await store.writeNow(P.config, { ...config, adminRecovery: await hashRecoveryCode(code), updatedAt: nowStamp() }, 'New admin recovery code')
+  await store.writeNow(P.config, { ...config, recovery: await hashRecoveryCode(code), updatedAt: nowStamp() }, 'New recovery code')
   return code
 }
 
-/** "Forgot admin PIN": the recovery code proves it's the admin, who then sets a new PIN. */
-export async function recoverAdminPin(store: Store, code: string, newPin: string): Promise<{ sessionEpoch: number; recoveryCode: string }> {
+/** "Forgot PIN" for the super admin: the recovery code proves who it is, who then sets a new PIN. */
+export async function recoverSuperPin(store: Store, code: string, newPin: string): Promise<DeviceLogin & { recoveryCode: string }> {
   const config = configOf(store)
   if (!config) throw new Error('App data is not loaded yet.')
-  if (!(await verifyRecoveryCode(code, config.adminRecovery))) throw new Error('That recovery code is not right.')
-  store.actor = { role: 'admin', personId: config.adminPersonId }
-  const sessionEpoch = await setOwnPin(store, config.adminPersonId, newPin)
-  return { sessionEpoch, recoveryCode: await rotateRecoveryCode(store) }
+  if (!(await verifyRecoveryCode(code, config.recovery))) throw new Error('That recovery code is not right.')
+  store.actor = { role: 'super', personId: config.superAdminId }
+  const login = await setOwnPin(store, config.superAdminId, newPin)
+  return { ...login, recoveryCode: await rotateRecoveryCode(store) }
 }
 
-export async function newRecoveryCode(store: Store, adminPersonId: string, currentPin: string): Promise<string> {
-  if (!(await verifyOwnPin(store, adminPersonId, currentPin))) throw new Error('Current PIN is wrong.')
+export async function newRecoveryCode(store: Store, personId: string, currentPin: string): Promise<string> {
+  if (!(await verifyOwnPin(store, personId, currentPin))) throw new Error('Current PIN is wrong.')
   return rotateRecoveryCode(store)
 }

@@ -14,8 +14,9 @@ const person = (id: string): Person => ({ id, name: id.toUpperCase(), access: 'v
 function setup(role: 'admin' | 'viewer' = 'admin') {
   const backend = fakeBackend()
   const store = new Store(backend, memoryKV(), 5)
-  store.actor = { role: 'admin', personId: 'p1' }
+  store.actor = { role: 'super', personId: 'p1' }
   store.write(P.people, { schemaVersion: 1, people: [person('p1'), person('p2')] }, 'seed')
+  store.actor = { role: 'admin', personId: 'p1' }
   const team = createTeam(store, { name: 'Royal Cricket Club', color: '#000' })
   store.actor = role === 'admin' ? { role: 'admin', personId: 'p1' } : { role: 'viewer', personId: 'p1' }
   return { backend, store, teamId: team.id }
