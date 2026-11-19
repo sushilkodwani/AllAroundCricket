@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { fmtDayMonth, money, todayISO } from '../lib/dates'
 import { completeMatch, isGuestIn, reopenMatch, settleShare, unsettleShare } from '../lib/domain'
+import { lineParts } from '../lib/split'
 import { useApp, type TeamData } from '../state/AppContext'
 import { navigate, useSheet } from '../state/router'
 import { METHOD_LABELS, type Match, type PayMethod, type PlayerShare, type Team } from '../types'
@@ -108,13 +109,14 @@ export function MatchMoney({ team, match, data }: { team: Team; match: Match; da
       <div className="card overflow-hidden">
         <div className="divide-y divide-line">
           {exp.lines.map((l) => {
-            const n = exp.payerIds.filter((id) => !l.excludedPersonIds.includes(id)).length
+            const { rest, own, left } = lineParts(l, exp.payerIds)
             return (
               <div key={l.categoryId} className="flex items-center justify-between px-4 py-2.5 text-sm">
                 <span>
                   {l.categoryName}
                   <span className="block text-xs text-muted">
-                    ÷ {n} · {money(Math.ceil(l.total / Math.max(1, n)))} each
+                    ÷ {rest.length} · {money(Math.ceil(Math.max(0, left) / Math.max(1, rest.length)))} each
+                    {own.length > 0 && ` · ${own.length} set separately`}
                   </span>
                 </span>
                 <span className="font-medium">{money(l.total)}</span>

@@ -174,6 +174,8 @@ export interface ExpenseLine {
   mode: CategoryMode // snapshot
   total: number
   excludedPersonIds: string[]
+  /** Players who pay their own amount for this line; the rest share what is left. */
+  fixed?: Record<string, number>
 }
 
 export interface PlayerShare {

@@ -694,7 +694,11 @@ export function setSquad(s: Store, teamId: string, matchId: string, squad: strin
         next.expense = {
           ...m.expense,
           payerIds: [...m.expense.payerIds.filter((id) => next.squad.includes(id)), ...added],
-          lines: m.expense.lines.map((l) => ({ ...l, excludedPersonIds: l.excludedPersonIds.filter((id) => next.squad.includes(id)) })),
+          lines: m.expense.lines.map((l) => {
+            const kept = { ...l, excludedPersonIds: l.excludedPersonIds.filter((id) => next.squad.includes(id)) }
+            if (l.fixed) kept.fixed = Object.fromEntries(Object.entries(l.fixed).filter(([id]) => next.squad.includes(id)))
+            return kept
+          }),
           updatedAt: nowStamp(),
         }
       }

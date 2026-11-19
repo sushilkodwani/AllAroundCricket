@@ -32,6 +32,8 @@ export function SplitExpenses({ teamId, matchId }: { teamId: string; matchId: st
   const [confirm, setConfirm] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const dirty = useRef(false)
+  const [picked, setPicked] = useState<{ categoryId: string; personId: string } | null>(null)
+  const [amountText, setAmountText] = useState('')
 
   // Start from the saved draft / submitted split, or a fresh draft from the categories.
   useEffect(() => {
@@ -107,12 +109,27 @@ export function SplitExpenses({ teamId, matchId }: { teamId: string; matchId: st
   function togglePayer(id: string) {
     change(lines!, payerIds.includes(id) ? payerIds.filter((p) => p !== id) : [...payerIds, id])
   }
-  function toggleExclude(categoryId: string, id: string) {
-    change(
-      lines!.map((l) =>
-        l.categoryId !== categoryId ? l : { ...l, excludedPersonIds: l.excludedPersonIds.includes(id) ? l.excludedPersonIds.filter((p) => p !== id) : [...l.excludedPersonIds, id] },
-      ),
-    )
+  function editLine(categoryId: string, fn: (l: ExpenseLine) => ExpenseLine) {
+    change(lines!.map((l) => (l.categoryId === categoryId ? fn(l) : l)))
+  }
+  const withoutFixed = (l: ExpenseLine, id: string) => {
+    if (!l.fixed) return l.fixed
+    const { [id]: _gone, ...keep } = l.fixed
+    return Object.keys(keep).length ? keep : undefined
+  }
+  /** Take the person out of this expense; the others share the rest. */
+  function removeFrom(categoryId: string, id: string) {
+    editLine(categoryId, (l) => ({ ...l, excludedPersonIds: [...l.excludedPersonIds, id], fixed: withoutFixed(l, id) }))
+  }
+  function addBack(categoryId: string, id: string) {
+    editLine(categoryId, (l) => ({ ...l, excludedPersonIds: l.excludedPersonIds.filter((p) => p !== id) }))
+  }
+  /** This person pays exactly this much; the others share what is left. */
+  function setOwnAmount(categoryId: string, id: string, amount: number) {
+    editLine(categoryId, (l) => ({ ...l, fixed: { ...l.fixed, [id]: amount } }))
+  }
+  function resetOwnAmount(categoryId: string, id: string) {
+    editLine(categoryId, (l) => ({ ...l, fixed: withoutFixed(l, id) }))
   }
 
   function submit(complete: boolean) {
@@ -169,7 +186,7 @@ export function SplitExpenses({ teamId, matchId }: { teamId: string; matchId: st
                       {l.categoryName}
                       {l.mode === 'mandatory' && <span className="text-bad" aria-label="required"> *</span>}
                     </span>
-                    <span className="block text-xs text-muted">{split ? `÷ ${split.participants} player${split.participants === 1 ? '' : 's'} · ${money(split.perHead)} each` : n === 0 && l.total > 0 ? 'Nobody is sharing this' : '—'}</span>
+                    <span className="block text-xs text-muted">{split ? `÷ ${split.participants} player${split.participants === 1 ? '' : 's'} · ${money(split.perHead)} each${Object.keys(l.fixed ?? {}).length ? ` · ${Object.keys(l.fixed ?? {}).length} set separately` : ''}` :n === 0 && l.total > 0 ? 'Nobody is sharing this' : '—'}</span>
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="text-muted">₹</span>
@@ -234,15 +251,19 @@ export function SplitExpenses({ teamId, matchId }: { teamId: string; matchId: st
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {live.map((l) => {
                           const out = l.excludedPersonIds.includes(id)
+                          const own = l.fixed?.[id] !== undefined
                           return (
                             <button
                               key={l.categoryId}
-                              className={`min-h-[32px] rounded-full border px-2.5 text-xs ${out ? 'border-line text-muted line-through' : 'border-chip-line bg-chip'}`}
-                              aria-pressed={!out}
-                              aria-label={`${l.categoryName} for ${personName(id)}: ${out ? 'excluded' : 'included'}`}
-                              onClick={() => toggleExclude(l.categoryId, id)}
+                              className={`min-h-[32px] rounded-full border px-2.5 text-xs ${out ? 'border-line text-muted line-through' : own ? 'border-accent bg-chip' : 'border-chip-line bg-chip'}`}
+                              aria-label={`${l.categoryName} for ${personName(id)}: ${out ? 'removed' : own ? 'set separately' : 'shared equally'}. Tap for options`}
+                              onClick={() => {
+                                setAmountText(String(share.byCategory[l.categoryId] ?? l.fixed?.[id] ?? ''))
+                                setPicked({ categoryId: l.categoryId, personId: id })
+                              }}
                             >
                               {shortCat(l.categoryName)} {out ? '' : money(share.byCategory[l.categoryId] ?? 0)}
+                              {own && !out ? ' ✎' : ''}
                             </button>
                           )
                         })}
@@ -268,6 +289,57 @@ export function SplitExpenses({ teamId, matchId }: { teamId: string; matchId: st
         {errors.length > 0 && <ErrorNote>{errors[0]}</ErrorNote>}
         <ErrorNote>{error}</ErrorNote>
       </div>
+
+      {picked && (() => {
+        const l = lines.find((x) => x.categoryId === picked.categoryId)
+        if (!l) return null
+        const id = picked.personId
+        const out = l.excludedPersonIds.includes(id)
+        const own = l.fixed?.[id] !== undefined
+        const close = () => setPicked(null)
+        const amount = Number(amountText)
+        const valid = amountText.trim() !== '' && Number.isInteger(amount) && amount >= 0 && amount <= l.total
+        return (
+          <Sheet title={`${l.categoryName} · ${personName(id)}`} onClose={close}>
+            {out ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-muted">{personName(id)} is not sharing {l.categoryName}.</p>
+                <button className="btn-primary" onClick={() => { addBack(l.categoryId, id); close() }}>
+                  Add back to this expense
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <span className="label">Update — what {personName(id)} pays for {l.categoryName}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted">₹</span>
+                    <NumberInput className="input flex-1" value={amountText} onChange={setAmountText} maxLength={7} placeholder="0" ariaLabel="Amount for this player" />
+                  </div>
+                  <p className="mt-1 text-xs text-muted">The rest of the {money(l.total)} is shared by everyone else in this expense.</p>
+                  <div className="mt-3 flex gap-2">
+                    <button className="btn-primary flex-1" disabled={!valid} onClick={() => { setOwnAmount(l.categoryId, id, amount); close() }}>
+                      Save amount
+                    </button>
+                    {own && (
+                      <button className="btn-secondary" onClick={() => { resetOwnAmount(l.categoryId, id); close() }}>
+                        Share equally
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <hr className="border-line" />
+                <div>
+                  <button className="btn-secondary w-full text-bad" onClick={() => { removeFrom(l.categoryId, id); close() }}>
+                    Remove {personName(id)} from this expense
+                  </button>
+                  <p className="mt-1 text-xs text-muted">Their part is shared by the others.</p>
+                </div>
+              </div>
+            )}
+          </Sheet>
+        )
+      })()}
 
       {sheet.name === 'addcat' && (
         <Sheet title="Add category" onClose={sheet.close}>

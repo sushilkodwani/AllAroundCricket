@@ -28,6 +28,18 @@ export interface SplitResult {
 
 export const participantsOf = (line: ExpenseLine, payerIds: string[]) => payerIds.filter((id) => !line.excludedPersonIds.includes(id))
 
+/**
+ * How one line divides: people with their own amount (e.g. who paid for a costly
+ * breakfast) pay exactly that; everyone else shares what is left of the total.
+ */
+export function lineParts(line: ExpenseLine, payerIds: string[]) {
+  const who = participantsOf(line, payerIds)
+  const own = who.filter((id) => (line.fixed?.[id] ?? -1) >= 0)
+  const rest = who.filter((id) => !own.includes(id))
+  const ownSum = own.reduce((s, id) => s + line.fixed![id], 0)
+  return { who, own, rest, ownSum, left: line.total - ownSum }
+}
+
 export function computeSplit({ lines, payerIds, available }: SplitInput): SplitResult {
   const byPerson = new Map<string, Record<string, number>>(payerIds.map((id) => [id, {}]))
   const perLine: Record<string, LineSplit> = {}
@@ -36,14 +48,15 @@ export function computeSplit({ lines, payerIds, available }: SplitInput): SplitR
 
   for (const line of lines) {
     if (!(line.total > 0)) continue
-    const who = participantsOf(line, payerIds)
+    const { who, own, rest, ownSum, left } = lineParts(line, payerIds)
     if (who.length === 0) continue // reported by validateSplit
-    // Round UP to the next rupee so everyone in a line pays the same.
-    const perHead = Math.ceil(line.total / who.length)
-    perLine[line.categoryId] = { participants: who.length, perHead }
+    // Round UP to the next rupee so everyone sharing a line pays the same.
+    const perHead = rest.length > 0 ? Math.ceil(Math.max(0, left) / rest.length) : 0
+    perLine[line.categoryId] = { participants: rest.length, perHead }
     total += line.total
-    roundingExtra += perHead * who.length - line.total
-    for (const id of who) byPerson.get(id)![line.categoryId] = perHead
+    roundingExtra += Math.max(0, ownSum + perHead * rest.length - line.total)
+    for (const id of own) byPerson.get(id)![line.categoryId] = line.fixed![id]
+    for (const id of rest) byPerson.get(id)![line.categoryId] = perHead
   }
 
   const shares: PlayerShare[] = payerIds.map((personId) => {
@@ -70,6 +83,10 @@ export function validateSplit(lines: ExpenseLine[], payerIds: string[]): string[
     else if (line.mode === 'mandatory' && line.total <= 0) errors.push(`${line.categoryName} is required.`)
     if (line.total > 0 && payerIds.length > 0 && participantsOf(line, payerIds).length === 0) {
       errors.push(`${line.categoryName}: nobody is sharing this — include at least one player.`)
+    } else if (line.total > 0 && payerIds.length > 0) {
+      const { rest, left } = lineParts(line, payerIds)
+      if (left < 0) errors.push(`${line.categoryName}: the amounts set for players add up to more than the total.`)
+      else if (rest.length === 0 && left > 0) errors.push(`${line.categoryName}: ₹${left} is not covered — change a player’s amount or add someone to share it.`)
     }
   }
   if (!errors.length && !lines.some((l) => l.total > 0)) errors.push('Enter at least one expense amount.')

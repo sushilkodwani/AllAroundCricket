@@ -372,6 +372,61 @@ export function ChoiceChips<T extends string>({ options, value, onChange }: { op
   )
 }
 
+/** A dropdown you can type into to narrow the list — for long player lists. */
+export function SearchSelect({ options, value, onChange, placeholder = 'Search…', ariaLabel }: { options: { value: string; label: string }[]; value: string | undefined; onChange: (v: string) => void; placeholder?: string; ariaLabel?: string }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const chosen = options.find((o) => o.value === value)
+  const shown = options.filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase()))
+  const pick = (v: string) => {
+    onChange(v)
+    setOpen(false)
+    setQ('')
+  }
+  return (
+    <div className="relative">
+      <input
+        className="input"
+        role="combobox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        autoComplete="off"
+        placeholder={chosen && !open ? chosen.label : placeholder}
+        value={open ? q : (chosen?.label ?? '')}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setQ(e.target.value)
+          setOpen(true)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && shown.length > 0) {
+            e.preventDefault()
+            pick(shown[0].value)
+          } else if (e.key === 'Escape') setOpen(false)
+        }}
+      />
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden>
+        ▾
+      </span>
+      {open && (
+        <>
+          <button type="button" tabIndex={-1} aria-label="Close list" className="fixed inset-0 z-10 cursor-default" onClick={() => setOpen(false)} />
+          <ul role="listbox" className="absolute left-0 right-0 z-20 mt-1 max-h-52 overflow-y-auto rounded-xl border border-line bg-surface shadow-lg">
+            {shown.map((o) => (
+              <li key={o.value} role="option" aria-selected={o.value === value}>
+                <button type="button" className={`flex min-h-[44px] w-full items-center px-3 text-left text-sm active:bg-alt ${o.value === value ? 'font-semibold text-brand' : 'text-ink'}`} onClick={() => pick(o.value)}>
+                  {o.label}
+                </button>
+              </li>
+            ))}
+            {shown.length === 0 && <li className="px-3 py-3 text-sm text-muted">No match</li>}
+          </ul>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function ErrorNote({ children }: { children: ReactNode }) {
   if (!children) return null
   return (

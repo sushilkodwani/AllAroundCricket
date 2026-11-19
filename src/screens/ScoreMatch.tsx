@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AwardsEditor } from '../components/Awards'
 import { AddPlayerSheet, BallChip, GroundMap, PressureStrip } from '../components/scoring'
 import { HeaderButton, Screen } from '../components/Screen'
-import { ChoiceChips, Confirm, Empty, Field, NumberInput, Pill, Segmented, Sheet, Toggle } from '../components/ui'
+import { ChoiceChips, Confirm, Empty, Field, NumberInput, Pill, SearchSelect, Segmented, Sheet, Toggle } from '../components/ui'
 import { addOpponentPlayers, setBatsLeft } from '../lib/domain'
 import { milestoneText, milestonesOf } from '../lib/insights'
 import { P } from '../lib/paths'
@@ -677,7 +677,7 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
         {fielderShown && (
           <div>
             <span className="label">{kind === 'run_out' ? 'Run out by' : KEEPER_KINDS.includes(kind!) ? 'Wicket-keeper' : 'Caught by'} (required)</span>
-            <ChoiceChips options={fielders.xi.map((id) => ({ value: id, label: personName(id) }))} value={chosenFielder} onChange={setFielder} />
+            <SearchSelect options={fielders.xi.map((id) => ({ value: id, label: personName(id) }))} value={chosenFielder} onChange={setFielder} placeholder="Search for a player" ariaLabel="Fielder" />
           </div>
         )}
         {(kind === 'caught' || kind === 'run_out') && (

@@ -567,14 +567,27 @@ function AnalysisTab({ file, summaries, lefties }: { file: ScoreFile; summaries:
             <div key={n} className="text-sm">
               <div className="flex justify-between gap-2">
                 <span className="min-w-0 truncate">
+                  <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'var(--series-1)' }} />
                   {personName(p.a)} <span className="text-muted">{p.aRuns} ({p.aBalls})</span>
                 </span>
                 <span className="min-w-0 truncate text-right">
                   {personName(p.b)} <span className="text-muted">{p.bRuns} ({p.bBalls})</span>
+                  <span className="ml-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'var(--series-2)' }} />
                 </span>
               </div>
               <div className="mt-1 flex items-center gap-2">
-                <span className="h-3 rounded-r" style={{ width: `${(p.runs / maxPair) * 100}%`, minWidth: 3, maxWidth: 'calc(100% - 76px)', background: `var(--series-${slot(idx)})` }} />
+                {/* One bar per partnership, split by who scored what; leftover runs are extras. */}
+                <span className="flex h-3 gap-0.5 overflow-hidden rounded-r" style={{ width: `${(p.runs / maxPair) * 100}%`, minWidth: 3, maxWidth: 'calc(100% - 76px)' }}>
+                  {[
+                    { n: p.aRuns, c: 'var(--series-1)' },
+                    { n: Math.max(0, p.runs - p.aRuns - p.bRuns), c: 'rgb(var(--border))' },
+                    { n: p.bRuns, c: 'var(--series-2)' },
+                  ]
+                    .filter((x) => x.n > 0)
+                    .map((x, k) => (
+                      <span key={k} style={{ flex: x.n, background: x.c }} />
+                    ))}
+                </span>
                 <span className="font-semibold">
                   {p.runs} ({p.balls}){p.unbroken ? '*' : ''}
                 </span>
