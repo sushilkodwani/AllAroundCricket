@@ -96,6 +96,19 @@ button {
   .input {
     @apply min-h-[44px] w-full rounded-xl border border-line bg-alt px-3 text-base text-ink outline-none placeholder:text-muted focus:border-brand;
   }
+  /* Date and time fields keep a built-in minimum width on phones and can poke out of their card. */
+  .input[type='date'],
+  .input[type='time'],
+  .input[type='datetime-local'] {
+    @apply block min-w-0 max-w-full appearance-none;
+    -webkit-appearance: none;
+  }
+  .input[type='date']::-webkit-date-and-time-value,
+  .input[type='time']::-webkit-date-and-time-value,
+  .input[type='datetime-local']::-webkit-date-and-time-value {
+    text-align: left;
+    min-width: 0;
+  }
   .label {
     @apply mb-1 block text-sm font-medium text-ink;
   }
