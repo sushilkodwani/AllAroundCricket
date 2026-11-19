@@ -7,6 +7,7 @@ import { ErrorNote, Field, PhoneInput } from '../components/ui'
 import { adminRecordOf, onboardStep } from '../lib/access'
 import { connectRepo, demoAvailable, findPersonByPhone, isSetUp, logInDevice, recoverSuperPin, setOwnPin, setupRepo, verifyOwnPin } from '../lib/connect'
 import { adminsOf, configOf, credsOf } from '../lib/domain'
+import { withKeyPrefix, withoutKeyPrefix } from '../lib/github'
 import { normalizePhone } from '../lib/phone'
 import { isWeakPin, verifyRecoveryCode } from '../lib/pin'
 import { clearPinFails, loadRepoRef, lockRemainingMs, registerPinFail, type RepoRef, type Session } from '../lib/session'
@@ -37,7 +38,8 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
   const repoFixed = !!envOwner && !!envRepo
   const [owner, setOwner] = useState(repoFixed ? envOwner : (saved?.owner ?? ''))
   const [repo, setRepo] = useState(repoFixed ? envRepo : (saved?.repo ?? ''))
-  const [token, setToken] = useState(saved?.token ?? '')
+  // The key is shown and typed without its common first part; the app adds it back (withKeyPrefix).
+  const [token, setToken] = useState(withoutKeyPrefix(saved?.token ?? ''))
   const [editRepo, setEditRepo] = useState(!saved)
   // The admin-setup link only appears once this repo has been seen to be empty.
   const [emptyRepo, setEmptyRepo] = useState(false)
@@ -61,7 +63,7 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
   const usedRecovery = useRef('')
   const pending = useRef<Session | null>(null)
 
-  const ref = (): RepoRef => ({ owner: owner.trim(), repo: repo.trim(), token: token.trim() })
+  const ref = (): RepoRef => ({ owner: owner.trim(), repo: repo.trim(), token: withKeyPrefix(token) })
 
   useEffect(() => {
     setError(null)
@@ -254,7 +256,7 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
                 </button>
               </div>
             ))}
-          <Field label="Access Key" hint={mode === 'join' ? 'Your team admin shares this with you.' : 'Fine-grained token for only the data repo, Contents: Read and write.'}>
+          <Field label="Access Key" hint={mode === 'join' ? 'Your team admin shares this with you.' : 'The access key for this app’s data store. You can leave out its common first part.'}>
             <input className="input" type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
           </Field>
           {demoAvailable && !repoFixed && <p className="text-xs text-muted">Dev server only: owner “demo” with any repo name and any key uses a fake repo stored in this browser.</p>}

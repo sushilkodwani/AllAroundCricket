@@ -1202,7 +1202,7 @@ export function saveGround(s: Store, input: Omit<Ground, 'id' | 'createdAt' | 'u
   if (all.some((g) => g.id !== input.id && g.name.toLowerCase() === name.toLowerCase())) throw new Error('A ground with this name already exists.')
   const mapUrl = input.mapUrl?.trim() || undefined
   if (mapUrl && !/^https:\/\/\S+$/.test(mapUrl)) throw new Error('The map link must start with https://')
-  if (/\d{10}/.test(`${input.contact ?? ''}${input.notes ?? ''}`.replace(/[\s-]/g, ''))) throw new Error('Don’t put a phone number here — everyone with the token can read it.')
+  if (/\d{10}/.test(`${input.contact ?? ''}${input.notes ?? ''}`.replace(/[\s-]/g, ''))) throw new Error('Don’t put a phone number here — everyone using the app can read it.')
   const now = nowStamp()
   const clean = { name, mapUrl, pitch: input.pitch, fee: input.fee && input.fee > 0 ? Math.round(input.fee) : undefined, contact: input.contact?.trim() || undefined, notes: input.notes?.trim() || undefined }
   const grounds = input.id ? all.map((g) => (g.id === input.id ? { ...g, ...clean, updatedAt: now } : g)) : [...all, { id: uuid(), ...clean, createdBy: actorId(s), createdAt: now, updatedAt: now }]

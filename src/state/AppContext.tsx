@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { checkSession, credentialOf, isAdminRole, roleOf, type Role } from '../lib/access'
 import { CORE_PATHS, createBackend, deviceHashOf, forgetDevice, isOldData, OLD_DATA, openStore } from '../lib/connect'
 import { adminsOf, configOf, credsOf, loadTeam, matchesOf, peopleOf, teamsOf } from '../lib/domain'
-import { describeRepoError } from '../lib/github'
+import { describeRepoError, withKeyPrefix } from '../lib/github'
 import { P } from '../lib/paths'
 import { disablePush } from '../lib/push'
 import { clearSession, forgetEverything, getPref, loadSession, saveSession, type Session } from '../lib/session'
@@ -255,11 +255,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const replaceToken = useCallback(
     async (token: string) => {
       if (!store || !session) return
-      const next = { ...session, token: token.trim() }
+      const next = { ...session, token: withKeyPrefix(token) }
       const backend = createBackend(next)
       try {
         const { canPush } = await backend.checkRepo()
-        if (!canPush) throw new Error('This token can read the repo but not write to it.')
+        if (!canPush) throw new Error('This access key can look but not save changes.')
       } catch (e) {
         throw new Error(describeRepoError(e))
       }

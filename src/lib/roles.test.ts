@@ -270,3 +270,23 @@ describe('write guard', () => {
     })
   })
 })
+
+import { describeRepoError, ApiError, withKeyPrefix, withoutKeyPrefix } from './github'
+
+describe('access key entry', () => {
+  it('adds the common first part, accepts a full key, drops stray spaces', () => {
+    expect(withKeyPrefix('11ABC_xyz')).toBe('github_pat_11ABC_xyz')
+    expect(withKeyPrefix('  11ABC_ xyz\n')).toBe('github_pat_11ABC_xyz')
+    expect(withKeyPrefix('github_pat_11ABC_xyz')).toBe('github_pat_11ABC_xyz')
+    expect(withKeyPrefix('ghp_classic123')).toBe('ghp_classic123')
+    expect(withKeyPrefix('   ')).toBe('')
+    expect(withoutKeyPrefix('github_pat_11ABC_xyz')).toBe('11ABC_xyz')
+    expect(withoutKeyPrefix(withKeyPrefix('11ABC_xyz'))).toBe('11ABC_xyz')
+  })
+  it('errors never repeat the service’s own wording', () => {
+    for (const status of [401, 403, 404, 422, 500]) {
+      const text = describeRepoError(new ApiError(status, 'Bad credentials / personal access token / GitHub'))
+      expect(text.toLowerCase()).not.toMatch(/github|personal access|bad credentials|token|repo\b/)
+    }
+  })
+})

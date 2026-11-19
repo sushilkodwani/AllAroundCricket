@@ -135,14 +135,33 @@ export function githubBackend(cfg: RepoConfig): Backend {
   }
 }
 
-/** Human message for an onboarding / token failure. */
+/**
+ * Everyone is given the access key without its first part: that part is the
+ * same for every key, so the app adds it. A full key pasted in works too
+ * (any of the usual prefixes is left alone). Spaces and line breaks are dropped.
+ */
+const KEY_PREFIX = 'github_pat_'
+const KNOWN_PREFIXES = [KEY_PREFIX, 'ghp_', 'gho_', 'ghu_', 'ghs_', 'ghr_']
+
+export function withKeyPrefix(input: string): string {
+  const key = input.replace(/\s+/g, '')
+  if (!key) return ''
+  return KNOWN_PREFIXES.some((p) => key.startsWith(p)) ? key : KEY_PREFIX + key
+}
+
+/** What to show back in a field: the key without its common first part. */
+export function withoutKeyPrefix(key: string): string {
+  return key.startsWith(KEY_PREFIX) ? key.slice(KEY_PREFIX.length) : key
+}
+
+/** Human message for an onboarding / access-key failure. Never repeats the service's own wording. */
 export function describeRepoError(e: unknown): string {
   if (e instanceof NetworkError) return 'No connection. Check your internet and try again.'
   if (e instanceof ApiError) {
-    if (e.status === 401) return 'The access token is wrong or has expired.'
-    if (e.status === 403) return 'The token is not allowed to use this repo (or the hourly limit was reached).'
-    if (e.status === 404) return 'Token or repo is wrong — the repo was not found with this token.'
-    return e.message
+    if (e.status === 401) return 'The access key isn’t working. It may be wrong or expired — ask your admin.'
+    if (e.status === 403) return 'The access key isn’t allowed to do this, or too many requests were made. Try again in a while.'
+    if (e.status === 404) return 'The access key or the data location is wrong.'
+    return `Something went wrong while talking to the data store (error ${e.status}). Try again.`
   }
   return (e as Error)?.message ?? 'Something went wrong.'
 }

@@ -106,7 +106,7 @@ function GroundSheet({ ground, onClose }: { ground?: Ground; onClose: () => void
         <Field label="Usual fee in ₹ (optional)">
           <NumberInput value={fee} onChange={setFee} maxLength={6} ariaLabel="Ground fee" />
         </Field>
-        <Field label="Contact person (optional)" hint="A name only. Phone numbers are never kept in the data repo.">
+        <Field label="Contact person (optional)" hint="A name only. Phone numbers are never stored in the app’s data.">
           <input className="input" value={contact} maxLength={40} onChange={(e) => setContact(e.target.value)} />
         </Field>
         <Field label="Notes (optional)">

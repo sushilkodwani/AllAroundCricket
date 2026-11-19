@@ -50,7 +50,7 @@ export async function connectRepo(ref: RepoRef): Promise<Store> {
   } catch (e) {
     throw new Error(describeRepoError(e))
   }
-  if (!canPush) throw new Error('This token can read the repo but not write to it. Ask your admin for the right token.')
+  if (!canPush) throw new Error('This access key can look but not save changes. Ask your admin for the right one.')
   const store = await openStore(ref)
   try {
     await store.refreshAll(CORE_PATHS)

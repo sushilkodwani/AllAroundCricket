@@ -88,7 +88,7 @@ export function Settings() {
               />
             }
           />
-          {!isSuper && <MenuRow label="Data repo" hint="Replace the access key on this device" onClick={() => sheet.open('repo')} />}
+          {!isSuper && <MenuRow label="Access key" hint="Replace the access key on this device" onClick={() => sheet.open('repo')} />}
           <button className="row font-medium text-bad active:bg-alt" onClick={() => setConfirmLogout(true)}>
             Log out
           </button>
@@ -186,11 +186,13 @@ export function Settings() {
       {sheet.name === 'profile' && me && <ProfileSheet person={me} onClose={sheet.close} />}
 
       {sheet.name === 'repo' && store && (
-        <Sheet title="Data repo" onClose={sheet.close}>
+        <Sheet title={isSuper ? "Data repo" : "Access key"} onClose={sheet.close}>
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-muted">
-              {session?.owner}/{session?.repo}
-            </p>
+            {isSuper && (
+              <p className="text-sm text-muted">
+                {session?.owner}/{session?.repo}
+              </p>
+            )}
             {isSuper && (
             <>
             <Field label="Access key expiry date" hint={`You’ll see a reminder from ${TOKEN_WARN_DAYS} days before this date.`}>
@@ -213,7 +215,7 @@ export function Settings() {
             <hr className="border-line" />
             </>
             )}
-            <Field label="Replace the access key on this device" hint="After a new key is created, enter it here.">
+            <Field label="Replace the access key on this device" hint="Enter the new key as your admin gave it to you.">
               <input className="input" type="password" value={newToken} onChange={(e) => setNewToken(e.target.value)} autoComplete="off"  />
             </Field>
             <ErrorNote>{tokenError}</ErrorNote>
@@ -234,7 +236,7 @@ export function Settings() {
                 }
               }}
             >
-              {busy ? 'Checking…' : 'Replace token'}
+              {busy ? 'Checking…' : 'Replace key'}
             </button>
           </div>
         </Sheet>
@@ -243,7 +245,7 @@ export function Settings() {
       {confirmLogout && (
         <Confirm
           title="Log out?"
-          message="This phone forgets the repo, the token and your login. You’ll need the token, your number and your PIN to come back."
+          message="This phone forgets the access key and your login. You’ll need the access key, your number and your PIN to come back."
           confirmLabel="Log out"
           danger
           onCancel={() => setConfirmLogout(false)}

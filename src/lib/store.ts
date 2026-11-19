@@ -11,7 +11,7 @@
 import type { AdminsFile, AppConfig, PeopleFile, TeamsFile } from '../types'
 import { canWrite, type Actor, type Lookup } from './access'
 import type { KV } from './cache'
-import { ApiError, NetworkError, type Backend } from './github'
+import { ApiError, describeRepoError, NetworkError, type Backend } from './github'
 import { mergeFile } from './merge'
 import { P } from './paths'
 
@@ -381,7 +381,7 @@ export class Store {
 
   private failFlush(err: unknown): false {
     this.noteFailure(err)
-    this.setStatus(err instanceof NetworkError ? { save: 'offline' } : { save: 'error', error: (err as Error).message })
+    this.setStatus(err instanceof NetworkError ? { save: 'offline' } : { save: 'error', error: describeRepoError(err) })
     this.schedule(RETRY_MS)
     return false
   }

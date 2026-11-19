@@ -71,7 +71,7 @@ export function Teams() {
       title="Teams"
       actions={
         <>
-          <HeaderButton label="Refresh from GitHub" onClick={() => void doRefresh()}>
+          <HeaderButton label="Refresh" onClick={() => void doRefresh()}>
             <RefreshIcon spinning={refreshing} />
           </HeaderButton>
           {isAdmin && (
