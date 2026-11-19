@@ -1,6 +1,6 @@
 // Before the first ball (PLAN §24.2): overs, both playing XIs, and the toss.
 import { useEffect, useMemo, useState } from 'react'
-import { AddPlayerSheet } from '../components/scoring'
+import { AddPlayerSheet, BulkPlayersSheet } from '../components/scoring'
 import { Screen } from '../components/Screen'
 import { Avatar, ChoiceChips, Empty, ErrorNote, Field, NumberInput, Pill } from '../components/ui'
 import { addOpponentPlayers, ensureOpponent, opponentsOf } from '../lib/domain'
@@ -41,6 +41,7 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
   const [extraOurs, setExtraOurs] = useState<string[]>([])
   const [wonBy, setWonBy] = useState<SideKey | undefined>()
   const [chose, setChose] = useState<'bat' | 'bowl' | undefined>()
+  const [captains, setCaptains] = useState<Partial<Record<SideKey, string>>>({})
   const [error, setError] = useState<string | null>(null)
 
   const oversValue = overs || (match?.overs ? String(match.overs) : '')
@@ -70,6 +71,11 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
   }
   const team = data.team
 
+  // A captain who is no longer in the XI is dropped; a one-player pick is the obvious choice only when asked.
+  const captainOf = (key: SideKey, xi: string[]) => (captains[key] && xi.includes(captains[key]!) ? captains[key] : undefined)
+  const homeCaptain = captainOf('home', ourXi)
+  const awayCaptain = captainOf('away', theirXi)
+
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
 
   // Everything the scorer still has to fill in before the first ball.
@@ -79,6 +85,8 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
     if (xi.length < 2) todo.push(`Pick the players for ${name} (at least 2)`)
     else if (xi.length > 11) todo.push(`${name}: ${xi.length} picked — a side plays 11 at most`)
   }
+  if (ourXi.length >= 2 && !homeCaptain) todo.push(`Pick the captain for ${team.name}`)
+  if (theirXi.length >= 2 && !awayCaptain) todo.push(`Pick the captain for ${match.opponent}`)
   if (!wonBy) todo.push('Toss: pick who won it')
   if (!chose) todo.push('Toss: pick bat or bowl')
   if (!opponent) todo.push('Waiting for the opponent team to load')
@@ -94,8 +102,8 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
         matchId,
         overs: Number(oversValue),
         opponentId: opponent.id,
-        home: { name: team.name, shortName: team.shortName, xi: ourXi },
-        away: { name: opponent.name, shortName: opponent.shortName, xi: theirXi },
+        home: { name: team.name, shortName: team.shortName, xi: ourXi, captainId: homeCaptain },
+        away: { name: opponent.name, shortName: opponent.shortName, xi: theirXi, captainId: awayCaptain },
         toss: { wonBy, chose },
       })
       navigate(`${base}/score`, { replace: true })
@@ -121,7 +129,7 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
     >
       <div className="flex flex-col gap-5 p-4">
         <p className="text-sm text-muted">
-          {team.shortName} vs {match.opponent}. Pick who is playing on both sides, record the toss, then start.
+          {team.shortName} vs {match.opponent}. Pick who is playing on both sides, tap C to choose each captain, record the toss, then start.
         </p>
 
         <Field label="Overs per innings">
@@ -134,9 +142,14 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
               <h2 className="section-title">
                 {side.name} — playing ({side.xi.length})
               </h2>
-              <button className="btn-ghost min-h-[36px]" onClick={() => sheet.open('addplayer', side.key)}>
-                + Add player
-              </button>
+              <div className="flex">
+                <button className="btn-ghost min-h-[36px]" onClick={() => sheet.open('addplayer', side.key)}>
+                  + Add player
+                </button>
+                <button className="btn-ghost min-h-[36px]" onClick={() => sheet.open('bulkplayers', side.key)}>
+                  Bulk add
+                </button>
+              </div>
             </div>
             {side.pool.length === 0 ? (
               <div className="card px-4 py-5 text-center text-sm text-muted">
@@ -147,13 +160,26 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
                 {side.pool.map((id) => {
                   const on = side.xi.includes(id)
                   const taken = side.key === 'away' && ourXi.includes(id)
+                  const isCaptain = captainOf(side.key, side.xi) === id
                   return (
-                    <button key={id} className="row active:bg-alt disabled:opacity-40" disabled={taken} aria-pressed={on} onClick={() => side.set(toggle(side.xi, id))}>
-                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-sm font-bold ${on ? 'border-brand bg-brand text-on-brand' : 'border-line'}`}>{on ? '✓' : ''}</span>
-                      <Avatar name={personName(id)} personId={id} color={side.color} size={32} />
-                      <span className="min-w-0 flex-1 truncate">{personName(id)}</span>
-                      <span className="text-xs text-muted">{taken ? 'in our XI' : maskPhone(byId.get(id)?.phoneLast4)}</span>
-                    </button>
+                    <div key={id} className="flex items-center">
+                      <button className="row min-w-0 flex-1 active:bg-alt disabled:opacity-40" disabled={taken} aria-pressed={on} onClick={() => side.set(toggle(side.xi, id))}>
+                        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-sm font-bold ${on ? 'border-brand bg-brand text-on-brand' : 'border-line'}`}>{on ? '✓' : ''}</span>
+                        <Avatar name={personName(id)} personId={id} color={side.color} size={32} />
+                        <span className="min-w-0 flex-1 truncate">{personName(id)}</span>
+                        <span className="text-xs text-muted">{taken ? 'in our XI' : maskPhone(byId.get(id)?.phoneLast4)}</span>
+                      </button>
+                      {on && (
+                        <button
+                          className={`mr-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${isCaptain ? 'border-brand bg-brand text-on-brand' : 'border-chip-line bg-chip text-ink'}`}
+                          aria-pressed={isCaptain}
+                          aria-label={`${isCaptain ? 'Captain' : 'Make captain'}: ${personName(id)}`}
+                          onClick={() => setCaptains((c) => ({ ...c, [side.key]: id }))}
+                        >
+                          C
+                        </button>
+                      )}
+                    </div>
                   )
                 })}
               </div>
@@ -207,6 +233,26 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
         <ErrorNote>{error}</ErrorNote>
       </div>
 
+      {sheet.name === 'bulkplayers' && (
+        <BulkPlayersSheet
+          title={`Bulk add players — ${sheet.arg === 'home' ? team.name : match.opponent}`}
+          onClose={sheet.close}
+          onAdded={(persons, existing) => {
+            const ids = persons.map((p) => p.id)
+            if (sheet.arg === 'home') {
+              setExtraOurs((x) => [...new Set([...x, ...ids])])
+              setOurs([...new Set([...ourXi, ...ids])])
+            } else if (opponent && store) {
+              const free = ids.filter((id) => !ourXi.includes(id))
+              if (free.length < ids.length) toast('Some players are in our XI, so they were left out')
+              addOpponentPlayers(store, opponent.id, free)
+              setTheirs([...new Set([...theirXi, ...free])])
+            }
+            toast(`${persons.length} player${persons.length === 1 ? '' : 's'} added${existing ? `, ${existing} already in the app` : ''}`)
+            sheet.close()
+          }}
+        />
+      )}
       {sheet.name === 'addplayer' && (
         <AddPlayerSheet
           title={`Add player — ${sheet.arg === 'home' ? team.name : match.opponent}`}

@@ -245,6 +245,7 @@ export function newScore(input: NewScoreInput): ScoreFile {
     if (side.xi.length < 2) throw new Error(`Pick at least 2 players for ${side.name}.`)
     if (side.xi.length > 11) throw new Error(`${side.name} has ${side.xi.length} players — a side plays 11 at most.`)
     if (new Set(side.xi).size !== side.xi.length) throw new Error(`A player is listed twice for ${side.name}.`)
+    if (side.captainId && !side.xi.includes(side.captainId)) throw new Error(`${side.name}: the captain must be in the playing XI.`)
   }
   if (input.home.xi.some((id) => input.away.xi.includes(id))) throw new Error('A player can’t be in both playing XIs.')
   const battingFirst = input.toss.chose === 'bat' ? input.toss.wonBy : other(input.toss.wonBy)

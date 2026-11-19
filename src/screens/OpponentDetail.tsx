@@ -2,7 +2,7 @@
 // its players' stats from those matches. Everyone can look; only the admin edits.
 import { useMemo, useState } from 'react'
 import { MatchRow } from '../components/match'
-import { AddPlayerSheet } from '../components/scoring'
+import { AddPlayerSheet, BulkPlayersSheet } from '../components/scoring'
 import { Screen } from '../components/Screen'
 import { batsText, RoleTag } from '../components/Profile'
 import { GroundMap } from '../components/scoring'
@@ -94,9 +94,14 @@ export function OpponentDetail({ opponentId }: { opponentId: string }) {
       {tab === 'players' && (
         <div className="flex flex-col gap-3 p-4">
           {isAdmin && (
-            <button className="btn-primary" onClick={() => sheet.open('addplayer')}>
-              + Add player
-            </button>
+            <div className="flex gap-2">
+              <button className="btn-primary flex-1" onClick={() => sheet.open('addplayer')}>
+                + Add player
+              </button>
+              <button className="btn-secondary" onClick={() => sheet.open('bulk')}>
+                Bulk add
+              </button>
+            </div>
           )}
           {players.length === 0 ? (
             <Empty icon="👥" title="No players saved" text={isAdmin ? 'Add them here, or when you start scoring a match against this team.' : 'Players appear once a match against this team is scored.'} />
@@ -174,6 +179,17 @@ export function OpponentDetail({ opponentId }: { opponentId: string }) {
         />
       )}
 
+      {sheet.name === 'bulk' && isAdmin && (
+        <BulkPlayersSheet
+          title={`Bulk add players — ${opponent.name}`}
+          onClose={sheet.close}
+          onAdded={(persons, existing) => {
+            addOpponentPlayers(store, opponent.id, persons.map((p) => p.id))
+            toast(`${persons.length} player${persons.length === 1 ? '' : 's'} added${existing ? `, ${existing} already in the app` : ''}`)
+            sheet.close()
+          }}
+        />
+      )}
       {sheet.name === 'addplayer' && isAdmin && (
         <AddPlayerSheet
           title={`Add player — ${opponent.name}`}

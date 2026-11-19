@@ -1,11 +1,12 @@
 // Pieces shared by the scoring setup, the scoring pad and the scorecard viewer.
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { findOrCreatePlayer } from '../lib/domain'
 import { pressureOf } from '../lib/insights'
-import { normalizePhone } from '../lib/phone'
+import { maskPhone, normalizePhone } from '../lib/phone'
 import { BATTER_POS, ballToken, ballTone, shotRegion, type BallTone } from '../lib/scorecard'
 import { useApp } from '../state/AppContext'
 import type { BallEvent, Person, ScoreFile } from '../types'
+import { parseBulk } from './PlayersTab'
 import { ErrorNote, Field, PhoneInput, Sheet } from './ui'
 
 const TONE: Record<BallTone, string> = {
@@ -78,6 +79,65 @@ export function AddPlayerSheet({ title, onClose, onAdded }: { title: string; onC
           {busy ? 'Checking…' : 'Add player'}
         </button>
       </form>
+    </Sheet>
+  )
+}
+
+/**
+ * Several players at once, one per line: a name then the 10-digit number. Numbers already in the app reuse
+ * that person. Used for opponent teams and the scoring set-up, where players are not team members.
+ */
+export function BulkPlayersSheet({ title, onClose, onAdded }: { title: string; onClose: () => void; onAdded: (persons: Person[], existing: number) => void }) {
+  const { store } = useApp()
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const lines = useMemo(() => parseBulk(text), [text])
+  const valid = lines.filter((l) => l.phone)
+
+  async function addAll() {
+    if (!store) return
+    setBusy(true)
+    setError(null)
+    const persons: Person[] = []
+    let existing = 0
+    try {
+      for (const line of valid) {
+        const r = await findOrCreatePlayer(store, line.name, line.phone!)
+        if (r.existed) existing++
+        if (!persons.some((p) => p.id === r.person.id)) persons.push(r.person)
+      }
+      onAdded(persons, existing)
+    } catch (e) {
+      setError((e as Error).message)
+      // Whoever was saved before the failure still counts.
+      if (persons.length) onAdded(persons, existing)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Sheet title={title} onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <Field label="One player per line" hint="Name followed by the 10-digit number. Numbers already in the app reuse that player.">
+          <textarea className="input min-h-[140px] py-2 font-mono text-sm" value={text} onChange={(e) => setText(e.target.value)} placeholder={'Rahul Sharma 9876543210\nVikram Rao 98765 43211'} />
+        </Field>
+        {lines.length > 0 && (
+          <div className="card divide-y divide-line overflow-hidden text-sm">
+            {lines.map((l, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
+                <span className="min-w-0 truncate">{l.name || l.raw}</span>
+                {l.phone ? <span className="shrink-0 text-ok">✓ {maskPhone(l.phone.slice(-4))}</span> : <span className="shrink-0 text-bad">{l.error}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+        <ErrorNote>{error}</ErrorNote>
+        <button className="btn-primary" disabled={busy || valid.length === 0} onClick={() => void addAll()}>
+          {busy ? 'Adding…' : `Add ${valid.length} valid player${valid.length === 1 ? '' : 's'}`}
+        </button>
+      </div>
     </Sheet>
   )
 }

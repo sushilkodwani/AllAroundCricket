@@ -196,6 +196,7 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
                         <span className="w-5 text-muted">{n + 1}</span>
                         <span className="min-w-0 flex-1 truncate">
                           {personName(id)}
+                          {file[k].captainId === id && ' (c)'}
                           {file[k].keeperId === id && ' †'}
                         </span>
                         <RoleTag person={people.find((p) => p.id === id)} />

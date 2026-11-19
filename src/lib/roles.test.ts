@@ -290,3 +290,75 @@ describe('access key entry', () => {
     }
   })
 })
+
+import { addExistingPlayer, lookupPlayer } from './domain'
+
+describe('an admin who is also a player', () => {
+  async function twoAdmins() {
+    const store = new Store(fakeBackend(), memoryKV(), 5)
+    store.actor = { role: 'setup', personId: 'boss' }
+    store.write(P.config, { schemaVersion: 2, appName: 'x', superAdminId: 'boss', phoneSalt: 'AAAAAAAAAAAAAAAAAAAAAA==', recovery: PIN, createdAt: '' }, 'seed')
+    store.write(P.admins, { schemaVersion: 1, admins: [] }, 'seed')
+    store.write(P.people, { schemaVersion: 1, people: [mk('boss', { teamIds: [], phoneHash: 'bosshash', phoneLast4: '0000' })] }, 'seed')
+    store.write(P.creds, { schemaVersion: 1, credentials: [cred('boss')] }, 'seed')
+    store.write(P.teams, { schemaVersion: 1, teams: [] }, 'seed')
+    store.actor = { role: 'super', personId: 'boss' }
+    const ravi = await addAdmin(store, 'Ravi', '9876543210')
+    const sam = await addAdmin(store, 'Sam', '9876543211')
+    store.actor = { role: 'admin', personId: sam.id }
+    const lions = createTeam(store, { name: 'Lions', color: '#000' })
+    store.actor = { role: 'admin', personId: ravi.id }
+    const tigers = createTeam(store, { name: 'Tigers', color: '#111' })
+    return { store, ravi, sam, lions, tigers }
+  }
+
+  it('another admin can be added to a team as a player, and keeps their own admin powers', async () => {
+    const { store, ravi, sam, lions, tigers } = await twoAdmins()
+    store.actor = { role: 'admin', personId: sam.id }
+    const found = await lookupPlayer(store, lions.id, '9876543210')
+    expect(found.kind).toBe('elsewhere') // already in the app (as an admin) — not a new person
+    addExistingPlayer(store, lions.id, ravi.id)
+    expect(membersOf(store, lions.id).find((m) => m.personId === ravi.id)?.status).toBe('active')
+    expect(peopleOf(store).find((p) => p.id === ravi.id)?.teamIds).toContain(lions.id)
+
+    // Ravi is still an admin: he runs Tigers, but only plays for Lions.
+    expect(roleOf(ravi.id, store.get<AppConfig>(P.config)!, peopleOf(store), adminsOf(store))).toBe('admin')
+    store.actor = { role: 'admin', personId: ravi.id }
+    addMatch(store, tigers.id, { date: '2026-01-10', time: '10:00', opponent: 'X', matchType: 'friendly' })
+    expect(matchesOf(store, tigers.id)).toHaveLength(1)
+    addMatch(store, lions.id, { date: '2026-01-11', time: '10:00', opponent: 'Y', matchType: 'friendly' })
+    expect(matchesOf(store, lions.id)).toHaveLength(0)
+  })
+
+  it('the team’s admin cannot change another admin’s details or PIN just because they play for the team', async () => {
+    const { store, ravi, sam, lions } = await twoAdmins()
+    store.actor = { role: 'admin', personId: sam.id }
+    addExistingPlayer(store, lions.id, ravi.id)
+    const before = store.get<{ people: Person[] }>(P.people)!
+    const renamed = { people: before.people.map((p) => (p.id === ravi.id ? { ...p, name: 'Renamed' } : p)) }
+    expect(canWrite({ role: 'admin', personId: sam.id }, P.people, before, renamed, store.lookup)).toBe(false)
+    const creds = store.get<{ credentials: Credential[] }>(P.creds)!
+    const reset = { credentials: creds.credentials.map((c) => (c.personId === ravi.id ? { ...c, pin: undefined, sessionEpoch: c.sessionEpoch + 1 } : c)) }
+    expect(canWrite({ role: 'admin', personId: sam.id }, P.creds, creds, reset, store.lookup)).toBe(false)
+  })
+
+  it('an admin can play in their own team, and the super admin can play in any team', async () => {
+    const { store, ravi, sam, lions, tigers } = await twoAdmins()
+    store.actor = { role: 'admin', personId: ravi.id }
+    addExistingPlayer(store, tigers.id, ravi.id) // Ravi in his own team
+    store.actor = { role: 'admin', personId: sam.id }
+    addExistingPlayer(store, lions.id, 'boss') // the super admin in Sam's team
+    expect(membersOf(store, tigers.id).some((m) => m.personId === ravi.id)).toBe(true)
+    expect(membersOf(store, lions.id).some((m) => m.personId === 'boss')).toBe(true)
+  })
+
+  it('taking them off the team does not delete the admin', async () => {
+    const { store, ravi, sam, lions } = await twoAdmins()
+    store.actor = { role: 'admin', personId: sam.id }
+    addExistingPlayer(store, lions.id, ravi.id)
+    const out = await deletePlayer(store, lions.id, ravi.id)
+    expect(out.personDeleted).toBe(false)
+    expect(peopleOf(store).some((p) => p.id === ravi.id)).toBe(true)
+    expect(adminsOf(store).some((a) => a.personId === ravi.id)).toBe(true)
+  })
+})
