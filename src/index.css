@@ -68,6 +68,15 @@ button {
   touch-action: manipulation;
 }
 
+@layer utilities {
+  /* A full-screen page that is exactly as tall as what is visible. iPhones count 100vh as the tallest the
+     screen can ever be (browser bars hidden), which made short pages scroll; dvh follows the real height. */
+  .min-h-app {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+}
+
 @layer components {
   .app-header {
     background: rgb(var(--header-bg));

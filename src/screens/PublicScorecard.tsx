@@ -20,7 +20,7 @@ export function PublicScorecard({ code }: { code: string }) {
   }, [code])
 
   return (
-    <div className="mx-auto min-h-screen max-w-2xl">
+    <div className="mx-auto min-h-app max-w-2xl">
       <header className="app-header pt-[env(safe-area-inset-top)]">
         <div className="flex min-h-[52px] items-center px-4">
           <h1 className="text-lg font-bold">🏏 All Around Cricket</h1>

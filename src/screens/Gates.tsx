@@ -9,7 +9,7 @@ import { useApp } from '../state/AppContext'
 
 function Shell({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
+    <div className="mx-auto flex min-h-app max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
       <div className="text-5xl" aria-hidden="true">
         {icon}
       </div>
@@ -21,7 +21,7 @@ function Shell({ icon, title, children }: { icon: string; title: string; childre
 
 export function Splash() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-3">
+    <div className="flex min-h-app flex-col items-center justify-center gap-3">
       <img src="./icon.svg" alt="" className="h-20 w-20 rounded-[22%]" />
       <p className="text-sm text-muted">Loading…</p>
     </div>
@@ -142,7 +142,7 @@ export function PinGate() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 px-6">
+    <div className="mx-auto flex min-h-app max-w-md flex-col items-center justify-center gap-2 px-6">
       <img src="./icon.svg" alt="" className="h-16 w-16 rounded-[22%]" />
       <h1 className="mt-2 text-lg font-semibold">Enter your PIN</h1>
       {me && <p className="text-sm text-muted">{me.name}</p>}

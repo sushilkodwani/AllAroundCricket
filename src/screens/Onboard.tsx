@@ -212,7 +212,7 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
   const locked = lockMs > 0
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col px-5 pb-10">
+    <div className="mx-auto flex min-h-app max-w-md flex-col px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       <Brand />
 
       {step === 'form' && (
@@ -361,7 +361,7 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
         </div>
       )}
 
-      <DevelopedBy className="mt-auto pt-10" />
+      <DevelopedBy className="mt-auto pt-6" />
     </div>
   )
 }

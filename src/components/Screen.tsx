@@ -39,7 +39,7 @@ export function Screen({
   footer?: ReactNode
 }) {
   return (
-    <div className="mx-auto min-h-screen max-w-2xl">
+    <div className="mx-auto min-h-app max-w-2xl">
       <header className="app-header sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
         <div className="flex min-h-[52px] items-center gap-1 px-2">
           {back ? (
