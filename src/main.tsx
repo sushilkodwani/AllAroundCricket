@@ -14,10 +14,12 @@ createRoot(document.getElementById('root')!).render(
   </ThemeProvider>,
 )
 
-// Dev server only: ?seed-showcase fills this browser with the intro's showcase club (src/dev). Not in builds.
-if (import.meta.env.DEV && new URLSearchParams(location.search).has('seed-showcase')) {
+// Dev server only: ?seed-showcase fills this browser with the intro's showcase club (src/dev), logged in
+// as a player; ?seed-showcase=super logs in as its super admin. Not in builds.
+const seedAs = import.meta.env.DEV ? new URLSearchParams(location.search).get('seed-showcase') : null
+if (import.meta.env.DEV && seedAs !== null) {
   void import('./dev/seedShowcase').then(async (m) => {
-    const r = await m.seedShowcase()
+    const r = await m.seedShowcase({ as: seedAs === 'super' ? 'super' : 'player' })
     document.title = `seeded ${r.results.length}`
     location.replace(`${location.pathname}#/teams`)
   })

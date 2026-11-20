@@ -3,6 +3,7 @@
 import type { Match, Person, Team } from '../types'
 import { METHOD_LABELS, ROLE_SHORT } from '../types'
 import { fmtDate, fmtTime, money } from './dates'
+import { track } from './usage'
 
 const SQUAD_SIZE = 11
 
@@ -72,6 +73,7 @@ export function expenseMessage(match: Match, team: Team, people: Person[]): stri
 
 /** Shares text through the phone's share sheet, or copies it where that is missing. */
 export async function shareMessage(text: string): Promise<'shared' | 'copied'> {
+  track('act.share')
   if (navigator.share) {
     await navigator.share({ text }).catch(() => {})
     return 'shared'

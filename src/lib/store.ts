@@ -14,6 +14,7 @@ import type { KV } from './cache'
 import { ApiError, describeRepoError, NetworkError, type Backend } from './github'
 import { mergeFile } from './merge'
 import { P } from './paths'
+import { isUsagePath, type Rate } from './usage'
 
 interface Entry {
   data: unknown
@@ -140,8 +141,19 @@ export class Store {
     return p
   }
 
+  /** Without a list: every file known, except usage counts (read only by the Usage screen). */
   async refreshAll(paths?: string[]): Promise<void> {
-    await Promise.all((paths ?? [...this.entries.keys()]).map((p) => this.refresh(p)))
+    await Promise.all((paths ?? [...this.entries.keys()].filter((p) => !isUsagePath(p))).map((p) => this.refresh(p)))
+  }
+
+  /** The hourly allowance right now (free to ask), or null when it can't be read. */
+  rateLimit(): Promise<Rate | null> {
+    return this.backend.rateLimit?.().catch(() => null) ?? Promise.resolve(null)
+  }
+
+  /** Has this file been checked against the repo since the app opened? */
+  isFresh(path: string): boolean {
+    return !!this.entries.get(path)?.fresh
   }
 
   private async doRefresh(path: string): Promise<void> {

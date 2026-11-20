@@ -1,6 +1,7 @@
 // Id-based 3-way merge (PLAN §6.10). Used when the remote copy of a file changed
 // since this device last read it: base = last read copy, local = this device's
 // edits, remote = what is in the repo now.
+import { isUsagePath, mergeUsage, type UsageFile } from './usage'
 
 type Rec = Record<string, unknown>
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
@@ -76,6 +77,8 @@ export function listSpecFor(path: string): ListSpec | null {
 export function mergeFile(path: string, base: unknown, local: unknown, remote: unknown): unknown {
   if (remote === null || remote === undefined) return local
   if (local === null || local === undefined) return remote
+  // Usage counts add up rather than replace each other.
+  if (isUsagePath(path)) return mergeUsage((base as UsageFile | null) ?? null, local as UsageFile, remote as UsageFile)
   const spec = listSpecFor(path)
   if (!spec) return mergeObjects(base as Rec | null, local as Rec, remote as Rec)
   const list = (file: unknown) => ((file as Rec | null)?.[spec.key] as Rec[] | undefined) ?? []

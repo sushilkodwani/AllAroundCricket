@@ -13,6 +13,7 @@ import { generateRecoveryCode, hashPin, hashRecoveryCode, needsRehash, verifyPin
 import { randomBytes, sha256, toB64 } from './bytes'
 import type { RepoRef } from './session'
 import { Store } from './store'
+import { countedDemo } from './usage'
 import { uuid } from './uuid'
 
 /** The small files every launch needs. */
@@ -25,7 +26,7 @@ const demos = new Map<string, Backend>()
 export function createBackend(ref: RepoRef): Backend {
   if (demoAvailable && ref.owner.trim().toLowerCase() === DEMO_OWNER) {
     const key = ref.repo.trim().toLowerCase()
-    if (!demos.has(key)) demos.set(key, demoBackend(key))
+    if (!demos.has(key)) demos.set(key, countedDemo(demoBackend(key)))
     return demos.get(key)!
   }
   return githubBackend(ref)

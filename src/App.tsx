@@ -6,7 +6,7 @@ import { Admins } from './screens/Admins'
 import { CompleteMatch } from './screens/CompleteMatch'
 import { ExpenseCategories } from './screens/ExpenseCategories'
 import { Funds } from './screens/Funds'
-import { BootError, NoAccess, PinGate, Splash, TokenGate } from './screens/Gates'
+import { BootError, Maintenance, NoAccess, PinGate, Splash, TokenGate } from './screens/Gates'
 import { SplitExpenses } from './screens/SplitExpenses'
 import { MatchDetail } from './screens/MatchDetail'
 import { Matches } from './screens/Matches'
@@ -30,6 +30,9 @@ import { Keys } from './screens/Keys'
 import { InstallGate, mustInstall } from './screens/InstallGate'
 import { Intro } from './screens/Intro'
 import { getPref, setPref } from './lib/session'
+import { featureOf, track } from './lib/usage'
+import { Usage } from './screens/Usage'
+import { LowAllowanceBar } from './components/LowAllowanceBar'
 import { useApp } from './state/AppContext'
 import { navigate, useRoute } from './state/router'
 
@@ -109,6 +112,13 @@ export default function App() {
     if (stray) navigate('/onboard', { replace: true })
   }, [stray])
 
+  // Usage counts: each screen (and tab) opened, once per visit.
+  const feature = phase === 'in' && !gate ? featureOf(route.segs, route.query) : null
+  const visit = feature ? `${route.path}|${feature}` : null
+  useEffect(() => {
+    if (visit && feature) track(feature)
+  }, [visit, feature])
+
   // Tapping a notification while the app is open: the service worker posts the
   // route to show (a closed app is simply opened at that URL).
   useEffect(() => {
@@ -128,6 +138,7 @@ export default function App() {
   if (phase === 'out') return <FirstRun mode={a === 'setup' ? 'setup' : 'join'} />
   if (gate === 'token') return <TokenGate />
   if (gate === 'no_access') return <NoAccess />
+  if (gate === 'paused') return <Maintenance />
   if (gate === 'locked') return <PinGate />
   if (home) return <Splash />
   // The app tour again, from Settings.
@@ -163,12 +174,14 @@ export default function App() {
   else if (a === 'settings' && b === 'users') screen = <Users />
   else if (a === 'settings' && b === 'admins') screen = <Admins />
   else if (a === 'settings' && b === 'keys') screen = <Keys />
+  else if (a === 'settings' && b === 'usage') screen = <Usage />
   else if (a === 'settings') screen = <Settings />
   else screen = <Placeholder title="Not found" />
 
   return (
     <>
       <MockBar />
+      <LowAllowanceBar />
       {screen}
       {tabs && <TabBar />}
       <NotifyPrompt />

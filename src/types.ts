@@ -21,6 +21,12 @@ export interface AppConfig {
   /** Recovery code of the super admin, for a forgotten PIN. */
   recovery: PinHash
   tokenExpiresOn?: string // YYYY-MM-DD
+  /**
+   * Hard stop: until this moment (ISO) nobody but the super admin can use the app. Set to when the
+   * hourly GitHub allowance starts afresh, so it ends by itself; the super admin can also end it early.
+   */
+  pausedUntil?: string
+  pausedBy?: string
   createdAt: string
   updatedAt?: string
 }

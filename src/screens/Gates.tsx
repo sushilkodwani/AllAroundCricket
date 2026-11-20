@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { PinPad } from '../components/PinPad'
 import { ErrorNote, Field } from '../components/ui'
 import { verifyOwnPin } from '../lib/connect'
+import { fmtDate, fmtTime, toISODate } from '../lib/dates'
 import { clearPinFails, lockRemainingMs, registerPinFail } from '../lib/session'
 import { useApp } from '../state/AppContext'
 
@@ -62,6 +63,40 @@ export function NoAccess() {
       </button>
       <button className="btn-primary w-full" onClick={switchNumber}>
         Use a different number
+      </button>
+    </Shell>
+  )
+}
+
+/** Hard stop by the super admin: nothing to do until the time shown (it lifts by itself). */
+export function Maintenance() {
+  const { pausedUntil, refresh } = useApp()
+  const [busy, setBusy] = useState(false)
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(t)
+  }, [])
+  const at = pausedUntil ? new Date(pausedUntil) : null
+  const time = at ? fmtTime(at.toTimeString().slice(0, 5)) : ''
+  const sameDay = at ? at.toDateString() === new Date(now).toDateString() : true
+  const mins = at ? Math.max(1, Math.ceil((at.getTime() - now) / 60_000)) : 0
+  return (
+    <Shell icon="🛠️" title="The app is under maintenance">
+      <p className="text-sm text-muted">
+        It will be back at <strong className="text-ink">{time}</strong>
+        {!sameDay && at ? ` on ${fmtDate(toISODate(at))}` : ''} (in about {mins} min). It opens again by itself; there’s no need to do anything.
+      </p>
+      <button
+        className="btn-secondary w-full"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true)
+          await refresh()
+          setBusy(false)
+        }}
+      >
+        {busy ? 'Checking…' : 'Check again'}
       </button>
     </Shell>
   )

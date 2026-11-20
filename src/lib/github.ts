@@ -1,6 +1,7 @@
 // GitHub REST "Contents" API client — the private data repo is the database.
 // Reads are conditional (ETag / If-None-Match): a 304 doesn't count toward the
 // 5,000 requests/hour limit that every phone shares through the one token.
+import { noteRate, noteRateHeaders, noteRequest, type Rate } from './usage'
 
 export interface RepoConfig {
   owner: string
@@ -38,6 +39,8 @@ export interface Backend {
   write(path: string, data: unknown, message: string, sha?: string): Promise<string>
   /** Deletes a file; `sha` must be its current blob sha. A file that is already gone is fine. */
   remove(path: string, message: string, sha: string): Promise<void>
+  /** The hourly allowance right now. Asking doesn't use any of it. */
+  rateLimit?(): Promise<Rate | null>
 }
 
 const API = 'https://api.github.com'
@@ -63,8 +66,9 @@ export function githubBackend(cfg: RepoConfig): Backend {
   const repoUrl = `${API}/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}`
 
   async function call(url: string, init: RequestInit = {}, extraHeaders: Record<string, string> = {}): Promise<Response> {
+    let res: Response
     try {
-      return await fetch(url, {
+      res = await fetch(url, {
         ...init,
         cache: 'no-store',
         headers: {
@@ -77,6 +81,10 @@ export function githubBackend(cfg: RepoConfig): Backend {
     } catch {
       throw new NetworkError()
     }
+    // Counted for the Usage screen; an unchanged file (304) doesn't use the allowance.
+    noteRequest(res.status === 304 ? 'free' : init.method && init.method !== 'GET' ? 'write' : 'read')
+    noteRateHeaders(res.headers)
+    return res
   }
 
   async function fail(res: Response): Promise<never> {
@@ -131,6 +139,21 @@ export function githubBackend(cfg: RepoConfig): Backend {
       const res = await call(`${repoUrl}/contents/${encodePath(path)}`, { method: 'DELETE', body: JSON.stringify({ message, sha }) })
       if (res.status === 404) return
       if (!res.ok) await fail(res)
+    },
+
+    async rateLimit() {
+      // GitHub doesn't count this one, so it is asked for directly (not through call()).
+      try {
+        const res = await fetch(`${API}/rate_limit`, { cache: 'no-store', headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' } })
+        if (!res.ok) return null
+        const core = ((await res.json()) as { resources?: { core?: { limit: number; remaining: number; reset: number } } }).resources?.core
+        if (!core) return null
+        const r: Rate = { limit: core.limit, remaining: core.remaining, resetAt: core.reset * 1000, at: Date.now() }
+        noteRate(r)
+        return r
+      } catch {
+        return null
+      }
     },
   }
 }

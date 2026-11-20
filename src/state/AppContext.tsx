@@ -5,17 +5,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { checkSession, credentialOf, isAdminRole, roleOf, type Role } from '../lib/access'
 import { CORE_PATHS, createBackend, deviceHashOf, forgetDevice, isOldData, OLD_DATA, openStore } from '../lib/connect'
-import { adminsOf, configOf, credsOf, loadTeam, matchesOf, peopleOf, teamsOf } from '../lib/domain'
+import { adminsOf, configOf, credsOf, loadTeam, matchesOf, pausedUntil, peopleOf, teamsOf } from '../lib/domain'
 import { describeRepoError, withKeyPrefix } from '../lib/github'
 import { P } from '../lib/paths'
 import { KEY_NOT_YOURS, keyFits, openPersonalKey } from '../lib/personalKey'
 import { disablePush } from '../lib/push'
 import { clearSession, forgetEverything, getPref, loadSession, saveSession, type Session } from '../lib/session'
 import type { Store, StoreStatus } from '../lib/store'
+import { noteOpen, setUsagePerson, syncDue } from '../lib/usage'
+import { syncUsage } from '../lib/usageSync'
 import type { AdminRecord, AppConfig, Credential, FundEntry, FundsFile, Match, MatchesFile, MembersFile, Membership, Person, Team } from '../types'
 
 export type Phase = 'boot' | 'out' | 'in' | 'error'
-export type Gate = null | 'no_access' | 'token' | 'locked'
+export type Gate = null | 'no_access' | 'token' | 'locked' | 'paused'
 
 interface ToastState {
   id: number
@@ -39,6 +41,8 @@ interface AppState {
   startMock: (personId: string) => void
   stopMock: () => void
   status: StoreStatus
+  /** Hard stop in force until this moment (ISO), or null. Everyone but the super admin sees Maintenance. */
+  pausedUntil: string | null
   config: AppConfig | null
   admins: AdminRecord[]
   people: Person[]
@@ -198,18 +202,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPhase('out')
   }, [check, store])
 
+  // ---------- hard stop (Settings → Usage): ends by itself at the set time ----------
+  const [clock, setClock] = useState(() => Date.now())
+  const paused = pausedUntil(config, clock)
+  useEffect(() => {
+    if (!config?.pausedUntil) return
+    const left = Date.parse(config.pausedUntil) - Date.now()
+    if (left <= 0) return
+    // Wake up when it ends (timers can't wait longer than ~24 days; a pause is never that long).
+    const t = setTimeout(() => setClock(Date.now()), Math.min(left + 500, 2 ** 31 - 1))
+    return () => clearTimeout(t)
+  }, [config?.pausedUntil])
+  // Paused for this person: the maintenance screen is all they get.
+  const pausedForMe = !!paused && realRole !== 'super'
+
   const status = store?.status ?? IDLE
   const pinOnOpen = getPref('pinOnOpen', false)
   const gate: Gate =
-    phase !== 'in' ? null : status.authFailed ? 'token' : check === 'no_access' ? 'no_access' : pinOnOpen && !unlocked && !!credentialOf(creds, session?.personId ?? '')?.pin ? 'locked' : null
+    phase !== 'in'
+      ? null
+      : status.authFailed
+        ? 'token'
+        : check === 'no_access'
+          ? 'no_access'
+          : pausedForMe
+            ? 'paused'
+            : pinOnOpen && !unlocked && !!credentialOf(creds, session?.personId ?? '')?.pin
+              ? 'locked'
+              : null
 
   // ---------- lifecycle: refresh on resume, flush on hide, retry when online ----------
   const lastRefresh = useRef(0)
   const refresh = useCallback(async () => {
     if (!store) return
     lastRefresh.current = Date.now()
-    await store.refreshAll().catch(() => {})
-  }, [store])
+    // While paused only the app settings are checked (free when unchanged), to learn when it is back.
+    await store.refreshAll(pausedForMe ? [P.config] : undefined).catch(() => {})
+  }, [store, pausedForMe])
+
+  // While paused, check every two minutes whether the super admin ended it early.
+  useEffect(() => {
+    if (!store || !pausedForMe) return
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') void store.refresh(P.config).catch(() => {})
+    }, 120_000)
+    return () => clearInterval(t)
+  }, [store, pausedForMe])
+
+  // When a pause ends, bring everything up to date again.
+  const wasPaused = useRef(false)
+  useEffect(() => {
+    if (wasPaused.current && !pausedForMe && store) void store.refreshAll().catch(() => {})
+    wasPaused.current = pausedForMe
+  }, [pausedForMe, store])
 
   useEffect(() => {
     if (!store || phase !== 'in') return
@@ -230,6 +275,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('pagehide', onHide)
     }
   }, [store, phase, refresh])
+
+  // ---------- usage counts for the super admin's Usage screen (lib/usage.ts) ----------
+  // Always the person really logged in on this phone, also while the super admin acts as an admin.
+  const usageId = phase === 'in' && check === 'ok' ? session?.personId : undefined
+  const deviceId = session?.deviceId
+  useEffect(() => {
+    setUsagePerson(usageId ?? null)
+  }, [usageId])
+  useEffect(() => {
+    // Nothing is sent while the app is paused.
+    if (!store || !usageId || !deviceId || pausedForMe) return
+    const sync = (flush: boolean) => void syncUsage(store, usageId, deviceId).then((ok) => (ok && flush ? store.flush() : ok))
+    noteOpen()
+    // Once a day, when the app is opened (a moment after the app's own files have loaded)…
+    const first = setTimeout(() => syncDue(usageId, 'open') && sync(false), 5000)
+    let hiddenAt = 0
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now()
+        // …or when it goes to the background, if it has been open for hours.
+        if (syncDue(usageId, 'hide')) sync(true)
+      } else if (hiddenAt && Date.now() - hiddenAt > 30 * 60_000) {
+        noteOpen()
+        if (syncDue(usageId, 'open')) sync(false)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      clearTimeout(first)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [store, usageId, deviceId, pausedForMe])
 
   // ---------- actions ----------
   const login = useCallback((s: Store, next: Session) => {
@@ -331,6 +408,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     startMock,
     stopMock,
     status,
+    pausedUntil: paused,
     config,
     admins,
     people,

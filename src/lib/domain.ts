@@ -44,6 +44,7 @@ import { hashPhone, last4 } from './phone'
 import { carrySettlements, computeSplit, validateSplit, type ReopenedShare } from './split'
 import { canMarkComplete, computeTeamStats, emptyStats } from './stats'
 import type { Store } from './store'
+import { track } from './usage'
 import { uuid } from './uuid'
 
 // ---------- typed readers ----------
@@ -1135,6 +1136,25 @@ export function updateConfig(s: Store, patch: Partial<Pick<AppConfig, 'tokenExpi
   s.write(P.config, { ...config, ...patch, updatedAt: nowStamp() }, 'Update app settings')
 }
 
+/** Is the app paused (hard stop) at this moment? Ends by itself once the time has passed. */
+export const pausedUntil = (config: AppConfig | null, now = Date.now()): string | null =>
+  config?.pausedUntil && Date.parse(config.pausedUntil) > now ? config.pausedUntil : null
+
+/** Hard stop (super admin): nobody else can use the app until `until`. Saved straight away. */
+export async function pauseApp(s: Store, until: Date, by: string): Promise<void> {
+  const config = configOf(s)
+  if (!config) throw new Error('App data is not loaded yet.')
+  await s.writeNow(P.config, { ...config, pausedUntil: until.toISOString(), pausedBy: by, updatedAt: nowStamp() }, 'Pause the app until the request limit resets')
+}
+
+/** Ends a hard stop early. */
+export async function resumeApp(s: Store): Promise<void> {
+  const config = configOf(s)
+  if (!config) throw new Error('App data is not loaded yet.')
+  const { pausedUntil: _u, pausedBy: _b, ...rest } = config
+  await s.writeNow(P.config, { ...rest, updatedAt: nowStamp() }, 'Resume the app')
+}
+
 /** The team's "Low balance" line in Funds (each admin sets their own). */
 export const lowBalanceThreshold = (s: Store, teamId: string) => teamsOf(s).find((t) => t.id === teamId)?.lowBalanceThreshold ?? 500
 export const today = todayISO
@@ -1147,6 +1167,7 @@ export function setAvailability(s: Store, teamId: string, matchId: string, perso
   const id = `${matchId}:${personId}`
   const rest = availabilityOf(s, teamId).filter((e) => e.id !== id)
   const entries: AvailabilityEntry[] = status ? [...rest, { id, matchId, personId, status, updatedAt: nowStamp() }] : rest
+  track('act.availability')
   return s.write(P.availability(teamId), { schemaVersion: 1, entries }, `Availability: ${personName(s, personId)} is ${status ?? 'undecided'}`)
 }
 

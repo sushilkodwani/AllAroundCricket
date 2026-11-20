@@ -141,6 +141,9 @@ const list = <T>(file: unknown, key: string): T[] => ((file as Record<string, T[
 export function canWrite(actor: Actor, path: string, before: unknown, after: unknown, look: Lookup = NO_LOOKUP): boolean {
   if (actor.role === 'super' || actor.role === 'setup') return true
   if ((actor.role !== 'viewer' && actor.role !== 'admin') || !actor.personId) return false
+  // Usage counts: everyone adds to their own file (the super admin's too while acting as an admin).
+  const usage = path.match(/^usage\/\d{4}-\d{2}\/([^/]+)\.json$/)
+  if (usage) return (usage[1] === actor.personId || usage[1] === actor.viaId) && (after as { personId?: string } | null)?.personId === usage[1]
   const me = actor.personId
   if (ownMayWrite(me, path, before, after)) return true
   if (actor.role === 'admin' && adminMayWrite(me, path, before, after, look)) return true

@@ -29,6 +29,7 @@ import { suggestAwards } from '../lib/insights'
 import { saveScore, startScoring } from '../lib/scoreDomain'
 import { addBall, bowlerBlock, isFreeHit, outIds, previousOverBowler, setCrease, startSecondInnings, type BallInput } from '../lib/scoring'
 import type { Store } from '../lib/store'
+import { seedUsage } from './seedUsage'
 import type { BowlStyle, ExpenseLine, Innings, PlayerRole, ScoreFile, SideKey, WicketKind } from '../types'
 
 const REPO = { owner: 'demo', repo: 'showcase', token: 'demo-token' }
@@ -230,7 +231,7 @@ function playInnings(file: ScoreFile, bat: SideInfo, bowl: SideInfo, stopAfterOv
 }
 
 // ---------- the season ----------
-export async function seedShowcase(): Promise<{ playerName: string; matches: number; results: string[] }> {
+export async function seedShowcase(opts: { as?: 'player' | 'super' } = {}): Promise<{ playerName: string; matches: number; results: string[] }> {
   // Start clean: the fake repo and this browser's cached copy of it.
   localStorage.removeItem('aac.demo.showcase')
   ;(createBackend(REPO) as FakeBackend).files.clear()
@@ -380,12 +381,17 @@ export async function seedShowcase(): Promise<{ playerName: string; matches: num
 
   if (!(await store.flush())) throw new Error('Could not save the showcase data')
 
+  // Two months of app usage, for the super admin's Usage screen.
+  await seedUsage(store, [{ id: owner.personId, name: SUPER.name, super: true }, ...CLUB.map((p, i) => ({ id: ids[i], name: p.name }))])
+
   // The screenshots are taken as a player: Aarav Mehta sets a PIN and logs this browser in.
+  // With { as: 'super' } this browser is logged in as the super admin instead.
   const aarav = byName('Aarav Mehta')
   store.actor = { role: 'viewer', personId: aarav }
   const device = await setOwnPin(store, aarav, pin)
   await store.flush()
-  localStorage.setItem('aac.session', JSON.stringify({ ...REPO, personId: aarav, ...device }))
+  const login = opts.as === 'super' ? { personId: owner.personId, sessionEpoch: owner.sessionEpoch, deviceId: owner.deviceId, deviceSecret: owner.deviceSecret } : { personId: aarav, ...device }
+  localStorage.setItem('aac.session', JSON.stringify({ ...REPO, ...login }))
   localStorage.setItem('aac.repo', JSON.stringify(REPO))
   return { playerName: 'Aarav Mehta', matches: fixtures.length + 2, results }
 }

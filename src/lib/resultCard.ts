@@ -4,6 +4,7 @@
 import type { ScoreFile } from '../types'
 import { summarize, type InningsSummary } from './scorecard'
 import { battingSide, oversText } from './scoring'
+import { track } from './usage'
 
 const W = 1080
 const H = 1350
@@ -93,6 +94,7 @@ export function drawResultCard(file: ScoreFile, nameOf: (id: string) => string, 
 
 /** Shares the card as a photo where the phone supports it; otherwise downloads it. */
 export async function shareResultCard(canvas: HTMLCanvasElement, filename: string, caption: string): Promise<'shared' | 'downloaded'> {
+  track('act.share')
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
   if (!blob) throw new Error('Could not create the image.')
   const file = new File([blob], filename, { type: 'image/png' })

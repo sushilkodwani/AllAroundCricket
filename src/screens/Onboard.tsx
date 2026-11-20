@@ -6,7 +6,8 @@ import { PinPad } from '../components/PinPad'
 import { ErrorNote, Field, PhoneInput } from '../components/ui'
 import { adminRecordOf, onboardStep } from '../lib/access'
 import { connectRepo, demoAvailable, findPersonByPhone, isSetUp, logInDevice, recoverSuperPin, setOwnPin, setupRepo, verifyOwnPin } from '../lib/connect'
-import { adminsOf, configOf, credsOf } from '../lib/domain'
+import { adminsOf, configOf, credsOf, pausedUntil } from '../lib/domain'
+import { fmtTime } from '../lib/dates'
 import { withKeyPrefix, withoutKeyPrefix } from '../lib/github'
 import { KEY_NOT_YOURS, keyFits, openPersonalKey, type OpenedKey } from '../lib/personalKey'
 import { normalizePhone } from '../lib/phone'
@@ -138,6 +139,12 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
       if (personal ? !(await keyFits(personal, found.phoneHash)) : configOf(s)!.superAdminId !== found.id) {
         await s.clear()
         throw new Error(KEY_NOT_YOURS)
+      }
+      // Hard stop: only the super admin may log in until it ends.
+      const paused = pausedUntil(configOf(s))
+      if (paused && configOf(s)!.superAdminId !== found.id) {
+        await s.clear()
+        throw new Error(`The app is under maintenance. It will be back at ${fmtTime(new Date(paused).toTimeString().slice(0, 5))}; log in then.`)
       }
       person.current = found
       setStep(next)

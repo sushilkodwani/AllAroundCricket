@@ -125,6 +125,7 @@ export function Settings() {
           <>
             <Section title="Super admin">
               <MenuRow label="Admins" hint={`${activeAdmins} active · add, suspend, hand over teams`} onClick={() => navigate('/settings/admins')} />
+              <MenuRow label="Usage" hint="Requests left this hour, who uses what" onClick={() => navigate('/settings/usage')} />
               <MenuRow
                 label="Data repo"
                 hint={config?.tokenExpiresOn ? `Access key expires ${fmtDate(config.tokenExpiresOn)}` : 'Access key expiry date not set'}
