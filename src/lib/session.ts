@@ -5,6 +5,8 @@ export interface RepoRef {
   owner: string
   repo: string
   token: string
+  /** The personal key as it was typed (the repo key mixed with this person's number). */
+  personalKey?: string
 }
 
 export interface Session extends RepoRef {
@@ -49,7 +51,7 @@ export function clearSession(): void {
 export const loadRepoRef = () => read<RepoRef>(REPO_KEY)
 
 export function saveRepoRef(r: RepoRef): void {
-  localStorage.setItem(REPO_KEY, JSON.stringify({ owner: r.owner, repo: r.repo, token: r.token }))
+  localStorage.setItem(REPO_KEY, JSON.stringify({ owner: r.owner, repo: r.repo, token: r.token, personalKey: r.personalKey }))
 }
 
 export function forgetEverything(): void {

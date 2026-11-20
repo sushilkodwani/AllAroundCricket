@@ -8,6 +8,7 @@ import { CORE_PATHS, createBackend, deviceHashOf, forgetDevice, isOldData, OLD_D
 import { adminsOf, configOf, credsOf, loadTeam, matchesOf, peopleOf, teamsOf } from '../lib/domain'
 import { describeRepoError, withKeyPrefix } from '../lib/github'
 import { P } from '../lib/paths'
+import { KEY_NOT_YOURS, keyFits, openPersonalKey } from '../lib/personalKey'
 import { disablePush } from '../lib/push'
 import { clearSession, forgetEverything, getPref, loadSession, saveSession, type Session } from '../lib/session'
 import type { Store, StoreStatus } from '../lib/store'
@@ -64,6 +65,7 @@ interface AppState {
   /** Keep repo + token, forget who is logged in. */
   switchNumber: () => void
   unlock: () => void
+  /** A personal key needs the person's own number; the super admin may also use the plain key. */
   replaceToken: (token: string) => Promise<void>
   refresh: () => Promise<void>
   retryBoot: () => void
@@ -275,9 +277,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const replaceToken = useCallback(
-    async (token: string) => {
+    async (input: string) => {
       if (!store || !session) return
-      const next = { ...session, token: withKeyPrefix(token) }
+      let token: string
+      let personalKey: string | undefined
+      // The person is known here, so their key is checked against their own stored number.
+      const mine = people.find((x) => x.id === session.personId)
+      const opened = await openPersonalKey(input)
+      if (opened && (await keyFits(opened, mine?.phoneHash))) {
+        token = opened.token
+        personalKey = opened.personalKey
+      } else if (realRole === 'super') {
+        token = withKeyPrefix(input)
+      } else {
+        throw new Error('This key isn’t yours. Ask the super admin for your new personal key.')
+      }
+      const next = { ...session, token, personalKey }
       const backend = createBackend(next)
       try {
         const { canPush } = await backend.checkRepo()
@@ -290,7 +305,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       store.setBackend(backend)
       await store.refreshAll(CORE_PATHS).catch(() => {})
     },
-    [store, session],
+    [store, session, people, realRole],
   )
 
   const startMock = useCallback((personId: string) => setMockId(personId), [])

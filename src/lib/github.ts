@@ -141,7 +141,7 @@ export function githubBackend(cfg: RepoConfig): Backend {
  * (any of the usual prefixes is left alone). Spaces and line breaks are dropped.
  */
 const KEY_PREFIX = 'github_pat_'
-const KNOWN_PREFIXES = [KEY_PREFIX, 'ghp_', 'gho_', 'ghu_', 'ghs_', 'ghr_']
+export const KNOWN_PREFIXES = [KEY_PREFIX, 'ghp_', 'gho_', 'ghu_', 'ghs_', 'ghr_']
 
 export function withKeyPrefix(input: string): string {
   const key = input.replace(/\s+/g, '')

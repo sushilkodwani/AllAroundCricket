@@ -2,6 +2,7 @@
 // admin by mobile number, suspending / restoring, handing teams to another
 // admin, PIN resets, and an overview of the whole app.
 import { useState } from 'react'
+import { PersonalKeyShare } from '../components/KeyShare'
 import { Screen } from '../components/Screen'
 import { Avatar, Confirm, Empty, ErrorNote, Field, MenuRow, PhoneInput, Pill, Sheet } from '../components/ui'
 import { credentialOf } from '../lib/access'
@@ -10,7 +11,7 @@ import { addAdmin, removeAdmin, resetPin, setAdminStatus, transferTeam } from '.
 import { maskPhone, normalizePhone } from '../lib/phone'
 import { useApp } from '../state/AppContext'
 import { navigate, useSheet } from '../state/router'
-import type { AdminRecord, Team } from '../types'
+import type { AdminRecord, Person, Team } from '../types'
 import { pinStatus } from './Users'
 
 export function Admins() {
@@ -126,6 +127,7 @@ function AddAdminSheet({ onClose }: { onClose: () => void }) {
   const { store, toast } = useApp()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [added, setAdded] = useState<{ person: Person; phone: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -137,12 +139,26 @@ function AddAdminSheet({ onClose }: { onClose: () => void }) {
     try {
       const person = await addAdmin(store!, name, p.phone)
       toast(`${person.name} is now an admin`)
-      onClose()
+      setAdded({ person, phone: p.phone })
     } catch (e) {
       setError((e as Error).message)
     } finally {
       setBusy(false)
     }
+  }
+
+  if (added) {
+    return (
+      <Sheet title="Admin added" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          <p className="rounded-xl bg-ok/15 px-3 py-2 text-sm text-ok">{added.person.name} is now an admin. Send them their personal access key.</p>
+          <PersonalKeyShare person={added.person} phone={added.phone} />
+          <button className="btn-secondary" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </Sheet>
+    )
   }
 
   return (
@@ -154,7 +170,7 @@ function AddAdminSheet({ onClose }: { onClose: () => void }) {
           void save()
         }}
       >
-        <p className="text-sm text-muted">They open the app, enter the access key and this number, and set their own PIN. If the number already belongs to a player, that player becomes an admin and keeps their teams and stats.</p>
+        <p className="text-sm text-muted">They open the app, enter this number and the personal key you send them next, and set their own PIN. If the number already belongs to a player, that player becomes an admin and keeps their teams and stats.</p>
         <Field label="Name">
           <input className="input" value={name} maxLength={40} autoFocus onChange={(e) => setName(e.target.value)} autoComplete="off" />
         </Field>
@@ -249,6 +265,12 @@ function AdminSheet({ record, onClose }: { record: AdminRecord; onClose: () => v
               🎭 Act as {name}
             </button>
             <p className="mt-1 text-xs text-muted">See the app exactly as {name} does and make changes for them. Their access stays the same. A banner at the top lets you stop.</p>
+          </section>
+        )}
+
+        {record.status === 'active' && person && (
+          <section className="border-t border-line pt-3">
+            <PersonalKeyShare person={person} />
           </section>
         )}
 

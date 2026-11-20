@@ -5,6 +5,7 @@ import { fmtDate } from '../lib/dates'
 import { addExistingPlayer, addNewPlayer, changeNumber, deletePlayer, lookupPlayer, renamePerson, type PlayerLookup } from '../lib/domain'
 import { maskPhone, normalizePhone } from '../lib/phone'
 import { lastPlayed, playedCount } from '../lib/stats'
+import { PersonalKeyShare } from './KeyShare'
 import { RoleTag } from './Profile'
 import { useApp, type TeamData } from '../state/AppContext'
 import { navigate, useSheet } from '../state/router'
@@ -21,8 +22,8 @@ function shareText(name: string, team: Team, owner: string, repo: string): strin
     '',
     `1. Open ${link} on your phone and add it to your Home Screen.`,
     repoKnown
-      ? '2. Open the app and enter your 10-digit mobile number and the Access Key (I’ll send it separately).'
-      : `2. Open the app and enter: your 10-digit mobile number, repo owner “${owner}”, repo name “${repo}”, and the Access Key (I’ll send it separately).`,
+      ? '2. Open the app and enter your 10-digit mobile number and your personal Access Key (sent separately).'
+      : `2. Open the app and enter: your 10-digit mobile number, repo owner “${owner}”, repo name “${repo}”, and your personal Access Key (sent separately).`,
     '3. Set your own 6-digit PIN.',
   ].join('\n')
 }
@@ -163,7 +164,7 @@ export function PlayersTab({ data }: { data: TeamData & { team: Team } }) {
 }
 
 function AddPlayerSheet({ team, onClose }: { team: Team; onClose: () => void }) {
-  const { store, session } = useApp()
+  const { store, session, isSuper, people } = useApp()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [busy, setBusy] = useState(false)
@@ -171,7 +172,7 @@ function AddPlayerSheet({ team, onClose }: { team: Team; onClose: () => void }) 
   const [found, setFound] = useState<Extract<PlayerLookup, { kind: 'removed' | 'elsewhere' }> | null>(null)
   const [grant, setGrant] = useState(true)
   // The typed number stays in memory just long enough to offer a WhatsApp link; it is never stored.
-  const [added, setAdded] = useState<{ name: string; phone: string } | null>(null)
+  const [added, setAdded] = useState<{ id: string; name: string; phone: string } | null>(null)
   if (!store) return null
 
   async function submit() {
@@ -185,7 +186,7 @@ function AddPlayerSheet({ team, onClose }: { team: Team; onClose: () => void }) 
       if (res.kind === 'active') throw new Error(`Already in this team (${res.person.name}).`)
       if (res.kind === 'new') {
         const person = addNewPlayer(store!, team.id, name, p.phone, res.phoneHash)
-        setAdded({ name: person.name, phone: p.phone })
+        setAdded({ id: person.id, name: person.name, phone: p.phone })
       } else {
         setFound(res)
       }
@@ -200,7 +201,8 @@ function AddPlayerSheet({ team, onClose }: { team: Team; onClose: () => void }) 
     if (!found) return
     try {
       addExistingPlayer(store!, team.id, found.person.id, { grantAccess: found.person.access === 'none' && grant })
-      setAdded({ name: found.person.name, phone })
+      const n = normalizePhone(phone)
+      setAdded({ id: found.person.id, name: found.person.name, phone: n.ok ? n.phone : phone })
       setFound(null)
     } catch (e) {
       setError((e as Error).message)
@@ -210,11 +212,12 @@ function AddPlayerSheet({ team, onClose }: { team: Team; onClose: () => void }) 
 
   if (added) {
     const text = shareText(added.name, team, session?.owner ?? '', session?.repo ?? '')
+    const addedPerson = people.find((x) => x.id === added.id)
     return (
       <Sheet title="Player added" onClose={onClose}>
         <div className="flex flex-col gap-3">
           <p className="rounded-xl bg-ok/15 px-3 py-2 text-sm text-ok">{added.name} added — they can now onboard with their number.</p>
-          <p className="text-sm text-muted">Send them the app link and steps. Share the Access Key separately and privately.</p>
+          <p className="text-sm text-muted">Send them the app link and steps. {isSuper ? 'Send their personal access key separately (below).' : 'The super admin sends them their personal access key.'}</p>
           <div className="flex flex-wrap gap-2">
             {'share' in navigator && (
               <button className="btn-primary flex-1" onClick={() => void navigator.share({ text }).catch(() => {})}>
@@ -226,6 +229,11 @@ function AddPlayerSheet({ team, onClose }: { team: Team; onClose: () => void }) 
             </a>
             <CopyButton text={text} />
           </div>
+          {isSuper && addedPerson && (
+            <div className="mt-2 border-t border-line pt-3">
+              <PersonalKeyShare person={addedPerson} phone={added.phone} />
+            </div>
+          )}
           <div className="mt-2 flex gap-2">
             <button
               className="btn-secondary flex-1"
@@ -390,7 +398,7 @@ function BulkAddSheet({ team, onClose }: { team: Team; onClose: () => void }) {
 }
 
 function PlayerSheet({ person, data, onClose, onRemove }: { person: Person; data: TeamData & { team: Team }; onClose: () => void; onRemove: () => void }) {
-  const { store, canManage, allTeams, toast } = useApp()
+  const { store, canManage, allTeams, toast, isSuper } = useApp()
   const isAdmin = canManage(data.team.id)
   const [name, setName] = useState(person.name)
   const [phone, setPhone] = useState('')
@@ -431,6 +439,12 @@ function PlayerSheet({ person, data, onClose, onRemove }: { person: Person; data
         <button className="btn-primary" onClick={() => navigate(`/teams/${data.team.id}/players/${person.id}`, { replace: true })}>
           View profile and stats
         </button>
+
+        {isSuper && !person.isGuest && person.access !== 'none' && (
+          <div className="border-t border-line pt-3">
+            <PersonalKeyShare person={person} />
+          </div>
+        )}
 
         {isAdmin && store && (
           <>

@@ -26,6 +26,7 @@ import { TeamDetail } from './screens/TeamDetail'
 import { TournamentDetail, Tournaments } from './screens/Tournaments'
 import { Teams } from './screens/Teams'
 import { Users } from './screens/Users'
+import { Keys } from './screens/Keys'
 import { useApp } from './state/AppContext'
 import { navigate, useRoute } from './state/router'
 
@@ -138,6 +139,7 @@ export default function App() {
   else if (a === 'funds') screen = <Funds />
   else if (a === 'settings' && b === 'users') screen = <Users />
   else if (a === 'settings' && b === 'admins') screen = <Admins />
+  else if (a === 'settings' && b === 'keys') screen = <Keys />
   else if (a === 'settings') screen = <Settings />
   else screen = <Placeholder title="Not found" />
 

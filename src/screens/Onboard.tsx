@@ -8,6 +8,7 @@ import { adminRecordOf, onboardStep } from '../lib/access'
 import { connectRepo, demoAvailable, findPersonByPhone, isSetUp, logInDevice, recoverSuperPin, setOwnPin, setupRepo, verifyOwnPin } from '../lib/connect'
 import { adminsOf, configOf, credsOf } from '../lib/domain'
 import { withKeyPrefix, withoutKeyPrefix } from '../lib/github'
+import { KEY_NOT_YOURS, keyFits, openPersonalKey, type OpenedKey } from '../lib/personalKey'
 import { normalizePhone } from '../lib/phone'
 import { isWeakPin, verifyRecoveryCode } from '../lib/pin'
 import { clearPinFails, loadRepoRef, lockRemainingMs, registerPinFail, type RepoRef, type Session } from '../lib/session'
@@ -40,7 +41,8 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
   const [owner, setOwner] = useState(repoFixed ? envOwner : (saved?.owner ?? ''))
   const [repo, setRepo] = useState(repoFixed ? envRepo : (saved?.repo ?? ''))
   // The key is shown and typed without its common first part; the app adds it back (withKeyPrefix).
-  const [token, setToken] = useState(withoutKeyPrefix(saved?.token ?? ''))
+  // A personal key typed here before comes back as typed; it still has to match the number entered.
+  const [token, setToken] = useState(saved?.personalKey ?? withoutKeyPrefix(saved?.token ?? ''))
   const [editRepo, setEditRepo] = useState(!saved)
   // The admin-setup link only appears once this repo has been seen to be empty.
   const [emptyRepo, setEmptyRepo] = useState(false)
@@ -63,8 +65,10 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
   const firstPin = useRef('')
   const usedRecovery = useRef('')
   const pending = useRef<Session | null>(null)
+  /** The repo key found inside a personal key, and that personal key. */
+  const resolved = useRef<{ token: string; personalKey?: string } | null>(null)
 
-  const ref = (): RepoRef => ({ owner: owner.trim(), repo: repo.trim(), token: withKeyPrefix(token) })
+  const ref = (): RepoRef => ({ owner: owner.trim(), repo: repo.trim(), token: resolved.current?.token ?? withKeyPrefix(token), personalKey: resolved.current?.personalKey })
 
   useEffect(() => {
     setError(null)
@@ -89,15 +93,31 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
 
   async function submitForm() {
     setError(null)
-    const r = ref()
-    if (!r.token) return setError('Enter your access key.')
-    if (!r.owner || !r.repo) return setError('Enter the repo owner and repo name.')
+    resolved.current = null
+    if (!token.trim()) return setError('Enter your access key.')
+    const r0 = ref()
+    if (!r0.owner || !r0.repo) return setError('Enter the repo owner and repo name.')
     if (mode === 'setup' && !name.trim()) return setError('Enter your name.')
     const p = normalizePhone(phoneInput)
     if (!p.ok) return setError(p.error)
     setBusy(true)
     try {
-      const s = await connectRepo(r)
+      // Players and admins sign in with their personal key; the plain key is for the super admin only.
+      // Whose key it is can only be checked once the people list is loaded, after connecting.
+      const opened = mode === 'join' ? await openPersonalKey(token) : null
+      let personal: OpenedKey | null = null
+      let s: Store | null = null
+      if (opened) {
+        resolved.current = { token: opened.token, personalKey: opened.personalKey }
+        try {
+          s = await connectRepo(ref())
+          personal = opened
+        } catch {
+          // Not a personal key after all (a plain key can look like one by chance): try it as typed.
+          resolved.current = null
+        }
+      }
+      if (!s) s = await connectRepo(ref())
       store.current = s
       phone.current = p.phone
       if (mode === 'setup') {
@@ -114,6 +134,10 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
       if (next === 'no_access' || !found) {
         await s.clear() // nothing is kept for a number without access
         throw new Error(NO_ACCESS)
+      }
+      if (personal ? !(await keyFits(personal, found.phoneHash)) : configOf(s)!.superAdminId !== found.id) {
+        await s.clear()
+        throw new Error(KEY_NOT_YOURS)
       }
       person.current = found
       setStep(next)
@@ -257,7 +281,7 @@ export function Onboard({ mode }: { mode: 'join' | 'setup' }) {
                 </button>
               </div>
             ))}
-          <Field label="Access Key" hint={mode === 'join' ? 'Your team admin shares this with you.' : 'The access key for this app’s data store. You can leave out its common first part.'}>
+          <Field label="Access Key" hint={mode === 'join' ? 'Your personal key from the super admin. It works only with your own number.' : 'The access key for this app’s data store. You can leave out its common first part.'}>
             <input className="input" type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
           </Field>
           {demoAvailable && !repoFixed && <p className="text-xs text-muted">Dev server only: owner “demo” with any repo name and any key uses a fake repo stored in this browser.</p>}

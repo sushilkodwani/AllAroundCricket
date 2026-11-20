@@ -130,6 +130,7 @@ export function Settings() {
                 hint={config?.tokenExpiresOn ? `Access key expires ${fmtDate(config.tokenExpiresOn)}` : 'Access key expiry date not set'}
                 onClick={() => sheet.open('repo')}
               />
+              <MenuRow label="Personal access keys" hint="Send each player and admin their own key" onClick={() => navigate('/settings/keys')} />
               <MenuRow label="Recovery code" hint="Create a new one (needs your PIN)" onClick={() => sheet.open('recovery')} />
             </Section>
 
@@ -226,7 +227,7 @@ export function Settings() {
             <hr className="border-line" />
             </>
             )}
-            <Field label="Replace the access key on this device" hint="Enter the new key as your admin gave it to you.">
+            <Field label="Replace the access key on this device" hint={isSuper ? 'The new plain key. Then send everyone their new personal key.' : 'Your new personal key from the super admin.'}>
               <input className="input" type="password" value={newToken} onChange={(e) => setNewToken(e.target.value)} autoComplete="off"  />
             </Field>
             <ErrorNote>{tokenError}</ErrorNote>
@@ -240,6 +241,7 @@ export function Settings() {
                   await replaceToken(newToken)
                   setNewToken('')
                   toast('Access key replaced on this device')
+                  if (isSuper) navigate('/settings/keys')
                 } catch (e) {
                   setTokenError((e as Error).message)
                 } finally {

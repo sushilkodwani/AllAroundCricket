@@ -75,7 +75,7 @@ export function TokenGate() {
   const [error, setError] = useState<string | null>(null)
   return (
     <Shell icon="🔑" title="New Access Key needed">
-      <p className="text-sm text-muted">The Access Key stopped working (expired or changed). Enter the new key from your admin.</p>
+      <p className="text-sm text-muted">The Access Key stopped working (expired or changed). Enter the new personal key the super admin sent you.</p>
       <form
         className="flex w-full flex-col gap-3 text-left"
         onSubmit={async (e) => {
