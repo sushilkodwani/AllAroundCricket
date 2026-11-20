@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { NotifyPrompt } from './components/NotificationsCard'
 import { Screen, TabBar } from './components/Screen'
 import { Empty } from './components/ui'
@@ -28,6 +28,8 @@ import { Teams } from './screens/Teams'
 import { Users } from './screens/Users'
 import { Keys } from './screens/Keys'
 import { InstallGate, mustInstall } from './screens/InstallGate'
+import { Intro } from './screens/Intro'
+import { getPref, setPref } from './lib/session'
 import { useApp } from './state/AppContext'
 import { navigate, useRoute } from './state/router'
 
@@ -65,6 +67,22 @@ function MockBar() {
       </button>
     </div>
   )
+}
+
+/** Logged out: the app tour comes first, once per device, then Get started. */
+function FirstRun({ mode }: { mode: 'join' | 'setup' }) {
+  const [seen, setSeen] = useState(() => getPref('introSeen', false))
+  if (mode === 'join' && !seen) {
+    return (
+      <Intro
+        onDone={() => {
+          setPref('introSeen', true)
+          setSeen(true)
+        }}
+      />
+    )
+  }
+  return <Onboard mode={mode} />
 }
 
 export default function App() {
@@ -107,11 +125,13 @@ export default function App() {
   if (mustInstall()) return <InstallGate />
   if (phase === 'boot') return <Splash />
   if (phase === 'error') return <BootError />
-  if (phase === 'out') return <Onboard mode={a === 'setup' ? 'setup' : 'join'} />
+  if (phase === 'out') return <FirstRun mode={a === 'setup' ? 'setup' : 'join'} />
   if (gate === 'token') return <TokenGate />
   if (gate === 'no_access') return <NoAccess />
   if (gate === 'locked') return <PinGate />
   if (home) return <Splash />
+  // The app tour again, from Settings.
+  if (a === 'tour') return <Intro onDone={() => navigate('/settings', { replace: true })} />
 
   let screen: React.ReactNode
   let tabs = true

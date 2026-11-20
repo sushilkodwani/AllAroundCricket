@@ -14,6 +14,15 @@ createRoot(document.getElementById('root')!).render(
   </ThemeProvider>,
 )
 
+// Dev server only: ?seed-showcase fills this browser with the intro's showcase club (src/dev). Not in builds.
+if (import.meta.env.DEV && new URLSearchParams(location.search).has('seed-showcase')) {
+  void import('./dev/seedShowcase').then(async (m) => {
+    const r = await m.seedShowcase()
+    document.title = `seeded ${r.results.length}`
+    location.replace(`${location.pathname}#/teams`)
+  })
+}
+
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   // updateViaCache 'none': always compare sw.js with the server, never the HTTP
   // cache, so a new deploy is noticed on the next check.

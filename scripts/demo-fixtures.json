@@ -1,17 +1,69 @@
 {
   "_about": "Test values for trying the app on the dev server (npm run dev) with the built-in fake repo: owner 'demo'. Nothing here is real and nothing leaves the browser. The 'club' repo holds old-format (v1) data and is refused by the current app; use 'league'.",
-  "repo": { "owner": "demo", "repo": "league", "token": "demo-token" },
-  "superAdmin": { "name": "Sunil Owner", "phone": "9812345680", "pin": "582947", "team": "Owner XI" },
+  "repo": {
+    "owner": "demo",
+    "repo": "league",
+    "token": "demo-token"
+  },
+  "superAdmin": {
+    "name": "Sunil Owner",
+    "phone": "9812345680",
+    "pin": "582947",
+    "team": "Owner XI"
+  },
   "admins": [
-    { "name": "Ravi Admin", "phone": "9812345681", "pin": "371946", "team": "Ravi XI" },
-    { "name": "Sam Admin", "phone": "9812345682" }
+    {
+      "name": "Ravi Admin",
+      "phone": "9812345681",
+      "pin": "371946",
+      "team": "Ravi XI"
+    },
+    {
+      "name": "Sam Admin",
+      "phone": "9812345682"
+    }
   ],
   "players": [
-    { "name": "Rahul Sharma", "phone": "9812345671", "team": "Owner XI" },
-    { "name": "Vikram Rao", "phone": "9812345672" },
-    { "name": "Amit Patel", "phone": "9812345673" },
-    { "name": "Sanjay Kumar", "phone": "9812345674" },
-    { "name": "Deepak Verma", "phone": "9812345675" }
+    {
+      "name": "Rahul Sharma",
+      "phone": "9812345671",
+      "team": "Owner XI"
+    },
+    {
+      "name": "Vikram Rao",
+      "phone": "9812345672"
+    },
+    {
+      "name": "Amit Patel",
+      "phone": "9812345673"
+    },
+    {
+      "name": "Sanjay Kumar",
+      "phone": "9812345674"
+    },
+    {
+      "name": "Deepak Verma",
+      "phone": "9812345675"
+    }
   ],
-  "oldRepo": { "owner": "demo", "repo": "club", "admin": { "name": "Arjun Admin", "phone": "9812345670", "pin": "482915" } }
+  "oldRepo": {
+    "owner": "demo",
+    "repo": "club",
+    "admin": {
+      "name": "Arjun Admin",
+      "phone": "9812345670",
+      "pin": "482915"
+    }
+  },
+  "showcase": {
+    "_about": "Club season used for the first-run intro screenshots. Made by src/dev/seedShowcase.ts in the dev server (owner demo, repo showcase). Numbers are made up; the screenshots show none of them.",
+    "repo": {
+      "owner": "demo",
+      "repo": "showcase",
+      "token": "demo-token"
+    },
+    "player": "Aarav Mehta",
+    "pin": "480137",
+    "numbers": "phoneFor(i) in seedShowcase.ts: 9 then 810000000 + i*7919, padded to 9 digits"
+  }
 }
