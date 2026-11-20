@@ -27,6 +27,7 @@ import { TournamentDetail, Tournaments } from './screens/Tournaments'
 import { Teams } from './screens/Teams'
 import { Users } from './screens/Users'
 import { Keys } from './screens/Keys'
+import { InstallGate, mustInstall } from './screens/InstallGate'
 import { useApp } from './state/AppContext'
 import { navigate, useRoute } from './state/router'
 
@@ -102,6 +103,8 @@ export default function App() {
   }, [])
 
   if (publicCard) return <PublicScorecard code={b} />
+  // Phones and tablets use the installed app only; the browser tab explains how to install it.
+  if (mustInstall()) return <InstallGate />
   if (phase === 'boot') return <Splash />
   if (phase === 'error') return <BootError />
   if (phase === 'out') return <Onboard mode={a === 'setup' ? 'setup' : 'join'} />
