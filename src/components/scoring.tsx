@@ -6,7 +6,7 @@ import { maskPhone, normalizePhone } from '../lib/phone'
 import { BATTER_POS, ballToken, ballTone, shotRegion, type BallTone } from '../lib/scorecard'
 import { useApp } from '../state/AppContext'
 import type { BallEvent, Person, ScoreFile } from '../types'
-import { parseBulk } from './PlayersTab'
+import { parseBulk } from '../lib/bulk'
 import { ErrorNote, Field, PhoneInput, Sheet } from './ui'
 
 const TONE: Record<BallTone, string> = {
@@ -32,10 +32,10 @@ export function BallChip({ ball, onClick, small }: { ball: BallEvent; onClick?: 
 }
 
 /**
- * Name + mobile number, both required. A number that is already known reuses
- * that person and says so, instead of creating a duplicate.
+ * Name + mobile number. A number that is already known reuses that person and says so, instead of
+ * creating a duplicate. With `phoneOptional` (opponents' players) the number may be left empty.
  */
-export function AddPlayerSheet({ title, onClose, onAdded }: { title: string; onClose: () => void; onAdded: (person: Person, existed: boolean) => void }) {
+export function AddPlayerSheet({ title, onClose, onAdded, phoneOptional }: { title: string; onClose: () => void; onAdded: (person: Person, existed: boolean) => void; phoneOptional?: boolean }) {
   const { store } = useApp()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -44,13 +44,14 @@ export function AddPlayerSheet({ title, onClose, onAdded }: { title: string; onC
 
   async function save() {
     if (!store) return
+    const blank = !!phoneOptional && !phone.replace(/\D/g, '')
     const p = normalizePhone(phone)
     if (!name.trim()) return setError('Enter the player’s name.')
-    if (!p.ok) return setError(p.error)
+    if (!blank && !p.ok) return setError(p.error)
     setBusy(true)
     setError(null)
     try {
-      const { person, existed } = await findOrCreatePlayer(store, name, p.phone)
+      const { person, existed } = await findOrCreatePlayer(store, name, !blank && p.ok ? p.phone : undefined)
       onAdded(person, existed)
     } catch (e) {
       setError((e as Error).message)
@@ -71,7 +72,10 @@ export function AddPlayerSheet({ title, onClose, onAdded }: { title: string; onC
         <Field label="Name">
           <input className="input" value={name} maxLength={40} autoFocus onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label="Mobile number" hint="Required. If this number is already in the app, that player is used.">
+        <Field
+          label={phoneOptional ? 'Mobile number (optional)' : 'Mobile number'}
+          hint={phoneOptional ? 'Can be left empty. If you enter one that is already in the app, that player is used.' : 'Required. If this number is already in the app, that player is used.'}
+        >
           <PhoneInput value={phone} onChange={setPhone} />
         </Field>
         <ErrorNote>{error}</ErrorNote>
@@ -86,14 +90,15 @@ export function AddPlayerSheet({ title, onClose, onAdded }: { title: string; onC
 /**
  * Several players at once, one per line: a name then the 10-digit number. Numbers already in the app reuse
  * that person. Used for opponent teams and the scoring set-up, where players are not team members.
+ * With `phoneOptional` (opponents' players) a line may be just a name.
  */
-export function BulkPlayersSheet({ title, onClose, onAdded }: { title: string; onClose: () => void; onAdded: (persons: Person[], existing: number) => void }) {
+export function BulkPlayersSheet({ title, onClose, onAdded, phoneOptional }: { title: string; onClose: () => void; onAdded: (persons: Person[], existing: number) => void; phoneOptional?: boolean }) {
   const { store } = useApp()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const lines = useMemo(() => parseBulk(text), [text])
-  const valid = lines.filter((l) => l.phone)
+  const lines = useMemo(() => parseBulk(text, phoneOptional), [text, phoneOptional])
+  const valid = lines.filter((l) => !l.error)
 
   async function addAll() {
     if (!store) return
@@ -103,7 +108,7 @@ export function BulkPlayersSheet({ title, onClose, onAdded }: { title: string; o
     let existing = 0
     try {
       for (const line of valid) {
-        const r = await findOrCreatePlayer(store, line.name, line.phone!)
+        const r = await findOrCreatePlayer(store, line.name, line.phone)
         if (r.existed) existing++
         if (!persons.some((p) => p.id === r.person.id)) persons.push(r.person)
       }
@@ -120,15 +125,18 @@ export function BulkPlayersSheet({ title, onClose, onAdded }: { title: string; o
   return (
     <Sheet title={title} onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <Field label="One player per line" hint="Name followed by the 10-digit number. Numbers already in the app reuse that player.">
-          <textarea className="input min-h-[140px] py-2 font-mono text-sm" value={text} onChange={(e) => setText(e.target.value)} placeholder={'Rahul Sharma 9876543210\nVikram Rao 98765 43211'} />
+        <Field
+          label="One player per line"
+          hint={phoneOptional ? 'A name, then the 10-digit number if you have it. Numbers already in the app reuse that player.' : 'Name followed by the 10-digit number. Numbers already in the app reuse that player.'}
+        >
+          <textarea className="input min-h-[140px] py-2 font-mono text-sm" value={text} onChange={(e) => setText(e.target.value)} placeholder={phoneOptional ? 'Rahul Sharma 9876543210\nVikram Rao' : 'Rahul Sharma 9876543210\nVikram Rao 98765 43211'} />
         </Field>
         {lines.length > 0 && (
           <div className="card divide-y divide-line overflow-hidden text-sm">
             {lines.map((l, i) => (
               <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
                 <span className="min-w-0 truncate">{l.name || l.raw}</span>
-                {l.phone ? <span className="shrink-0 text-ok">✓ {maskPhone(l.phone.slice(-4))}</span> : <span className="shrink-0 text-bad">{l.error}</span>}
+                {l.error ? <span className="shrink-0 text-bad">{l.error}</span> : <span className="shrink-0 text-ok">✓ {l.phone ? maskPhone(l.phone.slice(-4)) : 'no number'}</span>}
               </div>
             ))}
           </div>

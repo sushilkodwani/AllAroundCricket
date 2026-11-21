@@ -231,6 +231,8 @@ export interface Match {
   scoring?: 'live' | 'finished'
   /** A player the admin lets score this one match (PLAN §31). */
   scorerId?: string
+  /** Super admin's switch: the live score updates itself every 20 s for everyone watching (else ⟳ only). */
+  liveAuto?: boolean
   /** Tournament / season this match counts towards (PLAN §35). */
   tournamentId?: string
   createdAt: string

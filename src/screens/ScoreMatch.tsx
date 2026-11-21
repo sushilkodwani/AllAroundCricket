@@ -433,6 +433,7 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
       {sheet.name === 'addplayer' && (
         <AddPlayerSheet
           title="Add player"
+          phoneOptional={(sheet.arg ?? '').startsWith('away')}
           onClose={sheet.close}
           onAdded={(person, existed) => {
             const [side, role] = (sheet.arg ?? '').split(':') as [SideKey, Role]

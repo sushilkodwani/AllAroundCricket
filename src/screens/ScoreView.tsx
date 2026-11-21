@@ -1,12 +1,13 @@
 // What everyone sees (PLAN §26): Live, Scorecard, Commentary, Analysis, Detailed analysis, Teams.
-// Nothing here polls: the score is fetched when the screen opens and again
-// only when the viewer taps Refresh.
-import { useMemo, useState, type ReactNode } from 'react'
+// The score is fetched when the screen opens and again when the viewer taps Refresh — or, when the
+// super admin turned on auto-refresh for this match, every 20 seconds by itself.
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AwardsList } from '../components/Awards'
 import { RoleTag } from '../components/Profile'
 import { BallChip, PressureStrip } from '../components/scoring'
 import { HeaderButton, RefreshIcon, Screen } from '../components/Screen'
-import { Empty, Pill, Sheet } from '../components/ui'
+import { Empty, Pill, Sheet, Toggle } from '../components/ui'
+import { setLiveAuto } from '../lib/domain'
 import { fmtDate } from '../lib/dates'
 import { chaseView, milestoneText, milestonesOf, parScore } from '../lib/insights'
 import { buildPublicCard, cardUrl, encodeCard } from '../lib/publicCard'
@@ -21,6 +22,8 @@ import { WICKET_LABELS, type ScoreFile, type WicketKind } from '../types'
 
 const TABS = ['live', 'scorecard', 'commentary', 'analysis', 'detailed', 'teams'] as const
 type Tab = (typeof TABS)[number]
+/** How often the live score refreshes itself when the super admin turned that on. */
+const AUTO_MS = 20_000
 const TAB_LABEL: Record<Tab, string> = { live: 'Live', scorecard: 'Scorecard', commentary: 'Commentary', analysis: 'Analysis', detailed: 'Detailed analysis', teams: 'Teams' }
 
 const fmtClock = (iso: string) => {
@@ -29,7 +32,7 @@ const fmtClock = (iso: string) => {
 }
 
 export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string }) {
-  const { store, canManage, people, personName, toast, session } = useApp()
+  const { store, canManage, people, personName, toast, session, isSuper } = useApp()
   const isAdmin = canManage(teamId)
   const route = useRoute()
   const sheet = useSheet()
@@ -57,6 +60,20 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
       setBusy(false)
     }
   }
+
+  // Auto-refresh (super admin's switch, per match): the score every 20 s while the screen is in view,
+  // the match record every 2 minutes so a viewer notices when it is switched off. Unchanged = free.
+  const auto = !!match?.liveAuto && file?.status !== 'finished'
+  useEffect(() => {
+    if (!store || !auto) return
+    let tick = 0
+    const t = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      void store.refresh(path).catch(() => {})
+      if (++tick % 6 === 0) void store.refresh(P.matches(teamId)).catch(() => {})
+    }, AUTO_MS)
+    return () => clearInterval(t)
+  }, [store, auto, path, teamId])
 
   if (!file) {
     return (
@@ -119,9 +136,11 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
           <HeaderButton label="Share score" onClick={() => sheet.open('share')}>
             ↗
           </HeaderButton>
-          <HeaderButton label="Refresh score" onClick={() => void refresh()}>
-            <RefreshIcon spinning={busy} />
-          </HeaderButton>
+          {!auto && (
+            <HeaderButton label="Refresh score" onClick={() => void refresh()}>
+              <RefreshIcon spinning={busy} />
+            </HeaderButton>
+          )}
         </>
       }
     >
@@ -151,13 +170,30 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
             </div>
           )}
           <p className="mt-1 text-xs text-muted">
-            Last scored {fmtClock(file.updatedAt)} · tap ⟳ for the latest
+            Last scored {fmtClock(file.updatedAt)} · {auto ? 'updates by itself every 20 s' : 'tap ⟳ for the latest'}
             {(isAdmin || (!!match?.scorerId && match.scorerId === session?.personId)) && (
               <button className="ml-2 font-semibold text-accent" onClick={() => navigate(`${base}/score`)}>
                 {file.status === 'finished' ? 'Open scoring' : 'Continue scoring'}
               </button>
             )}
           </p>
+          {isSuper && match && file.status !== 'finished' && (
+            <div className="mt-2 flex items-center gap-3 border-t border-line pt-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">Auto-refresh for everyone</div>
+                <div className="text-xs text-muted">Every viewer’s score updates every 20 s. Off: they tap ⟳.</div>
+              </div>
+              <Toggle
+                label="Auto-refresh the live score for everyone"
+                checked={!!match.liveAuto}
+                onChange={(on) => {
+                  if (!store) return
+                  setLiveAuto(store, teamId, matchId, on)
+                  toast(on ? 'Live score now updates every 20 s for everyone' : 'Auto-refresh off — viewers tap ⟳')
+                }}
+              />
+            </div>
+          )}
         </div>
 
         <div className="-mx-3 flex overflow-x-auto border-b border-line px-3" role="tablist">

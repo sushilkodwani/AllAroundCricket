@@ -236,6 +236,7 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
       {sheet.name === 'bulkplayers' && (
         <BulkPlayersSheet
           title={`Bulk add players — ${sheet.arg === 'home' ? team.name : match.opponent}`}
+          phoneOptional={sheet.arg !== 'home'}
           onClose={sheet.close}
           onAdded={(persons, existing) => {
             const ids = persons.map((p) => p.id)
@@ -256,6 +257,7 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
       {sheet.name === 'addplayer' && (
         <AddPlayerSheet
           title={`Add player — ${sheet.arg === 'home' ? team.name : match.opponent}`}
+          phoneOptional={sheet.arg !== 'home'}
           onClose={sheet.close}
           onAdded={(person, existed) => {
             if (sheet.arg === 'home') {

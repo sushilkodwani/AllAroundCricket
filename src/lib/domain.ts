@@ -632,17 +632,22 @@ export function removeOpponentPlayer(s: Store, opponentId: string, personId: str
 }
 
 /**
- * A player for scoring: name and number are both required. If the number is
- * already known, that person is reused (`existed`); otherwise a record without
- * app access is created.
+ * A player for scoring or an opponent team. With a number that is already known, that person is
+ * reused (`existed`); otherwise a record without app access is created. The number may be left
+ * out (opponents' players): that always creates a new record, with no number.
  */
-export async function findOrCreatePlayer(s: Store, name: string, phone: string): Promise<{ person: Person; existed: boolean }> {
+export async function findOrCreatePlayer(s: Store, name: string, phone?: string): Promise<{ person: Person; existed: boolean }> {
   const config = configOf(s)
   if (!config) throw new Error('App data is not loaded yet.')
+  const now = nowStamp()
+  if (!phone) {
+    const person: Person = { id: uuid(), name: requireName(name), access: 'none', isGuest: true, teamIds: [], createdAt: now, updatedAt: now }
+    putPeople(s, [...peopleOf(s), person], `Add player ${person.name}`)
+    return { person, existed: false }
+  }
   const phoneHash = await hashPhone(phone, config.phoneSalt)
   const existing = peopleOf(s).find((p) => p.phoneHash === phoneHash)
   if (existing) return { person: existing, existed: true }
-  const now = nowStamp()
   const person: Person = { id: uuid(), name: requireName(name), phoneHash, phoneLast4: last4(phone), access: 'none', isGuest: true, teamIds: [], createdAt: now, updatedAt: now }
   putPeople(s, [...peopleOf(s), person], `Add player ${person.name}`)
   return { person, existed: false }
@@ -1184,6 +1189,21 @@ export function setScorer(s: Store, teamId: string, matchId: string, personId: s
       return next
     },
     personId ? `Scorer: ${personName(s, personId)}` : 'Remove scorer',
+  )
+}
+
+/** Super admin: the live score of this match refreshes itself for everyone (on) or only on ⟳ (off). */
+export function setLiveAuto(s: Store, teamId: string, matchId: string, on: boolean): Match {
+  return patchMatch(
+    s,
+    teamId,
+    matchId,
+    (m) => {
+      const next = { ...m, liveAuto: true }
+      if (!on) delete (next as Partial<Match>).liveAuto
+      return next
+    },
+    on ? 'Live score: auto-refresh on' : 'Live score: auto-refresh off',
   )
 }
 

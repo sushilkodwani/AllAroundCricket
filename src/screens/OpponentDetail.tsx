@@ -182,6 +182,7 @@ export function OpponentDetail({ opponentId }: { opponentId: string }) {
       {sheet.name === 'bulk' && isAdmin && (
         <BulkPlayersSheet
           title={`Bulk add players — ${opponent.name}`}
+          phoneOptional
           onClose={sheet.close}
           onAdded={(persons, existing) => {
             addOpponentPlayers(store, opponent.id, persons.map((p) => p.id))
@@ -193,6 +194,7 @@ export function OpponentDetail({ opponentId }: { opponentId: string }) {
       {sheet.name === 'addplayer' && isAdmin && (
         <AddPlayerSheet
           title={`Add player — ${opponent.name}`}
+          phoneOptional
           onClose={sheet.close}
           onAdded={(person, existed) => {
             addOpponentPlayers(store, opponent.id, [person.id])
