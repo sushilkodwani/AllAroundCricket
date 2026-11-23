@@ -2,7 +2,7 @@
 // ball-by-ball score files. Nothing extra is stored: every number comes from
 // the balls, the players' profiles (batting hand, bowling style) and the
 // ground's pitch type.
-import { BOWL_LABELS, type BowlStyle, type PitchType, type ScoreFile, type SideKey, type WicketKind } from '../types'
+import { BOWL_LABELS, type BowlingSide, type BowlStyle, type PitchType, type ScoreFile, type ShotType, type SideKey, type WicketKind } from '../types'
 import { ballsWithOver, phasesOf } from './analysis'
 import { inningsMinutes } from './minutes'
 import { shotRegion, summarize } from './scorecard'
@@ -51,6 +51,7 @@ export interface BatBall extends Where {
   shot?: [number, number]
   /** Where the catch was taken / the throw came from. */
   at?: [number, number]
+  shotType?: ShotType
 }
 
 export interface BatInn {
@@ -90,6 +91,8 @@ export interface BowlBall extends Where {
   /** Batting position of the batter they got out. */
   victim?: number
   shot?: [number, number]
+  shotType?: ShotType
+  side?: BowlingSide
 }
 
 export interface BowlInn {
@@ -129,6 +132,8 @@ export interface PlayerData {
   bowlBalls: BowlBall[]
   bowlInns: BowlInn[]
   stands: Stand[]
+  /** Catches taken (including caught & bowled), for goals. */
+  catches: { matchId: string; date: string }[]
   /** Matches played, with the per-match awards won in each. */
   matches: { matchId: string; date: string; potm: boolean; batter: boolean; bowler: boolean }[]
 }
@@ -139,7 +144,7 @@ const byDate = <T extends { date: string }>(a: T, b: T) => b.date.localeCompare(
 
 /** Everything this player did in these matches, ball by ball and innings by innings (latest first). */
 export function playerData(files: ScoreFile[], id: string, ctx: PlayerCtx): PlayerData {
-  const d: PlayerData = { batBalls: [], batInns: [], bowlBalls: [], bowlInns: [], stands: [], matches: [] }
+  const d: PlayerData = { batBalls: [], batInns: [], bowlBalls: [], bowlInns: [], stands: [], matches: [], catches: [] }
   for (const file of files) {
     const side = sideOf(file, id)
     const date = ctx.dateOf(file.matchId)
@@ -164,14 +169,15 @@ export function playerData(files: ScoreFile[], id: string, ctx: PlayerCtx): Play
         if (b.striker === id || outHere) {
           const onStrike = b.striker === id
           const faced = onStrike && b.kind !== 'wd'
-          d.batBalls.push({ ...where, bowler: b.bowler, style: ctx.styleOf(b.bowler) ?? 'unknown', bat: onStrike ? b.bat : 0, faced, out: outHere, shot: onStrike ? b.shot : undefined, at: outHere ? b.wicket?.at : undefined })
+          d.batBalls.push({ ...where, bowler: b.bowler, style: ctx.styleOf(b.bowler) ?? 'unknown', bat: onStrike ? b.bat : 0, faced, out: outHere, shot: onStrike ? b.shot : undefined, at: outHere ? b.wicket?.at : undefined, shotType: onStrike ? b.shotType : undefined })
           if (faced) progress.push((mine += b.bat))
         }
+        if (b.wicket && (b.wicket.kind === 'caught' || b.wicket.kind === 'caught_behind' ? b.wicket.fielder === id : b.wicket.kind === 'caught_bowled' && b.bowler === id)) d.catches.push({ matchId: file.matchId, date })
         if (b.bowler === id) {
           bowled = true
           const w = b.wicket && BOWLER_WICKETS.includes(b.wicket.kind) ? b.wicket : undefined
           const runs = bowlerRuns(b)
-          d.bowlBalls.push({ ...where, striker: b.striker, left: ctx.leftOf(b.striker), position: pos(b.striker), bat: b.bat, runs, legal: b.kind === 'legal', kind: b.kind, wicket: w?.kind, victim: w ? pos(w.who) : undefined, shot: b.shot })
+          d.bowlBalls.push({ ...where, striker: b.striker, left: ctx.leftOf(b.striker), position: pos(b.striker), bat: b.bat, runs, legal: b.kind === 'legal', kind: b.kind, wicket: w?.kind, victim: w ? pos(w.who) : undefined, shot: b.shot, shotType: b.shotType, side: b.side })
         }
       }
 
@@ -219,7 +225,7 @@ export function playerData(files: ScoreFile[], id: string, ctx: PlayerCtx): Play
 export function inYear(d: PlayerData, year: string): PlayerData {
   if (year === 'all') return d
   const y = <T extends { date: string }>(xs: T[]) => xs.filter((x) => x.date.startsWith(year))
-  return { ...d, batBalls: y(d.batBalls), batInns: y(d.batInns), bowlBalls: y(d.bowlBalls), bowlInns: y(d.bowlInns), stands: y(d.stands), matches: y(d.matches) }
+  return { ...d, batBalls: y(d.batBalls), batInns: y(d.batInns), bowlBalls: y(d.bowlBalls), bowlInns: y(d.bowlInns), stands: y(d.stands), matches: y(d.matches), catches: y(d.catches) }
 }
 
 export const awardsOf = (d: PlayerData) => ({ potm: d.matches.filter((m) => m.potm).length, batter: d.matches.filter((m) => m.batter).length, bowler: d.matches.filter((m) => m.bowler).length })

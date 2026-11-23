@@ -5,7 +5,7 @@
 // The ball-by-ball log is the only thing stored. Totals, the scorecard and the
 // charts are worked out from it (lib/scorecard.ts), so Undo is "drop the last
 // event" and fixing an old ball is "change it and recalculate".
-import type { BallEvent, Crease, DeliveryKind, Innings, ScoreEvent, ScoreFile, ScoreSide, SideKey, WicketKind } from '../types'
+import type { BallEvent, Crease, DeliveryKind, Innings, ScoreEvent, ScoreFile, ScoreSide, ShotType, SideKey, WicketKind } from '../types'
 import { nowStamp } from './dates'
 import { uuid } from './uuid'
 
@@ -239,6 +239,8 @@ export interface NewScoreInput {
   allDirections?: boolean
   /** Powerplay overs (0 = none). */
   powerplay?: number
+  askShotType?: boolean
+  askSide?: boolean
 }
 
 export function newScore(input: NewScoreInput): ScoreFile {
@@ -266,10 +268,21 @@ export function newScore(input: NewScoreInput): ScoreFile {
     innings: [{ batting: battingFirst, overs: input.overs, events: [], crease: {} }],
     ...(input.allDirections ? { allDirections: true } : {}),
     ...(input.powerplay !== undefined ? { powerplay: input.powerplay } : {}),
+    ...(input.askShotType ? { askShotType: true } : {}),
+    ...(input.askSide ? { askSide: true } : {}),
     status: 'live',
     startedAt: now,
     updatedAt: now,
   }
+}
+
+/** Turn on or off asking the shot type / over or round the wicket. */
+export function setAsk(file: ScoreFile, key: 'askShotType' | 'askSide', on: boolean): ScoreFile {
+  if (!!file[key] === on) return file
+  const next = { ...file, updatedAt: nowStamp() }
+  if (on) next[key] = true
+  else delete next[key]
+  return next
 }
 
 /** Turn on or off asking where 1s, 2s and 3s went. */
@@ -325,6 +338,7 @@ export interface BallInput {
   byeType?: 'b' | 'lb'
   wicket?: { kind: WicketKind; who?: string; fielder?: string; at?: [number, number] }
   shot?: [number, number]
+  shotType?: ShotType
 }
 
 export function addBall(file: ScoreFile, input: BallInput): ScoreFile {
@@ -359,9 +373,11 @@ export function addBall(file: ScoreFile, input: BallInput): ScoreFile {
   if (byes > 0 && kind !== 'wd') ball.byeType = input.byeType ?? 'b'
   if (wicket) ball.wicket = wicket
   if (input.shot) ball.shot = input.shot
+  if (input.shotType && kind !== 'wd') ball.shotType = input.shotType
+  if (inn.crease.side) ball.side = inn.crease.side
 
-  // Where everyone stands for the next ball.
-  let next: Crease = { striker, nonStriker, bowler }
+  // Where everyone stands for the next ball (over or round the wicket carries on until the over ends).
+  let next: Crease = { striker, nonStriker, bowler, ...(inn.crease.side ? { side: inn.crease.side } : {}) }
   const swap = () => (next = { ...next, striker: next.nonStriker, nonStriker: next.striker })
   if (wicket && CAUGHT.includes(wicket.kind)) {
     // The new batter always takes strike after a catch (unless the over ends).
@@ -376,6 +392,7 @@ export function addBall(file: ScoreFile, input: BallInput): ScoreFile {
   if (kind === 'legal' && (legalBalls(inn) + 1) % BALLS === 0) {
     swap()
     next.bowler = undefined
+    delete next.side
   }
   return withInnings(file, (i) => ({ ...i, events: [...i.events, ball], crease: next }))
 }
@@ -439,12 +456,12 @@ export function undo(file: ScoreFile): ScoreFile {
     return settle({ ...file, innings: [file.innings[0]] })
   }
   const last = inn.events[inn.events.length - 1]
-  const crease: Crease = last.t === 'ball' ? { striker: last.striker, nonStriker: last.nonStriker, bowler: last.bowler } : last.crease
+  const crease: Crease = last.t === 'ball' ? { striker: last.striker, nonStriker: last.nonStriker, bowler: last.bowler, ...(last.side ? { side: last.side } : {}) } : last.crease
   return withInnings(file, (i) => ({ ...i, events: i.events.slice(0, -1), crease }))
 }
 
 /** Fix the runs or the shot direction of an earlier ball. To change a wicket or a wide/no-ball, undo back to it. */
-export function editBall(file: ScoreFile, inningsIdx: number, ballId: string, patch: { bat: number; byes: number; byeType?: 'b' | 'lb'; shot?: [number, number] | null }): ScoreFile {
+export function editBall(file: ScoreFile, inningsIdx: number, ballId: string, patch: { bat: number; byes: number; byeType?: 'b' | 'lb'; shot?: [number, number] | null; shotType?: ShotType | null }): ScoreFile {
   const innings = file.innings.map((inn, i) => {
     if (i !== inningsIdx) return inn
     return {
@@ -458,6 +475,8 @@ export function editBall(file: ScoreFile, inningsIdx: number, ballId: string, pa
         else delete next.byeType
         if (patch.shot === null) delete next.shot
         else if (patch.shot) next.shot = patch.shot
+        if (patch.shotType === null) delete next.shotType
+        else if (patch.shotType) next.shotType = patch.shotType
         return next
       }),
     }

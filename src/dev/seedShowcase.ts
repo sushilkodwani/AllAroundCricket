@@ -18,6 +18,7 @@ import {
   getMatch,
   lookupPlayer,
   opponentsOf,
+  peopleOf,
   saveGround,
   setAvailability,
   setSquad,
@@ -30,7 +31,8 @@ import { saveScore, startScoring } from '../lib/scoreDomain'
 import { addBall, bowlerBlock, inningsTotal, isFreeHit, outIds, previousOverBowler, setCrease, startSecondInnings, type BallInput } from '../lib/scoring'
 import type { Store } from '../lib/store'
 import { seedUsage } from './seedUsage'
-import type { BowlStyle, ExpenseLine, Innings, PlayerRole, ScoreFile, SideKey, WicketKind } from '../types'
+import type { BowlStyle, ExpenseLine, Innings, PlayerRole, ScoreFile, ShotType, SideKey, WicketKind } from '../types'
+import { shotAngle } from '../lib/analysis'
 
 const REPO = { owner: 'demo', repo: 'showcase', token: 'demo-token' }
 
@@ -193,6 +195,62 @@ function nextBall(file: ScoreFile, inn: Innings, bat: SideInfo, bowl: SideInfo, 
   else if (runs >= 1 && file.allDirections && rnd() < 0.8) input.shot = shotFor(!!striker.left, runs)
   if (runs === 0 && rnd() < 0.05) return { byes: 1, byeType: rnd() < 0.5 ? 'lb' : 'b' }
   return input
+}
+
+// A second random sequence for the extra details below, so adding them never changes the scores.
+let seed2 = 7_2026
+function rnd2(): number {
+  seed2 |= 0
+  seed2 = (seed2 + 0x6d2b79f5) | 0
+  let t = Math.imul(seed2 ^ (seed2 >>> 15), 1 | seed2)
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+}
+function pick2<T>(table: [T, number][]): T {
+  let r = rnd2() * table.reduce((sum, [, w]) => sum + w, 0)
+  for (const [v, w] of table) if ((r -= w) <= 0) return v
+  return table[table.length - 1][0]
+}
+
+/**
+ * The shot played and over/round the wicket, as a scorer would note them: a shot that fits where
+ * the ball went (cut square on the off side, pull or sweep on the leg side, glance fine …), most
+ * balls but not all; over or round the wicket chosen once per over.
+ */
+function addDetails(file: ScoreFile, lefties: Set<string>): ScoreFile {
+  const innings = file.innings.map((inn) => {
+    let legal = 0
+    let side: 'over' | 'round' = 'over'
+    const events = inn.events.map((e) => {
+      if (e.t !== 'ball') return e
+      if (legal % 6 === 0) side = rnd2() < 0.7 ? 'over' : 'round'
+      if (e.kind === 'legal') legal++
+      const b = { ...e, side }
+      if (e.kind === 'wd' || rnd2() < 0.15) return b
+      let type: ShotType | undefined
+      const w = e.wicket?.kind
+      if (w === 'caught') type = pick2<ShotType>([['lofted', 4], ['drive', 2], ['pull', 2], ['sweep', 1]])
+      else if (w === 'caught_behind') type = 'edge'
+      else if (w === 'bowled') type = pick2<ShotType>([['defence', 4], ['drive', 3], ['cut', 1]])
+      else if (w === 'lbw') type = pick2<ShotType>([['flick', 2], ['defence', 2], ['sweep', 1]])
+      else if (w === 'stumped') type = pick2<ShotType>([['lofted', 2], ['drive', 1]])
+      else if (w === 'caught_bowled') type = 'drive'
+      else if (e.bat === 0) type = rnd2() < 0.55 ? 'defence' : undefined
+      else if (e.shot) {
+        const a = shotAngle(e.shot, lefties.has(e.striker))
+        const big = e.bat === 6
+        if (Math.abs(a) <= 25) type = big ? 'lofted' : pick2<ShotType>([['drive', 4], ['lofted', 1]])
+        else if (a < -110) type = pick2<ShotType>([['edge', 2], ['cut', 2], ['scoop', 1]])
+        else if (a < -25) type = big ? 'lofted' : pick2<ShotType>([['cut', 3], ['drive', 3]])
+        else if (a <= 75) type = big ? pick2<ShotType>([['lofted', 2], ['pull', 1]]) : pick2<ShotType>([['flick', 3], ['pull', 2], ['drive', 1]])
+        else if (a <= 125) type = big ? pick2<ShotType>([['pull', 2], ['hook', 2]]) : pick2<ShotType>([['pull', 3], ['sweep', 2], ['hook', 1]])
+        else type = pick2<ShotType>([['glance', 4], ['scoop', 1], ['sweep', 1]])
+      } else type = pick2<ShotType>([['drive', 2], ['flick', 2], ['cut', 1], ['other', 1]])
+      return type ? { ...b, shotType: type } : b
+    })
+    return { ...inn, events }
+  })
+  return { ...file, askShotType: true, askSide: true, innings }
 }
 
 /**
@@ -377,7 +435,7 @@ export async function seedShowcase(opts: { as?: 'player' | 'super' } = {}): Prom
     file = playInnings(file, first[1], first[0], live ? 13 : undefined)
     if (file.status === 'finished') file = { ...file, awards: suggestAwards(file) }
     // The first match was typed in afterwards, so it has no minutes; the rest were scored live.
-    if (k > 0) file = stampTimes(file, fixture.date)
+    if (k > 0) file = stampTimes(addDetails(file, new Set(peopleOf(store).filter((p) => p.batsLeft).map((p) => p.id))), fixture.date)
     saveScore(store, file, live ? 'Live' : 'Result')
     if (live) {
       results.push(`LIVE ${rival.name}`)

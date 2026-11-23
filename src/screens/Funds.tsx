@@ -2,7 +2,7 @@
 // dues, and the ledger per player. Viewers see the same screen read-only.
 import { useEffect, useState } from 'react'
 import { FundCharts } from '../components/FundCharts'
-import { PAY_METHODS } from '../components/MatchMoney'
+import { PAY_METHODS, PayButton } from '../components/MatchMoney'
 import { Screen } from '../components/Screen'
 import { Avatar, ChoiceChips, Confirm, Empty, ErrorNote, Field, NumberInput, Pill, Sheet } from '../components/ui'
 import { fmtDayMonth, money, todayISO } from '../lib/dates'
@@ -114,6 +114,18 @@ export function Funds() {
                 </div>
               </div>
             </div>
+
+            {current.upi && duesTotal(matches, me) > 0 && (
+              <div className="card p-4">
+                <p className="font-semibold">You owe {money(duesTotal(matches, me))}</p>
+                <p className="text-sm text-muted">
+                  For {duesOf(matches, me)
+                    .map((d) => `vs ${d.match.opponent} (${fmtDayMonth(d.match.date)})`)
+                    .join(', ')}
+                </p>
+                <PayButton upi={current.upi} amount={duesTotal(matches, me)} note={`${current.shortName} dues ${personName(me)}`} />
+              </div>
+            )}
 
             {isAdmin && activeIds.length > 0 && (
               <button className="btn-primary" onClick={() => sheet.open('pick')}>

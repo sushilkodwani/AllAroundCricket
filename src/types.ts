@@ -68,8 +68,21 @@ export interface Person {
   jersey?: number
   /** Stamp of the profile photo in images/people/<id>.json; absent = no photo. */
   photo?: string
+  /** Personal goals the player set (up to 4). */
+  goals?: Goal[]
   createdAt: string
   updatedAt: string
+}
+
+export type GoalMetric = 'runs' | 'wickets' | 'sixes' | 'fours' | 'fifties' | 'catches' | 'sr' | 'avg' | 'econ'
+export interface Goal {
+  id: string
+  metric: GoalMetric
+  target: number
+  /** One calendar year (counted from the matches that year) or the whole career. */
+  period: 'year' | 'all'
+  year?: string
+  createdAt: string
 }
 export interface PeopleFile {
   schemaVersion: 1
@@ -137,6 +150,8 @@ export interface Team {
   adminId: string
   /** Funds tab "Low balance" filter threshold in rupees (default 500). */
   lowBalanceThreshold?: number
+  /** Where players pay their dues by UPI (shown to the team's players on the Pay button). */
+  upi?: { id: string; name: string }
   archived: boolean
   createdAt: string
   updatedAt: string
@@ -384,7 +399,15 @@ export interface Crease {
   striker?: string
   nonStriker?: string
   bowler?: string
+  /** Over or round the wicket (only when the match asks for it); cleared at the end of each over. */
+  side?: BowlingSide
 }
+
+export type BowlingSide = 'over' | 'round'
+export const SIDE_LABELS: Record<BowlingSide, string> = { over: 'Over the wicket', round: 'Round the wicket' }
+
+export type ShotType = 'drive' | 'cut' | 'pull' | 'hook' | 'sweep' | 'flick' | 'glance' | 'lofted' | 'defence' | 'edge' | 'scoop' | 'other'
+export const SHOT_LABELS: Record<ShotType, string> = { drive: 'Drive', cut: 'Cut', pull: 'Pull', hook: 'Hook', sweep: 'Sweep', flick: 'Flick', glance: 'Glance', lofted: 'Lofted', defence: 'Defence', edge: 'Edge', scoop: 'Scoop / ramp', other: 'Other' }
 
 export interface BallEvent {
   t: 'ball'
@@ -402,6 +425,10 @@ export interface BallEvent {
   wicket?: { kind: WicketKind; who: string; fielder?: string; at?: [number, number] }
   /** Where a boundary went: point on the ground, unit circle, centre = 0,0, y down. */
   shot?: [number, number]
+  /** The kind of shot played (only when the match asks for it). */
+  shotType?: ShotType
+  /** Bowled over or round the wicket (only when the match asks for it). */
+  side?: BowlingSide
   at: string
 }
 /** A batter walks off between balls (hurt = may return; out = dismissed). */
@@ -449,6 +476,10 @@ export interface ScoreFile {
   powerplay?: number
   /** Also ask where 1s, 2s and 3s went (optional for the scorer), so the wagon wheel shows every scoring shot. */
   allDirections?: boolean
+  /** Also ask the kind of shot (drive, pull …) — optional on every ball. */
+  askShotType?: boolean
+  /** Also ask over or round the wicket when each over starts. */
+  askSide?: boolean
   status: 'live' | 'break' | 'finished'
   result?: { winner?: SideKey; text: string }
   /** Confirmed by the admin after the match (PLAN §33). */

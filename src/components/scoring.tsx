@@ -194,7 +194,11 @@ const EDGES = [12, 50, 80, 115, 168]
  * of the pitch. With `onPick` it is an input (tap where the ball went);
  * with `shots` it is a wagon wheel.
  */
-/** `exact` keeps the tapped spot (a catch in the ring) instead of stretching it to the rope; `marks` are ✕ points. */
+/**
+ * Tapping the ground: by default the pick is stretched to the rope (a four or six). `exact` keeps the
+ * tapped spot as a dot (a catch in the ring); `stop` keeps it too but draws the shot line up to it
+ * (a 1, 2 or 3 that stopped in the field). `marks` are ✕ points.
+ */
 export function GroundMap({
   left,
   shots = [],
@@ -202,6 +206,7 @@ export function GroundMap({
   picked,
   onPick,
   exact,
+  stop,
   children,
 }: {
   left?: boolean
@@ -210,6 +215,7 @@ export function GroundMap({
   picked?: [number, number] | null
   onPick?: (p: [number, number]) => void
   exact?: boolean
+  stop?: boolean
   children?: ReactNode
 }) {
   const ref = useRef<SVGSVGElement>(null)
@@ -225,13 +231,13 @@ export function GroundMap({
       viewBox="-1.12 -1.12 2.24 2.24"
       className={`mx-auto block w-full max-w-[340px] select-none ${onPick ? 'cursor-crosshair touch-none' : ''}`}
       role={onPick ? 'button' : 'img'}
-      aria-label={onPick ? 'Ground map: tap where the ball went' : 'Wagon wheel'}
+      aria-label={onPick ? (stop ? 'Ground map: tap where the ball stopped' : 'Ground map: tap where the ball went') : 'Wagon wheel'}
       onPointerDown={(e) => {
         if (!onPick || !ref.current) return
         const r = ref.current.getBoundingClientRect()
         const x = ((e.clientX - r.left) / r.width) * 2.24 - 1.12
         const y = ((e.clientY - r.top) / r.height) * 2.24 - 1.12
-        if (!exact) return onPick(toBoundary([x, y]))
+        if (!exact && !stop) return onPick(toBoundary([x, y]))
         // Inside the rope: keep the spot, pulled back onto the field if the tap was outside it.
         const d = Math.hypot(x, y)
         const k = d > 1 ? 1 / d : 1

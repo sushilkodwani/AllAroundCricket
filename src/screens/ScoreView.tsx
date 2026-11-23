@@ -14,6 +14,7 @@ import { buildPublicCard, cardUrl, encodeCard } from '../lib/publicCard'
 import { drawResultCard, shareResultCard } from '../lib/resultCard'
 import { inningsMinutes, mins as toMin } from '../lib/minutes'
 import { P } from '../lib/paths'
+import { everyText, liveRefreshMs, useSaverLevel } from '../lib/saver'
 import { ballNumbers, ballText, economy, fmtRate, howOut, scoreLine, strikeRate, summarize, type InningsSummary } from '../lib/scorecard'
 import { BALLS, ballRuns, battingSide, bowlingSide, isBall, oversText } from '../lib/scoring'
 import { useApp, useFile, useTeam } from '../state/AppContext'
@@ -24,7 +25,6 @@ import { WICKET_LABELS, type ScoreFile, type WicketKind } from '../types'
 const TABS = ['live', 'scorecard', 'commentary', 'analysis', 'detailed', 'teams'] as const
 type Tab = (typeof TABS)[number]
 /** How often the live score refreshes itself when the super admin turned that on. */
-const AUTO_MS = 20_000
 const TAB_LABEL: Record<Tab, string> = { live: 'Live', scorecard: 'Scorecard', commentary: 'Commentary', analysis: 'Analysis', detailed: 'Detailed analysis', teams: 'Teams' }
 
 const fmtClock = (iso: string) => {
@@ -65,6 +65,9 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
   // Auto-refresh (super admin's switch, per match): the score every 20 s while the screen is in view,
   // the match record every 2 minutes so a viewer notices when it is switched off. Unchanged = free.
   const auto = !!match?.liveAuto && file?.status !== 'finished'
+  // Every 20 s, or less often in saver mode (the club's allowance for the hour running low).
+  const saver = useSaverLevel()
+  const autoMs = liveRefreshMs(saver)
   useEffect(() => {
     if (!store || !auto) return
     let tick = 0
@@ -72,9 +75,9 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
       if (document.visibilityState !== 'visible') return
       void store.refresh(path).catch(() => {})
       if (++tick % 6 === 0) void store.refresh(P.matches(teamId)).catch(() => {})
-    }, AUTO_MS)
+    }, autoMs)
     return () => clearInterval(t)
-  }, [store, auto, path, teamId])
+  }, [store, auto, path, teamId, autoMs])
 
   if (!file) {
     return (
@@ -171,7 +174,7 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
             </div>
           )}
           <p className="mt-1 text-xs text-muted">
-            Last scored {fmtClock(file.updatedAt)} · {auto ? 'updates by itself every 20 s' : 'tap ⟳ for the latest'}
+            Last scored {fmtClock(file.updatedAt)} · {auto ? `updates by itself every ${everyText(autoMs)}${saver === 'normal' ? '' : ' (saving data)'}` : 'tap ⟳ for the latest'}
             {(isAdmin || (!!match?.scorerId && match.scorerId === session?.personId)) && (
               <button className="ml-2 font-semibold text-accent" onClick={() => navigate(`${base}/score`)}>
                 {file.status === 'finished' ? 'Open scoring' : 'Continue scoring'}

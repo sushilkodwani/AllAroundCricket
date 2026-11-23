@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { fmtDayMonth, money, todayISO } from '../lib/dates'
 import { completeMatch, isGuestIn, reopenMatch, settleShare, unsettleShare } from '../lib/domain'
 import { lineParts } from '../lib/split'
+import { upiLink } from '../lib/upi'
+import { track } from '../lib/usage'
 import { useApp, type TeamData } from '../state/AppContext'
 import { navigate, useSheet } from '../state/router'
 import { METHOD_LABELS, type Match, type PayMethod, type PlayerShare, type Team } from '../types'
@@ -103,7 +105,10 @@ export function MatchMoney({ team, match, data }: { team: Team; match: Match; da
       <h2 className="section-title !pb-0">Expenses</h2>
 
       {!isAdmin && mine && !mine.settled && mine.pending > 0 && (
-        <p className="rounded-xl bg-warn/15 px-3 py-2 text-sm font-medium text-warn">You owe {money(mine.pending)} — pay the admin</p>
+        <div className="rounded-xl bg-warn/15 px-3 py-2.5 text-sm">
+          <p className="font-medium text-warn">You owe {money(mine.pending)}{team.upi ? '' : ' — pay the admin'}</p>
+          {team.upi && <PayButton upi={team.upi} amount={mine.pending} note={`${team.shortName} v ${match.opponent} ${match.date}`} />}
+        </div>
       )}
 
       <div className="card overflow-hidden">
@@ -289,5 +294,19 @@ function SettleSheet({ name, amount, onClose, onSave }: { name: string; amount: 
         </button>
       </div>
     </Sheet>
+  )
+}
+
+/** Opens the player's UPI app with the team's UPI ID and the amount filled in. */
+export function PayButton({ upi, amount, note }: { upi: { id: string; name: string }; amount: number; note: string }) {
+  return (
+    <div className="mt-2">
+      <a className="btn-primary flex w-full items-center justify-center gap-2" href={upiLink(upi, amount, note)} onClick={() => track('act.pay')}>
+        Pay {money(amount)} by UPI
+      </a>
+      <p className="mt-1.5 text-xs text-muted">
+        To {upi.name} ({upi.id}). Opens GPay, PhonePe or any UPI app; you confirm the payment there. The admin marks it paid once it arrives.
+      </p>
+    </div>
   )
 }

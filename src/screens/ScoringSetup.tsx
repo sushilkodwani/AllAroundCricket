@@ -47,6 +47,9 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
   const [error, setError] = useState<string | null>(null)
   // Ask where every scoring shot went (on by default); fours and sixes are always asked.
   const [allDirections, setAllDirections] = useState(true)
+  // Extra details for the player analysis: off by default, each adds a tap.
+  const [askShotType, setAskShotType] = useState(false)
+  const [askSide, setAskSide] = useState(false)
 
   const oversValue = overs || (match?.overs ? String(match.overs) : '')
   // Powerplay overs: filled in with the usual 30% until the scorer changes it.
@@ -116,6 +119,8 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
         toss: { wonBy, chose },
         allDirections,
         powerplay: ppNum,
+        askShotType,
+        askSide,
       })
       navigate(`${base}/score`, { replace: true })
     } catch (e) {
@@ -235,14 +240,31 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
         </section>
 
         <section>
-          <h2 className="section-title">Wagon wheel</h2>
-          <div className="card flex items-center justify-between gap-3 p-4">
-            <span className="min-w-0 text-sm">
-              Ask where 1s, 2s and 3s went
-              <span className="block text-xs text-muted">Fours and sixes are always asked. You can skip any single, and change this later in Scoring options.</span>
-            </span>
-            <Toggle checked={allDirections} onChange={setAllDirections} label="Ask where 1s, 2s and 3s went" />
+          <h2 className="section-title">What to ask while scoring</h2>
+          <div className="card divide-y divide-line">
+            <div className="flex items-center justify-between gap-3 p-4">
+              <span className="min-w-0 text-sm">
+                Where 1s, 2s and 3s went
+                <span className="block text-xs text-muted">For the wagon wheel. Fours and sixes are always asked. You can skip any single.</span>
+              </span>
+              <Toggle checked={allDirections} onChange={setAllDirections} label="Ask where 1s, 2s and 3s went" />
+            </div>
+            <div className="flex items-center justify-between gap-3 p-4">
+              <span className="min-w-0 text-sm">
+                The shot played (drive, pull, sweep…)
+                <span className="block text-xs text-muted">Optional on each scoring shot and wicket, for the players’ shot analysis.</span>
+              </span>
+              <Toggle checked={askShotType} onChange={setAskShotType} label="Ask the shot played" />
+            </div>
+            <div className="flex items-center justify-between gap-3 p-4">
+              <span className="min-w-0 text-sm">
+                Over or round the wicket
+                <span className="block text-xs text-muted">Asked once at the start of each over, for the bowlers’ analysis.</span>
+              </span>
+              <Toggle checked={askSide} onChange={setAskSide} label="Ask over or round the wicket" />
+            </div>
           </div>
+          <p className="mt-1 px-1 text-xs text-muted">All three can be changed later in Scoring options.</p>
         </section>
 
         {todo.length > 0 && (

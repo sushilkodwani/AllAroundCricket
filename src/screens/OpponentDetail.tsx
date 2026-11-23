@@ -15,10 +15,11 @@ import { sortMatchesAsc } from '../lib/stats'
 import { useApp, useTeamsLoaded } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
 import { BOWL_LABELS, WICKET_LABELS, type Match, type Opponent, type WicketKind } from '../types'
+import { HeadToHeadTab } from './HeadToHead'
 import { PlayerStatsView } from './PlayerStats'
 
 const OPP_COLOR = '#475569'
-type Tab = 'players' | 'matches' | 'stats'
+type Tab = 'players' | 'h2h' | 'matches' | 'stats'
 
 /** Matches of the teams this person can see that were played against the opponent. */
 export function useOpponentMatches(opponent: Opponent | undefined): Match[] {
@@ -54,7 +55,7 @@ export function OpponentDetail({ opponentId }: { opponentId: string }) {
   const opponent = store ? opponentsOf(store).find((o) => o.id === opponentId) : undefined
   const matches = useOpponentMatches(opponent)
   const q = route.query.get('tab')
-  const tab: Tab = q === 'matches' || q === 'stats' ? q : 'players'
+  const tab: Tab = q === 'matches' || q === 'stats' || q === 'h2h' ? q : 'players'
 
   if (!opponent || !store) {
     return (
@@ -84,8 +85,9 @@ export function OpponentDetail({ opponentId }: { opponentId: string }) {
           value={tab}
           onChange={(t) => navigate(withQuery(route, { tab: t, sheet: null, arg: null }), { replace: true })}
           options={[
-            { value: 'players', label: `Players (${players.length})` },
-            { value: 'matches', label: `Matches (${matches.length})` },
+            { value: 'players', label: 'Players' },
+            { value: 'h2h', label: 'Record' },
+            { value: 'matches', label: 'Matches' },
             { value: 'stats', label: 'Stats' },
           ]}
         />
@@ -135,6 +137,8 @@ export function OpponentDetail({ opponentId }: { opponentId: string }) {
           <p className="px-1 text-xs text-muted">Opponent players have no login. Removing one here keeps their past scorecards and stats.</p>
         </div>
       )}
+
+      {tab === 'h2h' && <HeadToHeadTab opponent={opponent} matches={matches} />}
 
       {tab === 'matches' && (
         <div className="p-4">

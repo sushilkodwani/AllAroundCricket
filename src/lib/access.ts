@@ -178,7 +178,7 @@ function ownMayWrite(me: string, path: string, before: unknown, after: unknown):
   // Profile photo: a player may set or remove their own picture only.
   if (path === P.personPhoto(me)) return safeImageFile(after)
 
-  // Profile: their own role, batting hand, bowling style, jersey number and photo stamp.
+  // Profile: their own role, batting hand, bowling style, jersey number, photo stamp and goals.
   if (path === P.people) return ownProfileOnly(me, before, after)
   return false
 }
@@ -189,7 +189,7 @@ const safeImageFile = (after: unknown) => {
   return url === null || isSafeImage(url)
 }
 
-const PROFILE_FIELDS = ['role', 'batsLeft', 'bowlStyle', 'jersey', 'photo', 'updatedAt']
+const PROFILE_FIELDS = ['role', 'batsLeft', 'bowlStyle', 'jersey', 'photo', 'goals', 'updatedAt']
 
 function ownProfileOnly(personId: string, before: unknown, after: unknown): boolean {
   const b = (before as PeopleFile | null)?.people ?? []
@@ -306,8 +306,9 @@ function scorerMayWrite(matchIds: string[], path: string, before: unknown, after
     const b = (before as MatchesFile | null)?.matches ?? []
     const a = (after as MatchesFile | null)?.matches ?? []
     const old = new Map(b.map((m) => [m.id, m]))
-    const keep = ['scoring', 'result', 'ourScore', 'theirScore', 'overs', 'opponentId', 'updatedAt']
-    return a.length === b.length && touched(b, a, (m) => m.id).every((m) => matchIds.includes(m.id) && without(old.get(m.id), keep) === without(m, keep))
+    // The scorer may also hand scoring over to someone else (never leave the match without one).
+    const keep = ['scoring', 'result', 'ourScore', 'theirScore', 'overs', 'opponentId', 'scorerId', 'updatedAt']
+    return a.length === b.length && touched(b, a, (m) => m.id).every((m) => matchIds.includes(m.id) && (!!m.scorerId || !old.get(m.id)?.scorerId) && without(old.get(m.id), keep) === without(m, keep))
   }
 
   if (path === P.teams) {

@@ -101,6 +101,7 @@ export function NumberInput({
   ariaLabel,
   className = 'input',
   allowNegative,
+  decimal,
 }: {
   value: string
   onChange: (v: string) => void
@@ -110,12 +111,14 @@ export function NumberInput({
   ariaLabel?: string
   className?: string
   allowNegative?: boolean
+  /** Allow one decimal point with up to 2 places (e.g. an economy of 6.5). */
+  decimal?: boolean
 }) {
   return (
     <input
       className={className}
-      inputMode={allowNegative ? 'text' : 'numeric'}
-      pattern={allowNegative ? '-?[0-9]*' : '[0-9]*'}
+      inputMode={allowNegative ? 'text' : decimal ? 'decimal' : 'numeric'}
+      pattern={allowNegative ? '-?[0-9]*' : decimal ? '[0-9]*[.]?[0-9]*' : '[0-9]*'}
       autoComplete="off"
       value={value}
       maxLength={maxLength + (allowNegative ? 1 : 0)}
@@ -124,6 +127,10 @@ export function NumberInput({
       aria-label={ariaLabel}
       onChange={(e) => {
         const raw = e.target.value
+        if (decimal) {
+          const [whole, ...rest] = raw.replace(/[^\d.]/g, '').split('.')
+          return onChange((rest.length ? `${whole}.${rest.join('').slice(0, 2)}` : whole).slice(0, maxLength))
+        }
         const neg = allowNegative && raw.trim().startsWith('-') ? '-' : ''
         onChange(neg + raw.replace(/\D/g, '').slice(0, maxLength))
       }}

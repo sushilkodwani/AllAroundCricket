@@ -149,3 +149,70 @@ describe('opponent playing XI picked beforehand', () => {
     expect(() => setOpponentXi(store, 't1', 'm1', Array.from({ length: 12 }, (_, i) => `p${i}`))).toThrow('11 at most')
   })
 })
+
+describe('scorer handover', () => {
+  const match = { id: 'm1', teamId: 't1', date: '2026-11-29', opponent: 'X', squad: [], cancelled: false, lifecycle: 'scheduled', scoring: 'live', scorerId: 'p1', createdAt: 'x', updatedAt: 'x' }
+  const before = { schemaVersion: 1, matches: [match] }
+  const scorer = { role: 'viewer' as const, personId: 'p1', scorerMatchIds: ['m1'] }
+  it('lets the scorer pass scoring to someone else, but not leave the match without a scorer', () => {
+    expect(canWrite(scorer, 'teams/t1/matches.json', before, { schemaVersion: 1, matches: [{ ...match, scorerId: 'p2' }] })).toBe(true)
+    const { scorerId: _drop, ...noScorer } = match
+    void _drop
+    expect(canWrite(scorer, 'teams/t1/matches.json', before, { schemaVersion: 1, matches: [noScorer] })).toBe(false)
+    expect(canWrite(scorer, 'teams/t1/matches.json', before, { schemaVersion: 1, matches: [{ ...match, scorerId: 'p2', squad: ['p9'] }] })).toBe(false)
+  })
+})
+
+describe('UPI payment links', () => {
+  it('builds a upi://pay link with the payee, amount and note', async () => {
+    const { upiLink } = await import('./upi')
+    const link = upiLink({ id: 'rohan@okicici', name: 'Rohan Deshpande' }, 605, 'SPS v Thane Titans 2026-11-15')
+    expect(link.startsWith('upi://pay?')).toBe(true)
+    const q = new URLSearchParams(link.slice('upi://pay?'.length))
+    expect(Object.fromEntries(q)).toEqual({ pa: 'rohan@okicici', pn: 'Rohan Deshpande', am: '605.00', cu: 'INR', tn: 'SPS v Thane Titans 2026-11-15' })
+    expect(link).not.toContain('+') // spaces as %20, which every UPI app reads
+    expect(link).toContain('pa=rohan@okicici')
+  })
+
+  it('checks the UPI ID and the account name, and treats both empty as none', async () => {
+    const { checkUpi } = await import('./upi')
+    expect(checkUpi('', '')).toBeUndefined()
+    expect(checkUpi(' rohan.d@okhdfcbank ', ' Rohan  D ')).toEqual({ id: 'rohan.d@okhdfcbank', name: 'Rohan D' })
+    expect(() => checkUpi('9876543210', 'Rohan')).toThrow('UPI ID')
+    expect(() => checkUpi('rohan@ybl', '')).toThrow('name')
+  })
+})
+
+describe('saver mode', () => {
+  it('turns on below 10% of the hour and gets stronger below 5%', async () => {
+    const { saverLevel, liveRefreshMs, resumeGapMs, usageSyncAllowed, everyText } = await import('./saver')
+    const r = (remaining: number) => ({ limit: 5000, remaining, resetAt: Date.now() + 3_600_000, at: Date.now() })
+    expect(saverLevel(null)).toBe('normal')
+    expect(saverLevel(r(1000))).toBe('normal')
+    expect(saverLevel(r(400))).toBe('saver')
+    expect(saverLevel(r(200))).toBe('critical')
+    expect([liveRefreshMs('normal'), liveRefreshMs('saver'), liveRefreshMs('critical')]).toEqual([20_000, 60_000, 120_000])
+    expect(resumeGapMs('critical')).toBeGreaterThan(resumeGapMs('saver'))
+    expect([usageSyncAllowed('normal'), usageSyncAllowed('saver')]).toEqual([true, false])
+    expect([everyText(20_000), everyText(60_000), everyText(120_000)]).toEqual(['20 s', 'minute', '2 minutes'])
+  })
+})
+
+describe('extra scoring details', () => {
+  it('stores the shot played and over/round the wicket, clearing the side when the over ends', async () => {
+    const { addBall, newScore, setAsk, setCrease, undo } = await import('./scoring')
+    let f = newScore({ matchId: 'm', teamId: 't', overs: 2, home: { name: 'H', shortName: 'H', xi: ['h1', 'h2', 'h3'] }, away: { name: 'A', shortName: 'A', xi: ['a1', 'a2'] }, toss: { wonBy: 'home', chose: 'bat' }, askShotType: true, askSide: true })
+    expect([f.askShotType, f.askSide]).toEqual([true, true])
+    f = setCrease(f, { striker: 'h1', nonStriker: 'h2', bowler: 'a1', side: 'round' })
+    f = addBall(f, { bat: 4, shot: [0.5, 0.5], shotType: 'pull' })
+    f = addBall(f, { kind: 'wd', shotType: 'drive' }) // no shot off a wide
+    const [four, wide] = f.innings[0].events as import('../types').BallEvent[]
+    expect([four.shotType, four.side]).toEqual(['pull', 'round'])
+    expect([wide.shotType, wide.side]).toEqual([undefined, 'round'])
+    for (let i = 0; i < 5; i++) f = addBall(f, { bat: 0 })
+    expect(f.innings[0].crease.side).toBeUndefined() // a new over: asked again
+    f = undo(f)
+    expect(f.innings[0].crease.side).toBe('round') // undo brings it back
+    expect(setAsk(f, 'askSide', false).askSide).toBeUndefined()
+  })
+})

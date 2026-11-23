@@ -46,6 +46,8 @@ export interface StartInput {
   toss: { wonBy: SideKey; chose: 'bat' | 'bowl' }
   allDirections?: boolean
   powerplay?: number
+  askShotType?: boolean
+  askSide?: boolean
 }
 
 export function startScoring(s: Store, input: StartInput): ScoreFile {

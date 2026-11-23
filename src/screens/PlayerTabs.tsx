@@ -4,6 +4,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { TrendBars } from '../components/charts'
 import { WagonWheel, WicketDonut } from '../components/matchViz'
+import { ShotTiles } from '../components/ShotIcons'
 import { Bars, DataTable, FilterChips, Insights, Panel, ProgressChart, Tiles } from '../components/playerViz'
 import { SearchSelect, Segmented } from '../components/ui'
 import { careerStats, type Career } from '../lib/career'
@@ -37,9 +38,21 @@ import {
   type PlayerData,
 } from '../lib/playerAnalysis'
 import { mins } from '../lib/minutes'
+import type { HighlightKind } from '../lib/highlightCard'
 import { oversText } from '../lib/scoring'
 import { navigate } from '../state/router'
-import { PITCH_LABELS, WICKET_LABELS, type Match, type PitchType, type ScoreFile, type WicketKind } from '../types'
+import { PITCH_LABELS, SHOT_LABELS, SIDE_LABELS, WICKET_LABELS, type BowlingSide, type Match, type PitchType, type ScoreFile, type ShotType, type WicketKind } from '../types'
+
+type ShotFilter = 'all' | 'out' | 'dots' | 'ones' | 'twos' | 'fours' | 'sixes'
+const SHOT_FILTERS: { value: ShotFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'out', label: 'Out' },
+  { value: 'dots', label: 'Dots' },
+  { value: 'ones', label: '1s' },
+  { value: 'twos', label: '2s and 3s' },
+  { value: 'fours', label: '4s' },
+  { value: 'sixes', label: '6s' },
+]
 
 const PHASES: { value: PhaseKey | 'any'; label: string }[] = [
   { value: 'any', label: 'All overs' },
@@ -69,23 +82,32 @@ export interface TabProps {
   left: boolean
   matchOf: (id: string) => Match | undefined
   career?: Career
+  /** Shares a picture of their innings or spell in a match (absent: no share buttons). */
+  share?: (matchId: string, kind: HighlightKind) => void
 }
 
-export function FormList<T extends { matchId: string; date: string; opponent: string }>({ items, text, sub, matchOf }: { items: T[]; text: (x: T) => string; sub?: (x: T) => string; matchOf: (id: string) => Match | undefined }) {
+export function FormList<T extends { matchId: string; date: string; opponent: string }>({ items, text, sub, matchOf, onShare }: { items: T[]; text: (x: T) => string; sub?: (x: T) => string; matchOf: (id: string) => Match | undefined; onShare?: (x: T) => void }) {
   const [all, setAll] = useState(false)
   const shown = all ? items : items.slice(0, 5)
   return (
     <div>
       <div className="-mx-4 divide-y divide-line border-y border-line">
         {shown.map((x, n) => (
-          <button key={n} className="row w-full px-4 active:bg-alt" onClick={() => openMatch(matchOf(x.matchId))}>
-            <span className="w-16 shrink-0 text-left font-semibold">{text(x)}</span>
-            <span className="min-w-0 flex-1 truncate text-left text-sm">vs {x.opponent}</span>
-            <span className="shrink-0 text-right text-xs text-muted">
-              {sub && <span className="block">{sub(x)}</span>}
-              {fmtDayMonth(x.date)}
-            </span>
-          </button>
+          <div key={n} className="flex items-center">
+            <button className="row min-w-0 flex-1 px-4 active:bg-alt" onClick={() => openMatch(matchOf(x.matchId))}>
+              <span className="w-16 shrink-0 text-left font-semibold">{text(x)}</span>
+              <span className="min-w-0 flex-1 truncate text-left text-sm">vs {x.opponent}</span>
+              <span className="shrink-0 text-right text-xs text-muted">
+                {sub && <span className="block">{sub(x)}</span>}
+                {fmtDayMonth(x.date)}
+              </span>
+            </button>
+            {onShare && (
+              <button className="mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg text-muted active:bg-alt" onClick={() => onShare(x)} aria-label={`Share a picture of this — vs ${x.opponent}, ${fmtDayMonth(x.date)}`}>
+                📤
+              </button>
+            )}
+          </div>
         ))}
       </div>
       {items.length > 5 && (
@@ -113,10 +135,11 @@ const yearsSorted = <T extends { date: string }>(xs: T[]) => groupBy([...xs].sor
 // ======================================================================
 // Batting
 // ======================================================================
-export function BattingTab({ personId, d, name, personName, left, matchOf }: TabProps) {
+export function BattingTab({ personId, d, name, personName, left, matchOf, share }: TabProps) {
   const [wheelPace, setWheelPace] = useState<PaceKey | 'any'>('any')
   const [wheelPhase, setWheelPhase] = useState<PhaseKey | 'any'>('any')
   const [runsPace, setRunsPace] = useState<PaceKey | 'any'>('any')
+  const [shotFilter, setShotFilter] = useState<ShotFilter>('all')
   const inns = d.batInns
   if (!inns.length) return <p className="card px-4 py-5 text-center text-sm text-muted">Has not batted in these matches.</p>
 
@@ -181,6 +204,18 @@ export function BattingTab({ personId, d, name, personName, left, matchOf }: Tab
     (xs) => xs.length,
   )
 
+  const shotRows = [...groupBy(d.batBalls.filter((b) => b.shotType), (b) => b.shotType as ShotType).entries()].map(([k, xs]) => ({ k, a: batAgg(xs) })).sort((a, b) => b.a.runs - a.a.runs)
+  // Tiles for the Shots analysis, by the filter picked (like All / Out / 1s / 4s …).
+  const shotTiles = shotRows
+    .map(({ k, a }) => {
+      const v = shotFilter === 'all' ? a.runs : shotFilter === 'out' ? a.outs : shotFilter === 'dots' ? a.dots : shotFilter === 'ones' ? a.ones : shotFilter === 'twos' ? a.twos * 2 + a.threes * 3 : shotFilter === 'fours' ? a.fours : a.sixes
+      const unit = shotFilter === 'all' || shotFilter === 'twos' ? 'run' : shotFilter === 'out' ? 'time out' : shotFilter === 'dots' ? 'dot ball' : shotFilter === 'ones' ? 'single' : shotFilter === 'fours' ? 'four' : 'six'
+      const word = v === 1 ? unit : unit === 'six' ? 'sixes' : unit === 'time out' ? 'times out' : `${unit}s`
+      return { type: k, n: v, value: `${v} ${word}`, note: `${SHOT_LABELS[k]}: ${a.runs} runs off ${a.balls} balls, ${a.fours} fours, ${a.sixes} sixes${a.outs ? `, out ${a.outs} ${a.outs === 1 ? 'time' : 'times'}` : ''}.` }
+    })
+    .filter((r) => r.n > 0)
+    .sort((x, y) => y.n - x.n)
+  const outShot = topBy(groupBy(d.batBalls.filter((b) => b.shotType && b.out), (b) => b.shotType as ShotType), (xs) => xs.length)
   const years = [...yearsSorted(inns).entries()].map(([year, xs]) => ({ year, value: xs.reduce((s, i) => s + i.runs, 0) }))
   const timed = inns.filter((i) => i.minutes !== undefined)
   const timedMs = timed.reduce((s, i) => s + (i.minutes ?? 0), 0)
@@ -188,7 +223,7 @@ export function BattingTab({ personId, d, name, personName, left, matchOf }: Tab
   return (
     <div className="flex flex-col gap-4">
       <Panel title="Current form" sub="Last 5 innings, latest first">
-        <FormList items={inns} matchOf={matchOf} text={(i) => `${scoreText(i)} (${i.balls})`} sub={(i) => `${i.out ? WICKET_LABELS[i.out.kind] : 'not out'}${i.minutes ? ` · ${mins(i.minutes)} min` : ''}`} />
+        <FormList items={inns} matchOf={matchOf} text={(i) => `${scoreText(i)} (${i.balls})`} sub={(i) => `${i.out ? WICKET_LABELS[i.out.kind] : 'not out'}${i.minutes ? ` · ${mins(i.minutes)} min` : ''}`} onShare={share && ((i) => share(i.matchId, 'bat'))} />
         <div className="mt-3">
           <Tiles
             items={[
@@ -291,6 +326,25 @@ export function BattingTab({ personId, d, name, personName, left, matchOf }: Tab
           ]}
         />
       </Panel>
+
+      {shotRows.length > 0 && (
+        <Panel title="Shots analysis" sub="Each kind of shot, where the scorer recorded it. Tap a tile for more.">
+          <FilterChips options={SHOT_FILTERS} value={shotFilter} onChange={setShotFilter} />
+          <ShotTiles left={left} rows={shotTiles} />
+          <Insights
+            items={[
+              <>
+                Favourite shot: <B>{SHOT_LABELS[shotRows[0].k]}</B> ({shotRows[0].a.runs} runs)
+              </>,
+              outShot && (
+                <>
+                  Out most often playing the <B>{SHOT_LABELS[outShot.key].toLowerCase()}</B> ({outShot.value})
+                </>
+              ),
+            ]}
+          />
+        </Panel>
+      )}
 
       <Panel title="Batting position" sub="Runs at each position">
         <Bars
@@ -458,7 +512,7 @@ export function BattingTab({ personId, d, name, personName, left, matchOf }: Tab
 type OverView = 'overs' | 'econ' | 'wickets'
 type Hand = 'any' | 'right' | 'left'
 
-export function BowlingTab({ personId, d, name, personName, matchOf, career }: TabProps) {
+export function BowlingTab({ personId, d, name, personName, matchOf, career, share }: TabProps) {
   const [overView, setOverView] = useState<OverView>('wickets')
   const [hand, setHand] = useState<Hand>('any')
   const inns = d.bowlInns
@@ -513,6 +567,8 @@ export function BowlingTab({ personId, d, name, personName, matchOf, career }: T
   const byInn = groupBy(inns, (i) => i.inn)
   const pitchRows = [...groupBy(inns.filter((i) => i.pitch), (i) => i.pitch as PitchType).entries()]
   const victims = d.bowlBalls.filter((b) => b.victim)
+  const sideRows = [...groupBy(d.bowlBalls.filter((b) => b.side), (b) => b.side as BowlingSide).entries()].map(([k, xs]) => ({ k, a: bowlAgg(xs) })).sort((a, b) => a.k.localeCompare(b.k))
+  const wicketShots = [...groupBy(d.bowlBalls.filter((b) => b.wicket && b.shotType), (b) => b.shotType as ShotType).entries()].map(([k, xs]) => [k, xs.length] as [ShotType, number]).sort((a, b) => b[1] - a[1])
   const vpos = (from: number, to: number) => victims.filter((b) => b.victim! >= from && b.victim! <= to).length
   const spread = wicketsSpread(inns)
   const win3 = winPct(inns, (i) => i.wickets >= 3)
@@ -529,7 +585,7 @@ export function BowlingTab({ personId, d, name, personName, matchOf, career }: T
   return (
     <div className="flex flex-col gap-4">
       <Panel title="Current form" sub="Last 5 innings, latest first">
-        <FormList items={inns} matchOf={matchOf} text={(i) => `${i.wickets}/${i.runs}`} sub={(i) => `${oversText(i.balls)} ov`} />
+        <FormList items={inns} matchOf={matchOf} text={(i) => `${i.wickets}/${i.runs}`} sub={(i) => `${oversText(i.balls)} ov`} onShare={share && ((i) => share(i.matchId, 'bowl'))} />
         <div className="mt-3">
           <Tiles
             items={[
@@ -618,6 +674,21 @@ export function BowlingTab({ personId, d, name, personName, matchOf, career }: T
         />
         <p className="mt-1 text-xs text-muted">Strike rate = balls per wicket. Batters count as right-handed unless their profile says left.</p>
       </Panel>
+
+      {sideRows.length > 0 && (
+        <Panel title="Over or round the wicket">
+          <DataTable
+            head={['', 'Balls', 'Runs', 'Wkts', 'Avg', 'Econ']}
+            rows={sideRows.map(({ k, a }) => [SIDE_LABELS[k], a.balls, a.runs, a.wickets, f1(avg(a.runs, a.wickets)), fmt(econ(a.runs, a.balls))])}
+          />
+        </Panel>
+      )}
+
+      {wicketShots.length > 0 && (
+        <Panel title="Wickets by shot" sub="The shot the batter played when this bowler got them out">
+          <ShotTiles rows={wicketShots.map(([k, n]) => ({ type: k, value: `${n} wicket${n === 1 ? '' : 's'}` }))} />
+        </Panel>
+      )}
 
       <Panel title="Bowling first or defending">
         <DataTable

@@ -12,6 +12,7 @@ import { KEY_NOT_YOURS, keyFits, openPersonalKey } from '../lib/personalKey'
 import { disablePush } from '../lib/push'
 import { clearSession, forgetEverything, getPref, loadSession, saveSession, type Session } from '../lib/session'
 import type { Store, StoreStatus } from '../lib/store'
+import { resumeGapMs, saverLevel, usageSyncAllowed } from '../lib/saver'
 import { noteOpen, setUsagePerson, syncDue } from '../lib/usage'
 import { syncUsage } from '../lib/usageSync'
 import type { AdminRecord, AppConfig, Credential, FundEntry, FundsFile, Match, MatchesFile, MembersFile, Membership, Person, Team } from '../types'
@@ -237,7 +238,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!store) return
     lastRefresh.current = Date.now()
     // While paused only the app settings are checked (free when unchanged), to learn when it is back.
-    await store.refreshAll(pausedForMe ? [P.config] : undefined).catch(() => {})
+    // With the hour's allowance nearly gone, only the files every screen needs.
+    await store.refreshAll(pausedForMe ? [P.config] : saverLevel() === 'critical' ? CORE_PATHS : undefined).catch(() => {})
   }, [store, pausedForMe])
 
   // While paused, check every two minutes whether the super admin ended it early.
@@ -259,7 +261,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!store || phase !== 'in') return
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && Date.now() - lastRefresh.current > 30_000) void refresh()
+      // Saver mode (allowance running low): check less often on coming back to the app.
+      if (document.visibilityState === 'visible' && Date.now() - lastRefresh.current > resumeGapMs(saverLevel())) void refresh()
     }
     const onOnline = () => {
       store.onOnline()
@@ -286,7 +289,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Nothing is sent while the app is paused.
     if (!store || !usageId || !deviceId || pausedForMe) return
-    const sync = (flush: boolean) => void syncUsage(store, usageId, deviceId).then((ok) => (ok && flush ? store.flush() : ok))
+    // Usage counts wait on the phone (nothing lost) while the allowance is low.
+    const sync = (flush: boolean) => usageSyncAllowed(saverLevel()) && void syncUsage(store, usageId, deviceId).then((ok) => (ok && flush ? store.flush() : ok))
     noteOpen()
     // Once a day, when the app is opened (a moment after the app's own files have loaded)…
     const first = setTimeout(() => syncDue(usageId, 'open') && sync(false), 5000)

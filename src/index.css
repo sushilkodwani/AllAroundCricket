@@ -197,3 +197,14 @@ input[type='search']::-webkit-search-decoration {
   -webkit-appearance: none;
   appearance: none;
 }
+
+/* A shot sticker swings its bat once when picked (ShotIcons.tsx). */
+@keyframes shot-swing {
+  0% { transform: rotate(-38deg); }
+  70% { transform: rotate(6deg); }
+  100% { transform: rotate(0); }
+}
+.shot-swing { animation: shot-swing 450ms ease-out; transform-box: view-box; }
+@media (prefers-reduced-motion: reduce) {
+  .shot-swing { animation: none; }
+}

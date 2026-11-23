@@ -118,6 +118,7 @@ export const FEATURES: { key: string; label: string; group: FeatureGroup }[] = [
   { key: 'matches', label: 'Matches tab', group: 'player' },
   { key: 'funds', label: 'Funds tab', group: 'player' },
   { key: 'act.share', label: 'Shared a score or result', group: 'player' },
+  { key: 'act.pay', label: 'Tapped Pay by UPI', group: 'player' },
   { key: 'settings', label: 'Settings', group: 'player' },
   { key: 'tour', label: 'App tour', group: 'player' },
   { key: 'squad', label: 'Pick squad', group: 'admin' },

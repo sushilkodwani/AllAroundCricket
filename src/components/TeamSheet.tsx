@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createTeam, shortNameFor, updateTeam } from '../lib/domain'
+import { checkUpi } from '../lib/upi'
 import { setTeamLogo, useImage } from '../lib/images'
 import { P } from '../lib/paths'
 import { useApp } from '../state/AppContext'
@@ -16,6 +17,8 @@ export function TeamSheet({ team, onClose, onCreated }: { team?: Team; onClose: 
   const [color, setColor] = useState(team?.color ?? TEAM_COLORS[allTeams.length % TEAM_COLORS.length].hex)
   const [ground, setGround] = useState(team?.homeGround ?? '')
   const [threshold, setThreshold] = useState(String(team?.lowBalanceThreshold ?? 500))
+  const [upiId, setUpiId] = useState(team?.upi?.id ?? '')
+  const [upiName, setUpiName] = useState(team?.upi?.name ?? '')
   const [error, setError] = useState<string | null>(null)
   const savedLogo = useImage(store, team ? P.teamLogo(team.id) : null, team?.logo)
   // undefined = unchanged; a data URL = new logo; null = remove.
@@ -29,7 +32,7 @@ export function TeamSheet({ team, onClose, onCreated }: { team?: Team; onClose: 
       const input = { name, shortName, color, homeGround: ground }
       const changedLogo = logo !== undefined && (logo ?? null) !== (savedLogo ?? null)
       if (team) {
-        updateTeam(store!, team.id, { ...input, lowBalanceThreshold: Number(threshold) || 0 })
+        updateTeam(store!, team.id, { ...input, lowBalanceThreshold: Number(threshold) || 0, upi: checkUpi(upiId, upiName) ?? null })
         if (changedLogo) setTeamLogo(store!, team.id, logo ?? null)
         onClose()
       } else {
@@ -91,6 +94,16 @@ export function TeamSheet({ team, onClose, onCreated }: { team?: Team; onClose: 
           <Field label="Low balance line (₹)" hint="Players below this show up under the “Low balance” filter in Funds.">
             <NumberInput value={threshold} onChange={setThreshold} maxLength={6} ariaLabel="Low balance threshold" />
           </Field>
+        )}
+        {team && (
+          <>
+            <Field label="UPI ID for payments (optional)" hint="Players with dues get a Pay button that opens their UPI app with this ID and the amount filled in. Everyone in the team can see it.">
+              <input className="input" value={upiId} maxLength={100} inputMode="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="name@okicici" onChange={(e) => setUpiId(e.target.value)} />
+            </Field>
+            <Field label="Name on that UPI account">
+              <input className="input" value={upiName} maxLength={50} placeholder="Rohan Deshpande" onChange={(e) => setUpiName(e.target.value)} />
+            </Field>
+          </>
         )}
         <ErrorNote>{error}</ErrorNote>
         <button className="btn-primary" disabled={!name.trim()}>

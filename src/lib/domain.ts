@@ -10,6 +10,7 @@ import type {
   Credential,
   CredentialsFile,
   ExpenseCategoriesFile,
+  Goal,
   ExpenseCategory,
   ExpenseLine,
   FundEntry,
@@ -177,7 +178,7 @@ export function createTeam(s: Store, input: TeamInput): Team {
   return team
 }
 
-export function updateTeam(s: Store, teamId: string, input: TeamInput & { lowBalanceThreshold?: number }): void {
+export function updateTeam(s: Store, teamId: string, input: TeamInput & { lowBalanceThreshold?: number; upi?: { id: string; name: string } | null }): void {
   const name = requireName(input.name)
   checkTeamName(s, name, teamId)
   putTeams(
@@ -191,6 +192,8 @@ export function updateTeam(s: Store, teamId: string, input: TeamInput & { lowBal
             color: input.color,
             homeGround: input.homeGround?.trim() || undefined,
             lowBalanceThreshold: input.lowBalanceThreshold === undefined ? t.lowBalanceThreshold : Math.max(0, Math.round(input.lowBalanceThreshold)),
+            // undefined = unchanged, null = removed.
+            upi: input.upi === undefined ? t.upi : (input.upi ?? undefined),
             updatedAt: nowStamp(),
           }
         : t,
@@ -1262,6 +1265,24 @@ export function updateProfile(s: Store, personId: string, input: ProfileInput): 
     return next
   })
   return putPeople(s, people, `Update profile of ${personName(s, personId)}`)
+}
+
+/** Replace a player's personal goals (at most 4, each with a sensible target). */
+export function setGoals(s: Store, personId: string, goals: Goal[]): boolean {
+  if (goals.length > 4) throw new Error('Keep it to 4 goals at a time.')
+  for (const g of goals) {
+    if (!Number.isFinite(g.target) || g.target <= 0) throw new Error('Enter a target above 0.')
+    if (g.target > 100000) throw new Error('That target is too big.')
+    if (g.period === 'year' && !/^\d{4}$/.test(g.year ?? '')) throw new Error('Pick the year for this goal.')
+  }
+  const people = peopleOf(s).map((p) => {
+    if (p.id !== personId) return p
+    const next: Person = { ...p, updatedAt: nowStamp() }
+    if (goals.length) next.goals = goals
+    else delete next.goals
+    return next
+  })
+  return putPeople(s, people, `Goals of ${personName(s, personId)}`)
 }
 
 // ---------- grounds (PLAN §42) ----------

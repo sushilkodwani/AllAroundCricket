@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AwardsEditor } from '../components/Awards'
 import { AddPlayerSheet, BallChip, GroundMap, PressureStrip } from '../components/scoring'
+import { ShotPicker } from '../components/ShotIcons'
 import { HeaderButton, Screen } from '../components/Screen'
-import { ChoiceChips, Confirm, Empty, Field, NumberInput, Pill, SearchSelect, Segmented, Sheet, Toggle } from '../components/ui'
-import { addOpponentPlayers, setBatsLeft, setBowlStyle } from '../lib/domain'
+import { Avatar, ChoiceChips, Confirm, Empty, Field, NumberInput, Pill, SearchSelect, Segmented, Sheet, Toggle } from '../components/ui'
+import { addOpponentPlayers, setBatsLeft, setBowlStyle, setScorer } from '../lib/domain'
 import { milestoneText, milestonesOf, parScore } from '../lib/insights'
 import { P } from '../lib/paths'
 import { economy, fmtRate, shotRegion, strikeRate, summarize, type BatLine, type BowlLine } from '../lib/scorecard'
@@ -36,6 +37,7 @@ import {
   previousOverBowler,
   retire,
   setAllDirections,
+  setAsk as setAskOption,
   setCrease,
   setOvers,
   setTarget,
@@ -46,7 +48,7 @@ import {
 } from '../lib/scoring'
 import { useApp, useFile, useTeam } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
-import { BOWL_LABELS, WICKET_LABELS, type BallEvent, type BowlStyle, type ScoreFile, type SideKey, type WicketKind } from '../types'
+import { BOWL_LABELS, SIDE_LABELS, WICKET_LABELS, type BallEvent, type BowlingSide, type BowlStyle, type ScoreFile, type ShotType, type SideKey, type WicketKind } from '../types'
 
 type Role = 'striker' | 'nonStriker' | 'bowler'
 const ROLE_LABEL: Record<Role, string> = { striker: 'striker', nonStriker: 'non-striker', bowler: 'bowler' }
@@ -93,6 +95,21 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
   // A picked batter or bowler whose profile lacks the batting hand / bowling style: asked before they start.
   const [ask, setAsk] = useState<{ id: string; role: Role } | null>(null)
   const skipped = useRef(new Set<string>())
+  // Fetch the latest score before the first tap: after a handover (or on a second phone) the copy
+  // kept on this phone may be behind, and scoring on it would overwrite the balls entered since.
+  const [synced, setSynced] = useState(false)
+  useEffect(() => {
+    if (!store) return
+    let live = true
+    store
+      .refresh(path)
+      .catch(() => toast('Could not check for the latest score. Check the connection before scoring.'))
+      .finally(() => live && setSynced(true))
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, path])
   const prompted = useRef('')
   useWakeLock()
 
@@ -114,6 +131,16 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
     openSheet('pick', need)
   }, [canScore, need, sheetName, key, openSheet])
 
+  // Over or round the wicket (when the match asks): once the bowler is in, at the start of each over.
+  const sidePrompted = useRef('')
+  const askSideNow = !!file?.askSide && !!inn && !inn.closed && !need && !!inn.crease.bowler && !inn.crease.side
+  const sideKey = `${idx}:${Math.floor((inn?.events.filter((e) => e.t === 'ball' && e.kind === 'legal').length ?? 0) / 6)}`
+  useEffect(() => {
+    if (!canScore || !askSideNow || sheetName || sidePrompted.current === sideKey) return
+    sidePrompted.current = sideKey
+    openSheet('side')
+  }, [canScore, askSideNow, sheetName, sideKey, openSheet])
+
   // No score file → scoring has not been set up for this match.
   useEffect(() => {
     if (loaded && !file) navigate(`${base}/setup`, { replace: true })
@@ -126,10 +153,10 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
       </Screen>
     )
   }
-  if (!file || !inn || !summary || !store) {
+  if (!synced || !file || !inn || !summary || !store) {
     return (
       <Screen title="Scoring" back={base}>
-        <p className="p-10 text-center text-sm text-muted">Loading…</p>
+        <p className="p-10 text-center text-sm text-muted">Getting the latest score…</p>
       </Screen>
     )
   }
@@ -182,8 +209,8 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
   function commit(input: BallInput, skipShot = false) {
     const offBat = input.kind !== 'wd' && !input.shot && !input.wicket
     const boundary = input.bat === 4 || input.bat === 6
-    const small = !!file!.allDirections && !skipShot && (input.bat ?? 0) >= 1 && (input.bat ?? 0) <= 3
-    if (offBat && (boundary || small)) {
+    const small = (!!file!.allDirections || !!file!.askShotType) && !skipShot && (input.bat ?? 0) >= 1 && (input.bat ?? 0) <= 3
+    if (offBat && !skipShot && (boundary || small)) {
       setPending(input)
       show('shot')
       return
@@ -315,6 +342,13 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
                 <span className="flex-1 font-semibold text-accent">Pick bowler</span>
               )}
             </button>
+            {file.askSide && inn.crease.bowler && (
+              <button className="row min-h-[40px] py-1.5 text-sm active:bg-alt" onClick={() => show('side')}>
+                <span className="w-4" aria-hidden>↔</span>
+                <span className="min-w-0 flex-1 text-left">{inn.crease.side ? SIDE_LABELS[inn.crease.side] : <span className="text-muted">Over or round the wicket?</span>}</span>
+                <span className="text-xs font-semibold text-accent">Change</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -502,8 +536,10 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
           batter={personName(striker)}
           left={lefties.has(striker)}
           onLeft={(v) => setBatsLeft(store, striker, v)}
+          withDirection={(pending.bat ?? 4) >= 4 || !!file.allDirections}
+          askType={!!file.askShotType}
           onClose={sheet.close}
-          onSave={(shot) => commit({ ...pending, shot })}
+          onSave={(shot, shotType) => commit({ ...pending, ...(shot ? { shot } : {}), ...(shotType ? { shotType } : {}) }, true)}
           onSkip={() => commit(pending, true)}
         />
       )}
@@ -550,6 +586,11 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
                 </button>
               </>
             )}
+            {file.status !== 'finished' && (
+              <button className="btn-secondary" onClick={() => show('handover')}>
+                Hand over scoring
+              </button>
+            )}
             <div className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2.5 text-sm">
               <span className="min-w-0">
                 Ask where 1s, 2s and 3s went
@@ -557,9 +598,61 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
               </span>
               <Toggle checked={!!file.allDirections} onChange={(v) => run((f) => setAllDirections(f, v), v ? 'Ask every shot direction' : 'Ask boundary directions only')} label="Ask where 1s, 2s and 3s went" />
             </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2.5 text-sm">
+              <span className="min-w-0">
+                Ask the shot played
+                <span className="block text-xs text-muted">Drive, pull, sweep… optional on each scoring shot.</span>
+              </span>
+              <Toggle checked={!!file.askShotType} onChange={(v) => run((f) => setAskOption(f, 'askShotType', v), v ? 'Ask the shot played' : 'Stop asking the shot played')} label="Ask the shot played" />
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2.5 text-sm">
+              <span className="min-w-0">
+                Ask over or round the wicket
+                <span className="block text-xs text-muted">Once at the start of each over.</span>
+              </span>
+              <Toggle checked={!!file.askSide} onChange={(v) => run((f) => setAskOption(f, 'askSide', v), v ? 'Ask over or round the wicket' : 'Stop asking over or round')} label="Ask over or round the wicket" />
+            </div>
             <p className="px-1 text-xs text-muted">Tap a ball in “This over” to correct its runs. Undo steps back one ball at a time, as far as needed.</p>
           </div>
         </Sheet>
+      )}
+
+      {sheet.name === 'side' && (
+        <Sheet title={`${personName(inn.crease.bowler ?? '')} — over or round the wicket?`} onClose={sheet.close}>
+          <div className="grid grid-cols-2 gap-2">
+            {(['over', 'round'] as BowlingSide[]).map((k) => (
+              <button key={k} className={`min-h-[56px] rounded-xl border px-2 text-sm font-semibold active:bg-line ${inn.crease.side === k ? 'border-brand bg-brand text-on-brand' : 'border-chip-line bg-chip'}`} onClick={() => run((f) => setCrease(f, { side: k })) && hide()}>
+                {SIDE_LABELS[k]}
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-muted">Kept for the rest of the over. Change it any time from the line under the bowler.</p>
+          <button className="btn-ghost mt-1 w-full" onClick={sheet.close}>
+            Skip this over
+          </button>
+        </Sheet>
+      )}
+
+      {sheet.name === 'handover' && (
+        <HandoverSheet
+          ids={[...new Set([...file.home.xi, ...data.members.filter((m) => m.status === 'active').map((m) => m.personId)])].filter((id) => id !== session?.personId)}
+          xi={file.home.xi}
+          current={data.matches.find((m) => m.id === matchId)?.scorerId}
+          isAdmin={isAdmin}
+          onClose={sheet.close}
+          onHandOver={async (id) => {
+            try {
+              // Every ball entered here reaches the repo first, then the new scorer is named.
+              await store.flush()
+              setScorer(store, teamId, matchId, id)
+              await store.flush()
+              toast(`${personName(id)} is scoring now`)
+              navigate(`${base}/live`, { replace: true })
+            } catch (e) {
+              toast((e as Error).message || 'Could not hand over. Check the connection and try again.')
+            }
+          }}
+        />
       )}
 
       {sheet.name === 'retire' && (
@@ -721,7 +814,7 @@ function ExtraSheet({ kind, onCommit, onWicket, onClose }: { kind: 'wd' | 'nb' |
 
 // ---------- wicket ----------
 function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: ScoreFile; delivery: BallInput; freeHit: boolean; onCommit: (input: BallInput, keeper?: string) => void; onClose: () => void }) {
-  const { personName } = useApp()
+  const { personName, people } = useApp()
   const inn = file.innings[currentIndex(file)]
   const fielders = bowlingSide(file, inn)
   const dk = delivery.kind ?? 'legal'
@@ -731,6 +824,7 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
   const [runs, setRuns] = useState(0)
   const [fielder, setFielder] = useState<string | undefined>()
   const [at, setAt] = useState<[number, number] | null>(null)
+  const [shotType, setShotType] = useState<ShotType | undefined>()
   const byBatter = kind === 'run_out' || kind === 'obstructing'
   const fielderShown = kind && FIELDER_REQUIRED.includes(kind)
   const chosenFielder = fielder ?? (kind && KEEPER_KINDS.includes(kind) ? fielders.keeperId : undefined)
@@ -740,7 +834,7 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
   function confirm() {
     if (!kind || !ready) return
     const placed = kind === 'caught' || kind === 'run_out'
-    const input: BallInput = { ...delivery, wicket: { kind, who: byBatter ? who : undefined, fielder: fielderShown ? chosenFielder : undefined, at: placed && at ? at : undefined } }
+    const input: BallInput = { ...delivery, wicket: { kind, who: byBatter ? who : undefined, fielder: fielderShown ? chosenFielder : undefined, at: placed && at ? at : undefined }, ...(shotType && dk !== 'wd' ? { shotType } : {}) }
     if (byBatter && runs > 0) {
       if (dk === 'wd' || delivery.byes) input.byes = (delivery.byes ?? 0) + runs
       else input.bat = runs
@@ -776,6 +870,12 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
             <GroundMap exact picked={at} onPick={setAt} />
           </div>
         )}
+        {file.askShotType && dk !== 'wd' && kind && kind !== 'run_out' && kind !== 'obstructing' && (
+          <div>
+            <span className="label">Shot played (optional)</span>
+            <ShotPicker value={shotType} onChange={setShotType} left={!!people.find((x) => x.id === inn.crease.striker)?.batsLeft} />
+          </div>
+        )}
         {!kind ? <p className="text-sm text-muted">Pick how the batter got out.</p> : fielderShown && !chosenFielder ? <p className="text-sm text-warn">Pick the fielder above to continue.</p> : null}
         <button className="btn-primary" disabled={!ready} onClick={confirm}>
           Confirm wicket
@@ -786,27 +886,40 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
 }
 
 // ---------- where did the boundary go ----------
-function ShotSheet({ runs, batter, left, onLeft, onSave, onSkip, onClose }: { runs: number; batter: string; left: boolean; onLeft: (v: boolean) => void; onSave: (shot: [number, number]) => void; onSkip: () => void; onClose: () => void }) {
+function ShotSheet({ runs, batter, left, onLeft, withDirection, askType, onSave, onSkip, onClose }: { runs: number; batter: string; left: boolean; onLeft: (v: boolean) => void; withDirection: boolean; askType: boolean; onSave: (shot: [number, number] | null, shotType?: ShotType) => void; onSkip: () => void; onClose: () => void }) {
   const [picked, setPicked] = useState<[number, number] | null>(null)
+  const [type, setType] = useState<ShotType | undefined>()
   const boundary = runs === 4 || runs === 6
   const what = runs === 6 ? 'six' : runs === 4 ? 'four' : runs === 1 ? '1 run' : `${runs} runs`
+  // A boundary always needs its direction; anything else needs at least one detail to save.
+  const canSave = boundary ? !!picked : !!picked || !!type
   return (
-    <Sheet title={`${boundary ? what.toUpperCase() : what[0].toUpperCase() + what.slice(1)} — where did it go?`} onClose={onClose}>
-      <GroundMap left={left} picked={picked} onPick={setPicked} />
-      <p className="mt-1 min-h-[20px] text-center text-sm font-medium">
-        {picked ? `To ${shotRegion(picked, left)}` : <span className="text-muted">{boundary ? 'Tap the ground where the ball crossed the rope' : 'Tap where the ball went (optional)'}</span>}
-      </p>
-      <div className="mt-2 flex items-center justify-between gap-3 text-sm">
-        <span className="min-w-0 truncate">{batter} bats left-handed</span>
-        <Toggle checked={left} onChange={onLeft} label={`${batter} bats left-handed`} />
-      </div>
+    <Sheet title={`${boundary ? what.toUpperCase() : what[0].toUpperCase() + what.slice(1)} — ${withDirection ? 'where did it go?' : 'what shot?'}`} onClose={onClose}>
+      {withDirection && (
+        <>
+          <GroundMap left={left} picked={picked} onPick={setPicked} stop={!boundary} />
+          <p className="mt-1 min-h-[20px] text-center text-sm font-medium">
+            {picked ? `To ${shotRegion(picked, left)}` : <span className="text-muted">{boundary ? 'Tap the ground where the ball crossed the rope' : 'Tap where the ball stopped or was fielded (optional)'}</span>}
+          </p>
+          <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+            <span className="min-w-0 truncate">{batter} bats left-handed</span>
+            <Toggle checked={left} onChange={onLeft} label={`${batter} bats left-handed`} />
+          </div>
+        </>
+      )}
+      {askType && (
+        <div className="mt-3">
+          <span className="label">Shot (optional)</span>
+          <ShotPicker value={type} onChange={setType} left={left} />
+        </div>
+      )}
       <div className="mt-3 flex gap-2">
         {!boundary && (
           <button className="btn-secondary flex-1" onClick={onSkip}>
             Skip
           </button>
         )}
-        <button className="btn-primary flex-1" disabled={!picked} onClick={() => picked && onSave(picked)}>
+        <button className="btn-primary flex-1" disabled={!canSave} onClick={() => canSave && onSave(picked, type)}>
           Save {what}
         </button>
       </div>
@@ -845,7 +958,7 @@ function EditBallSheet({ ball, left, allDirections, onSave, onClose }: { ball: B
         {(boundary || small) && (
           <div>
             <span className="label">Direction ({boundary ? 'required' : 'optional'}){shot ? ` — ${shotRegion(shot, left)}` : ''}</span>
-            <GroundMap left={left} picked={shot} onPick={setShot} />
+            <GroundMap left={left} picked={shot} onPick={setShot} stop={!boundary} />
           </div>
         )}
         <button className="btn-primary" disabled={boundary && !shot} onClick={() => onSave(wide ? { bat: 0, byes: n } : how === 'bat' ? { bat: n, byes: 0, shot: boundary || small ? shot : null } : { bat: 0, byes: n, byeType: how, shot: null })}>
@@ -917,6 +1030,56 @@ function NumberSheet({ title, hint, initial, onSave, onClose }: { title: string;
         <button className="btn-primary" disabled={!value} onClick={() => onSave(Number(value))}>
           Save
         </button>
+      </div>
+    </Sheet>
+  )
+}
+
+// ---------- hand scoring over to someone else ----------
+function HandoverSheet({ ids, xi, current, isAdmin, onClose, onHandOver }: { ids: string[]; xi: string[]; current?: string; isAdmin: boolean; onClose: () => void; onHandOver: (id: string) => Promise<void> }) {
+  const { personName } = useApp()
+  const [pick, setPick] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const sorted = [...ids].sort((a, b) => Number(xi.includes(b)) - Number(xi.includes(a)) || personName(a).localeCompare(personName(b)))
+  if (pick)
+    return (
+      <Sheet title="Hand over scoring" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          <p className="text-sm">
+            <strong className="font-semibold">{personName(pick)}</strong> will score from the next ball. Everything entered so far is saved first.
+          </p>
+          <ul className="list-disc pl-5 text-sm text-muted">
+            <li>They open this match on their phone and tap Score. The app fetches the latest score before they can start.</li>
+            <li>{isAdmin ? 'As an admin you can still score, but only one phone should score at a time.' : 'This phone stops scoring straight away.'}</li>
+          </ul>
+          <button
+            className="btn-primary"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              await onHandOver(pick)
+              setBusy(false)
+            }}
+          >
+            {busy ? 'Handing over…' : `Hand over to ${personName(pick)}`}
+          </button>
+          <button className="btn-ghost" disabled={busy} onClick={() => setPick(null)}>
+            Pick someone else
+          </button>
+        </div>
+      </Sheet>
+    )
+  return (
+    <Sheet title="Hand over scoring" onClose={onClose} full>
+      <p className="mb-2 text-sm text-muted">Who takes over? Our playing XI first.</p>
+      <div className="card divide-y divide-line overflow-hidden">
+        {sorted.map((id) => (
+          <button key={id} className="row w-full active:bg-alt disabled:opacity-40" disabled={id === current} onClick={() => setPick(id)}>
+            <Avatar name={personName(id)} personId={id} size={32} />
+            <span className="min-w-0 flex-1 truncate text-left">{personName(id)}</span>
+            <span className="text-xs text-muted">{id === current ? 'scoring now' : xi.includes(id) ? 'playing' : ''}</span>
+          </button>
+        ))}
       </div>
     </Sheet>
   )

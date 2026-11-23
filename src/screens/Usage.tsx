@@ -9,6 +9,7 @@ import { pauseApp, resumeApp } from '../lib/domain'
 import { roleOf } from '../lib/access'
 import { fmtDate, fmtDayMonth, fmtTime } from '../lib/dates'
 import { currentRate, FEATURES, featureLabel, isLow, latestRate, localDate, pendingOf, subscribeRate, usagePath, type FeatureGroup, type Rate, type UsageFile } from '../lib/usage'
+import { SAVER_SHARE, everyText, liveRefreshMs, resumeGapMs, saverLevel } from '../lib/saver'
 import { buildReport, daysInMonth, recentMonths, type FeatureUsage, type PersonUsage } from '../lib/usageReport'
 import { APP_VERSION } from '../lib/version'
 import { useApp } from '../state/AppContext'
@@ -101,6 +102,14 @@ function AllowanceCard() {
         {num(used)} used · starts afresh at {fmtTime(new Date(rate.resetAt).toTimeString().slice(0, 5))} (in {mins} min)
       </p>
       {isLow(rate) && <p className="mt-2 text-sm font-medium text-bad">⚠ Less than 10% left. Saving and refreshing may fail until it starts afresh.</p>}
+      <p className="mt-2 rounded-xl bg-alt px-3 py-2 text-sm">
+        <strong className="font-semibold">Saver mode: {saverLevel(rate) === 'normal' ? 'off' : saverLevel(rate) === 'saver' ? 'on' : 'on (strong)'}</strong>
+        <span className="block text-xs text-muted">
+          {saverLevel(rate) === 'normal'
+            ? `Turns on by itself below ${Math.round(SAVER_SHARE * 100)}% left: live scores refresh less often, phones check less on reopening, and usage counts wait. Scoring is never slowed.`
+            : `Live scores refresh every ${everyText(liveRefreshMs(saverLevel(rate)))}, phones check at most every ${everyText(resumeGapMs(saverLevel(rate)))} on reopening, and usage counts wait on the phones. Scoring is never slowed. Ends when the hour starts afresh.`}
+        </span>
+      </p>
       <p className="mt-2 text-xs text-muted">Checks that find nothing changed are free and aren’t counted. Checked {ago(new Date(rate.at).toISOString(), now)}.</p>
     </section>
   )

@@ -202,7 +202,8 @@ describe('write guard: availability and scorer', () => {
     const before = mf(match({}), match({ id: 'm2' }))
     expect(canWrite(scorer, 'teams/t/matches.json', before, mf(match({ scoring: 'finished', result: 'won', ourScore: '10/0 (1.0)' }), match({ id: 'm2' })))).toBe(true)
     expect(canWrite(scorer, 'teams/t/matches.json', before, mf(match({ squad: [] }), match({ id: 'm2' })))).toBe(false)
-    expect(canWrite(scorer, 'teams/t/matches.json', before, mf(match({ scorerId: 'p9' }), match({ id: 'm2' })))).toBe(false)
+    // Handing scoring over to someone else is allowed (see the handover tests).
+    expect(canWrite(scorer, 'teams/t/matches.json', before, mf(match({ scorerId: 'p9' }), match({ id: 'm2' })))).toBe(true)
     expect(canWrite(scorer, 'teams/t/matches.json', before, mf(match({}), match({ id: 'm2', result: 'won' })))).toBe(false)
     expect(canWrite(scorer, 'teams/t/matches.json', before, mf(match({})))).toBe(false)
   })
