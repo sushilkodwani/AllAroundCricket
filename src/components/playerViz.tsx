@@ -2,6 +2,7 @@
 // insight, a plain table, vertical bars with a tap-to-read line, and the
 // "average innings" line (runs against balls faced).
 import { useState, type ReactNode } from 'react'
+import { Avatar, Sheet } from './ui'
 
 /** Big number, small label — the overall-stats and current-form grids. */
 export function Tiles({ items, cols = 3 }: { items: [string, ReactNode][]; cols?: 2 | 3 | 4 }) {
@@ -152,12 +153,13 @@ export function Bars({ bars, idle, color = 'var(--series-1)', axis }: { bars: Ba
   )
 }
 
-/** Average runs after each ball faced, as a line; a guide marks ball `mark` (e.g. 15). */
-export function ProgressChart({ values, mark }: { values: number[]; mark?: number }) {
+/** Average runs after each ball faced, as a line (two lines when comparing); a guide marks ball `mark` (e.g. 15). */
+export function ProgressChart({ values, second, names, mark }: { values: number[]; second?: number[]; names?: [string, string]; mark?: number }) {
   const [at, setAt] = useState<number | null>(null)
-  if (values.length < 2) return <p className="py-3 text-center text-sm text-muted">Needs a few more innings</p>
-  const n = values.length
-  const max = niceMax(Math.max(1, ...values))
+  const lines = [values, ...(second ? [second] : [])]
+  if (lines.every((l) => l.length < 2)) return <p className="py-3 text-center text-sm text-muted">Needs a few more innings</p>
+  const n = Math.max(...lines.map((l) => l.length))
+  const max = niceMax(Math.max(1, ...lines.flat()))
   const pw = CW - CM.l - CM.r
   const ph = CH - CM.t - CM.b
   const px = (i: number) => CM.l + (i / Math.max(1, n - 1)) * pw
@@ -170,16 +172,21 @@ export function ProgressChart({ values, mark }: { values: number[]; mark?: numbe
     const i = Math.round(((((e.clientX - r.left) / r.width) * CW - CM.l) / pw) * (n - 1))
     return i >= 0 && i < n ? i : null
   }
+  const read = (i: number) =>
+    second && names
+      ? `After ${i + 1} ball${i ? "s" : ""}: ` + lines.map((l, k) => `${names[k]} ${l[i] !== undefined ? l[i].toFixed(1) : "–"}`).join(" · ")
+      : `After ${i + 1} ball${i ? "s" : ""}: ${values[i]?.toFixed(1) ?? "–"} runs on average`
   return (
     <div>
-      <p className="min-h-[20px] text-sm text-muted">{at !== null ? `After ${at + 1} ball${at ? 's' : ''}: ${values[at].toFixed(1)} runs on average` : 'Tap the line to read a ball.'}</p>
-      <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full touch-pan-y select-none" role="img" aria-label="Average runs against balls faced" onPointerMove={(e) => e.pointerType === 'mouse' && setAt(pick(e))} onPointerLeave={() => setAt(null)} onClick={(e) => setAt(pick(e))}>
+      {second && names && <Legend names={names} />}
+      <p className="min-h-[20px] text-sm text-muted">{at !== null ? read(at) : "Tap the line to read a ball."}</p>
+      <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full touch-pan-y select-none" role="img" aria-label="Average runs against balls faced" onPointerMove={(e) => e.pointerType === "mouse" && setAt(pick(e))} onPointerLeave={() => setAt(null)} onClick={(e) => setAt(pick(e))}>
         <g fontSize="9" fill="rgb(var(--text-muted))">
-          {[0, max / 2, max].map((s) => (
-            <g key={s}>
-              <line x1={CM.l} x2={CW - CM.r} y1={py(s)} y2={py(s)} stroke="var(--grid)" />
-              <text x={CM.l - 4} y={py(s) + 3} textAnchor="end">
-                {s}
+          {[0, max / 2, max].map((v) => (
+            <g key={v}>
+              <line x1={CM.l} x2={CW - CM.r} y1={py(v)} y2={py(v)} stroke="var(--grid)" />
+              <text x={CM.l - 4} y={py(v) + 3} textAnchor="end">
+                {v}
               </text>
             </g>
           ))}
@@ -193,8 +200,15 @@ export function ProgressChart({ values, mark }: { values: number[]; mark?: numbe
           </text>
         </g>
         {mark && mark <= n && <line x1={px(mark - 1)} x2={px(mark - 1)} y1={CM.t} y2={CM.t + ph} stroke="rgb(var(--text-muted))" strokeDasharray="3 3" />}
-        <path d={`M${values.map((v, i) => `${px(i)},${py(v)}`).join(' L')}`} fill="none" stroke="var(--series-1)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-        {at !== null && <circle cx={px(at)} cy={py(values[at])} r="4" fill="var(--series-1)" stroke="rgb(var(--surface))" strokeWidth="2" />}
+        {at !== null && <line x1={px(at)} x2={px(at)} y1={CM.t} y2={CM.t + ph} stroke="rgb(var(--text))" opacity="0.15" />}
+        {lines.map((l, k) =>
+          l.length > 1 ? (
+            <g key={k}>
+              <path d={`M${l.map((v, i) => `${px(i)},${py(v)}`).join(" L")}`} fill="none" stroke={SERIES[k]} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+              {at !== null && l[at] !== undefined && <circle cx={px(at)} cy={py(l[at])} r="4" fill={SERIES[k]} stroke="rgb(var(--surface))" strokeWidth="2" />}
+            </g>
+          ) : null,
+        )}
       </svg>
     </div>
   )
@@ -220,6 +234,186 @@ export function FilterChips<T extends string>({ options, value, onChange }: { op
           {o.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+// ---------- two players side by side ----------
+/** This player = series 1 (blue), the one they are compared with = series 2 (orange). */
+export const SERIES = ['var(--series-1)', 'var(--series-2)'] as const
+
+export function Legend({ names }: { names: [string, string] }) {
+  return (
+    <div className="mb-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+      {names.map((n, k) => (
+        <span key={k} className="inline-flex min-w-0 items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: SERIES[k] }} />
+          <span className="truncate">{n}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/** Two bars per label (blue = first player, orange = second). Tap a group to read both. */
+export function PairBars({ labels, a, b, names, fmt = (v) => String(Math.round(v * 10) / 10), axis }: { labels: string[]; a: number[]; b: number[]; names: [string, string]; fmt?: (v: number) => string; axis?: string }) {
+  const [at, setAt] = useState<number | null>(null)
+  if ([...a, ...b].every((v) => !v)) return <p className="py-3 text-center text-sm text-muted">Nothing yet</p>
+  const max = niceMax(Math.max(1, ...a, ...b))
+  const pw = CW - CM.l - CM.r
+  const ph = CH - CM.t - CM.b
+  const slot = pw / labels.length
+  const bw = Math.min(16, Math.max(3, (slot - 6) / 2))
+  const pick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const i = Math.floor(((((e.clientX - r.left) / r.width) * CW - CM.l) / pw) * labels.length)
+    return i >= 0 && i < labels.length ? i : null
+  }
+  return (
+    <div>
+      <Legend names={names} />
+      <p className="min-h-[20px] text-sm text-muted">{at !== null ? `${labels[at]}: ${names[0]} ${fmt(a[at] ?? 0)} · ${names[1]} ${fmt(b[at] ?? 0)}` : 'Tap a pair of bars to read them.'}</p>
+      <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full touch-pan-y select-none" role="img" aria-label={labels.map((l, i) => `${l}: ${fmt(a[i] ?? 0)} v ${fmt(b[i] ?? 0)}`).join(', ')} onClick={(e) => setAt(pick(e))} onPointerMove={(e) => e.pointerType === 'mouse' && setAt(pick(e))} onPointerLeave={() => setAt(null)}>
+        <g fontSize="9" fill="rgb(var(--text-muted))">
+          {[0, max / 2, max].map((v) => {
+            const y = CM.t + ph - (v / max) * ph
+            return (
+              <g key={v}>
+                <line x1={CM.l} x2={CW - CM.r} y1={y} y2={y} stroke="var(--grid)" />
+                <text x={CM.l - 4} y={y + 3} textAnchor="end">
+                  {fmt(v)}
+                </text>
+              </g>
+            )
+          })}
+        </g>
+        {at !== null && <rect x={CM.l + at * slot} y={CM.t} width={slot} height={ph} fill="rgb(var(--text))" opacity="0.07" />}
+        {labels.map((l, i) => {
+          const cx = CM.l + i * slot + slot / 2
+          return (
+            <g key={i}>
+              {[a[i] ?? 0, b[i] ?? 0].map((v, k) => {
+                const h = (v / max) * ph
+                if (h <= 0) return null
+                const x = cx + (k === 0 ? -bw - 1 : 1)
+                const y = CM.t + ph - h
+                const r = Math.min(2, bw / 2, h)
+                return <path key={k} d={`M${x},${CM.t + ph} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${CM.t + ph} Z`} fill={SERIES[k]} />
+              })}
+              <text x={cx} y={CH - CM.b + 12} textAnchor="middle" fontSize="9" fill="rgb(var(--text-muted))">
+                {l}
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+      {axis && <p className="-mt-1 text-center text-[11px] text-muted">{axis}</p>}
+    </div>
+  )
+}
+
+/** Mirrored bars: the first player's grow left from the middle, the second's grow right. */
+export function Butterfly({ rows, names }: { rows: { label: string; a: number; b: number }[]; names: [string, string] }) {
+  const shown = rows.filter((r) => r.a || r.b)
+  if (!shown.length) return <p className="py-3 text-center text-sm text-muted">Nothing yet</p>
+  const max = Math.max(1, ...shown.flatMap((r) => [r.a, r.b]))
+  const totals = [shown.reduce((s, r) => s + r.a, 0), shown.reduce((s, r) => s + r.b, 0)]
+  return (
+    <div>
+      <Legend names={names} />
+      <div className="mt-1 flex flex-col gap-1.5">
+        {shown.map((r) => (
+          <div key={r.label} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-sm">
+            <div className="flex items-center justify-end gap-1.5">
+              <span className="font-semibold">{r.a || ''}</span>
+              <span className="h-3.5 rounded-l" style={{ width: `${(r.a / max) * 80}%`, minWidth: r.a ? 3 : 0, background: SERIES[0] }} />
+            </div>
+            <span className="w-24 text-center text-xs text-muted">{r.label}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="h-3.5 rounded-r" style={{ width: `${(r.b / max) * 80}%`, minWidth: r.b ? 3 : 0, background: SERIES[1] }} />
+              <span className="font-semibold">{r.b || ''}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 grid grid-cols-2 text-xs text-muted">
+        <span>Total {totals[0]}</span>
+        <span className="text-right">Total {totals[1]}</span>
+      </p>
+    </div>
+  )
+}
+
+/** A figure for both players on one row, the better one in bold (`better`: which way is better). */
+export function VsRows({ rows }: { rows: { label: string; a: string; b: string; av: number | null; bv: number | null; better?: 'high' | 'low' }[] }) {
+  return (
+    <div className="-mx-4 divide-y divide-line border-y border-line">
+      {rows.map((r) => {
+        const w = !r.better || r.av === null || r.bv === null || r.av === r.bv ? 0 : (r.better === 'high' ? r.av > r.bv : r.av < r.bv) ? 1 : -1
+        return (
+          <div key={r.label} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2 text-sm">
+            <span className={`flex items-center gap-1.5 ${w > 0 ? 'font-bold' : ''}`}>
+              {r.a}
+              {w > 0 && <span className="h-2 w-2 rounded-full" style={{ background: SERIES[0] }} aria-label="better" />}
+            </span>
+            <span className="text-center text-xs text-muted">{r.label}</span>
+            <span className={`flex items-center justify-end gap-1.5 ${w < 0 ? 'font-bold' : ''}`}>
+              {w < 0 && <span className="h-2 w-2 rounded-full" style={{ background: SERIES[1] }} aria-label="better" />}
+              {r.b}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Full-height picker: search box over a grid of player photos (initials when there is none). */
+export function PlayerPicker({ title, ids, name, value, onPick, onClose, note }: { title: string; ids: string[]; name: (id: string) => string; value?: string; onPick: (id: string) => void; onClose: () => void; note?: (id: string) => string | undefined }) {
+  const [q, setQ] = useState('')
+  const shown = ids.filter((id) => name(id).toLowerCase().includes(q.trim().toLowerCase())).sort((a, b) => name(a).localeCompare(name(b)))
+  return (
+    <Sheet title={title} onClose={onClose} full>
+      <input className="input mb-3 w-full" type="search" placeholder="Search by player name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search by player name" autoFocus />
+      {shown.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted">No player called “{q}”.</p>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {shown.map((id) => (
+            <button key={id} className={`flex flex-col items-center gap-1 rounded-xl border p-2 text-center active:bg-alt ${id === value ? 'border-brand bg-alt' : 'border-line'}`} onClick={() => onPick(id)} aria-pressed={id === value}>
+              <Avatar name={name(id)} personId={id} size={56} />
+              <span className="line-clamp-2 text-xs font-medium leading-tight">{name(id)}</span>
+              {note?.(id) && <span className="text-[10px] leading-tight text-muted">{note(id)}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </Sheet>
+  )
+}
+
+/** The two players at the top of Compare / Face off; tap the right-hand one to pick. */
+export function VsHeader({ a, b, name, onPick, pickLabel }: { a: string; b?: string; name: (id: string) => string; onPick: () => void; pickLabel: string }) {
+  return (
+    <div className="card grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-4">
+      <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
+        <span className="rounded-full p-0.5" style={{ boxShadow: `0 0 0 2px ${SERIES[0]}` }}>
+          <Avatar name={name(a)} personId={a} size={64} />
+        </span>
+        <span className="line-clamp-2 text-sm font-semibold">{name(a)}</span>
+      </div>
+      <span className="rounded-full bg-alt px-2.5 py-1 text-xs font-bold text-muted">VS</span>
+      <button className="flex min-w-0 flex-col items-center gap-1.5 text-center" onClick={onPick} aria-label={b ? `Change: ${name(b)}` : pickLabel}>
+        {b ? (
+          <span className="rounded-full p-0.5" style={{ boxShadow: `0 0 0 2px ${SERIES[1]}` }}>
+            <Avatar name={name(b)} personId={b} size={64} />
+          </span>
+        ) : (
+          <span className="flex h-[68px] w-[68px] items-center justify-center rounded-full border-2 border-dashed border-line text-2xl text-muted">+</span>
+        )}
+        <span className="line-clamp-2 text-sm font-semibold">{b ? name(b) : pickLabel}</span>
+        {b && <span className="text-[11px] font-semibold text-accent">Change</span>}
+      </button>
     </div>
   )
 }

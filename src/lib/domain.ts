@@ -591,6 +591,27 @@ export function patchMatch(s: Store, teamId: string, matchId: string, fn: (m: Ma
 
 export const getMatch = (s: Store, teamId: string, matchId: string) => matchesOf(s, teamId).find((m) => m.id === matchId)
 
+/** The opponent's playing XI (and captain) for a match, picked ahead of time; empty clears it. */
+export function setOpponentXi(s: Store, teamId: string, matchId: string, xi: string[], captainId?: string): Match {
+  const ids = [...new Set(xi)]
+  if (ids.length > 11) throw new Error(`${ids.length} picked — a side plays 11 at most.`)
+  return patchMatch(
+    s,
+    teamId,
+    matchId,
+    (m) => {
+      if (m.scoring) throw new Error('Scoring has started: change the playing XI from the scoring screen.')
+      const next: Match = { ...m }
+      if (ids.length) next.opponentXi = ids
+      else delete next.opponentXi
+      if (captainId && ids.includes(captainId)) next.opponentCaptainId = captainId
+      else delete next.opponentCaptainId
+      return next
+    },
+    `Opponent XI vs ${getMatch(s, teamId, matchId)?.opponent ?? ''}`.trim(),
+  )
+}
+
 // ---------- opponents (PLAN §23) ----------
 export const opponentsOf = (s: Store) => s.get<OpponentsFile>(P.opponents)?.opponents ?? []
 const putOpponents = (s: Store, opponents: Opponent[], msg: string) => s.write(P.opponents, { schemaVersion: 1, opponents }, msg)

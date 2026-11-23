@@ -237,6 +237,8 @@ export interface NewScoreInput {
   opponentId?: string
   toss: { wonBy: SideKey; chose: 'bat' | 'bowl' }
   allDirections?: boolean
+  /** Powerplay overs (0 = none). */
+  powerplay?: number
 }
 
 export function newScore(input: NewScoreInput): ScoreFile {
@@ -248,6 +250,7 @@ export function newScore(input: NewScoreInput): ScoreFile {
     if (new Set(side.xi).size !== side.xi.length) throw new Error(`A player is listed twice for ${side.name}.`)
     if (side.captainId && !side.xi.includes(side.captainId)) throw new Error(`${side.name}: the captain must be in the playing XI.`)
   }
+  if (input.powerplay !== undefined && (!Number.isInteger(input.powerplay) || input.powerplay < 0 || input.powerplay >= input.overs)) throw new Error(`Powerplay overs must be between 0 and ${input.overs - 1}.`)
   if (input.home.xi.some((id) => input.away.xi.includes(id))) throw new Error('A player can’t be in both playing XIs.')
   const battingFirst = input.toss.chose === 'bat' ? input.toss.wonBy : other(input.toss.wonBy)
   const now = nowStamp()
@@ -262,6 +265,7 @@ export function newScore(input: NewScoreInput): ScoreFile {
     toss: input.toss,
     innings: [{ batting: battingFirst, overs: input.overs, events: [], crease: {} }],
     ...(input.allDirections ? { allDirections: true } : {}),
+    ...(input.powerplay !== undefined ? { powerplay: input.powerplay } : {}),
     status: 'live',
     startedAt: now,
     updatedAt: now,

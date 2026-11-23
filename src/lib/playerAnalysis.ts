@@ -30,6 +30,7 @@ export const CAUGHT: WicketKind[] = ['caught', 'caught_behind', 'caught_bowled']
 interface Where {
   matchId: string
   date: string
+  opponent: string
   /** 0 = first innings of the match, 1 = second. */
   inn: number
   over: number
@@ -128,6 +129,8 @@ export interface PlayerData {
   bowlBalls: BowlBall[]
   bowlInns: BowlInn[]
   stands: Stand[]
+  /** Matches played, with the per-match awards won in each. */
+  matches: { matchId: string; date: string; potm: boolean; batter: boolean; bowler: boolean }[]
 }
 
 const sideOf = (file: ScoreFile, id: string): SideKey | null => (file.home.xi.includes(id) ? 'home' : file.away.xi.includes(id) ? 'away' : null)
@@ -136,10 +139,11 @@ const byDate = <T extends { date: string }>(a: T, b: T) => b.date.localeCompare(
 
 /** Everything this player did in these matches, ball by ball and innings by innings (latest first). */
 export function playerData(files: ScoreFile[], id: string, ctx: PlayerCtx): PlayerData {
-  const d: PlayerData = { batBalls: [], batInns: [], bowlBalls: [], bowlInns: [], stands: [] }
+  const d: PlayerData = { batBalls: [], batInns: [], bowlBalls: [], bowlInns: [], stands: [], matches: [] }
   for (const file of files) {
     const side = sideOf(file, id)
     const date = ctx.dateOf(file.matchId)
+    if (side) d.matches.push({ matchId: file.matchId, date, potm: file.awards?.potm === id, batter: file.awards?.batter === id, bowler: file.awards?.bowler === id })
     const opponent = ctx.opponentOf(file.matchId)
     const pitch = ctx.pitchOf(file.matchId)
     const won = wonFor(file, side)
@@ -148,14 +152,14 @@ export function playerData(files: ScoreFile[], id: string, ctx: PlayerCtx): Play
       const time = inningsMinutes(innings)
       const order = s.batters.map((b) => b.id)
       const pos = (who: string) => order.indexOf(who) + 1
-      const phases = phasesOf(innings.overs)
-      const phaseAt = (over: number): PhaseKey => (phases.length < 3 ? 'all' : (phases.find((p) => over >= p.from && over <= p.to)?.key ?? 'death'))
+      const phases = phasesOf(innings.overs, file.powerplay)
+      const phaseAt = (over: number): PhaseKey => phases.find((p) => over >= p.from && over <= p.to)?.key ?? phases[phases.length - 1].key
       const progress: number[] = []
       let mine = 0
       let bowled = false
 
       for (const { b, over } of ballsWithOver(file, inn)) {
-        const where: Where = { matchId: file.matchId, date, inn, over, phase: phaseAt(over), pitch }
+        const where: Where = { matchId: file.matchId, date, opponent, inn, over, phase: phaseAt(over), pitch }
         const outHere = b.wicket?.who === id ? b.wicket.kind : undefined
         if (b.striker === id || outHere) {
           const onStrike = b.striker === id
@@ -215,8 +219,10 @@ export function playerData(files: ScoreFile[], id: string, ctx: PlayerCtx): Play
 export function inYear(d: PlayerData, year: string): PlayerData {
   if (year === 'all') return d
   const y = <T extends { date: string }>(xs: T[]) => xs.filter((x) => x.date.startsWith(year))
-  return { batBalls: y(d.batBalls), batInns: y(d.batInns), bowlBalls: y(d.bowlBalls), bowlInns: y(d.bowlInns), stands: y(d.stands) }
+  return { ...d, batBalls: y(d.batBalls), batInns: y(d.batInns), bowlBalls: y(d.bowlBalls), bowlInns: y(d.bowlInns), stands: y(d.stands), matches: y(d.matches) }
 }
+
+export const awardsOf = (d: PlayerData) => ({ potm: d.matches.filter((m) => m.potm).length, batter: d.matches.filter((m) => m.batter).length, bowler: d.matches.filter((m) => m.bowler).length })
 
 export const yearsOf = (d: PlayerData) => [...new Set([...d.batInns, ...d.bowlInns].map((x) => x.date.slice(0, 4)))].filter(Boolean).sort().reverse()
 

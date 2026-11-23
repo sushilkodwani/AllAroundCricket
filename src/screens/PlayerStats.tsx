@@ -11,7 +11,8 @@ import { inYear, playerData, yearsOf, type PlayerCtx } from '../lib/playerAnalys
 import { useApp, useTeam } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
 import type { Match } from '../types'
-import { BattingTab, BowlingTab, CompareTab, FaceOffTab } from './PlayerTabs'
+import { BattingTab, BowlingTab } from './PlayerTabs'
+import { CompareTab, FaceOffTab } from './PlayerVs'
 
 /** Last few scores as chips, newest first. */
 export function FormStrip({ label, values }: { label: string; values: string[] }) {
@@ -57,6 +58,8 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const all = useMemo(() => playerData(files, personId, ctx), [stamp, personId, people])
   const years = yearsOf(all)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const yearFiles = useMemo(() => (year === 'all' ? files : files.filter((f) => (scored.find((m) => m.id === f.matchId)?.date ?? '').startsWith(year))), [stamp, year])
   // Everyone who played in these matches, for Compare.
   const players = [...new Set(files.flatMap((f) => [...f.home.xi, ...f.away.xi]))].sort((a, b) => personName(a).localeCompare(personName(b)))
   // Their own profile; the admin of a team they are in (or a player in no team); the super admin.
@@ -77,7 +80,6 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
     { value: 'compare' as const, label: 'Compare' },
     { value: 'faceoff' as const, label: 'Face off' },
   ]
-  const yearFiles = year === 'all' ? files : files.filter((f) => (matchOf(f.matchId)?.date ?? '').startsWith(year))
   const d = inYear(all, year)
   const props = { personId, d, name, personName, left: !!person?.batsLeft, matchOf, career: year === 'all' ? c : careerStats(yearFiles).get(personId) }
 
@@ -112,8 +114,8 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
             </div>
             {tab === 'batting' && <BattingTab {...props} />}
             {tab === 'bowling' && <BowlingTab {...props} />}
-            {tab === 'compare' && <CompareTab personId={personId} files={yearFiles} personName={personName} players={players} />}
-            {tab === 'faceoff' && <FaceOffTab d={d} personName={personName} />}
+            {tab === 'compare' && <CompareTab personId={personId} d={d} files={yearFiles} ctx={ctx} personName={personName} players={players} matchOf={matchOf} />}
+            {tab === 'faceoff' && <FaceOffTab personId={personId} d={d} personName={personName} ctx={ctx} matchOf={matchOf} />}
           </>
         )}
       </div>

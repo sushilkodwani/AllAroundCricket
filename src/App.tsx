@@ -19,6 +19,7 @@ import { PlayerStats } from './screens/PlayerStats'
 import { ScoreMatch } from './screens/ScoreMatch'
 import { ScoreView } from './screens/ScoreView'
 import { ScoringSetup } from './screens/ScoringSetup'
+import { OpponentXiPicker } from './screens/OpponentXiPicker'
 import { Settings } from './screens/Settings'
 import { SquadPicker } from './screens/SquadPicker'
 import { PlayerStatement } from './screens/PlayerStatement'
@@ -153,6 +154,7 @@ export default function App() {
     tabs = !e
     if (!e) screen = <MatchDetail teamId={b} matchId={d} />
     else if (e === 'squad') screen = <SquadPicker teamId={b} matchId={d} />
+    else if (e === 'opponent-xi') screen = <OpponentXiPicker teamId={b} matchId={d} />
     else if (e === 'complete') screen = <CompleteMatch teamId={b} matchId={d} />
     else if (e === 'expenses') screen = <SplitExpenses teamId={b} matchId={d} />
     else if (e === 'setup') screen = <ScoringSetup teamId={b} matchId={d} />

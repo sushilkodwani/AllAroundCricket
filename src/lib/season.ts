@@ -182,8 +182,8 @@ export function phaseProfile(files: ScoreFile[], personId: string): PhaseProfile
   const rows: PhaseProfile[] = PROFILE.map((p) => ({ ...p, bat: { runs: 0, balls: 0, outs: 0 }, bowl: { runs: 0, balls: 0, wickets: 0 } }))
   for (const f of files) {
     f.innings.forEach((inn, idx) => {
-      const phases = phasesOf(inn.overs)
-      if (phases.length < 3) return // too short to split
+      const phases = phasesOf(inn.overs, f.powerplay)
+      if (phases[0].key === 'all') return // too short to split
       for (const { b, over } of ballsWithOver(f, idx)) {
         const k = phases.find((p) => over >= p.from && over <= p.to)?.key ?? 'death'
         const row = rows.find((r) => r.key === k)!

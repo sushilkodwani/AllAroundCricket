@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BowlStyle, ScoreFile } from '../types'
-import { batAgg, bowlAgg, busiestRegion, byOverOfInnings, inYear, playerData, progression, startAndAfter, wicketsSpread, winPct, type PlayerCtx } from './playerAnalysis'
+import { awardsOf, batAgg, bowlAgg, busiestRegion, byOverOfInnings, inYear, playerData, progression, startAndAfter, wicketsSpread, winPct, type PlayerCtx } from './playerAnalysis'
 import { addBall, endInnings, newScore, setCrease, startSecondInnings, type BallInput } from './scoring'
 
 const H = ['h1', 'h2', 'h3', 'h4']
@@ -31,7 +31,7 @@ const ctx: PlayerCtx = {
 }
 
 describe('player analysis', () => {
-  const files = [match('m1'), match('m2')]
+  const files = [match('m1'), { ...match('m2'), awards: { potm: 'h1', bowler: 'h1' } }]
   const d = playerData(files, 'h1', ctx)
 
   it('collects batting balls and innings, latest first, without counting wides as faced', () => {
@@ -74,5 +74,12 @@ describe('player analysis', () => {
     expect(inYear(d, '2025').batInns).toHaveLength(1)
     const w = winPct(d.batInns, () => true)
     expect(w?.of).toBe(2)
+  })
+
+  it('counts matches and per-match awards, and keeps them to the year picked', () => {
+    expect(d.matches).toHaveLength(2)
+    expect(awardsOf(d)).toEqual({ potm: 1, batter: 0, bowler: 1 })
+    expect(awardsOf(inYear(d, '2025'))).toEqual({ potm: 0, batter: 0, bowler: 0 })
+    expect(d.batBalls[0].opponent).toBe('A')
   })
 })

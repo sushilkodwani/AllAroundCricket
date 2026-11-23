@@ -27,7 +27,7 @@ import {
 } from '../lib/domain'
 import { suggestAwards } from '../lib/insights'
 import { saveScore, startScoring } from '../lib/scoreDomain'
-import { addBall, bowlerBlock, isFreeHit, outIds, previousOverBowler, setCrease, startSecondInnings, type BallInput } from '../lib/scoring'
+import { addBall, bowlerBlock, inningsTotal, isFreeHit, outIds, previousOverBowler, setCrease, startSecondInnings, type BallInput } from '../lib/scoring'
 import type { Store } from '../lib/store'
 import { seedUsage } from './seedUsage'
 import type { BowlStyle, ExpenseLine, Innings, PlayerRole, ScoreFile, SideKey, WicketKind } from '../types'
@@ -233,6 +233,8 @@ function playInnings(file: ScoreFile, bat: SideInfo, bowl: SideInfo, stopAfterOv
     const legal = inn.events.filter((e) => e.t === 'ball' && e.kind === 'legal').length
     const over = Math.floor(legal / 6)
     if (stopAfterOvers !== undefined && legal >= stopAfterOvers * 6) break
+    // The live chase must still be going: stop while a fair few runs are needed.
+    if (stopAfterOvers !== undefined && inn.target && inningsTotal(file, idx) >= inn.target - 30) break
     const out = outIds(inn)
     const used = new Set(inn.events.flatMap((e) => (e.t === 'ball' ? [e.striker, e.nonStriker] : [])))
     const fresh = () => {
@@ -366,9 +368,9 @@ export async function seedShowcase(opts: { as?: 'player' | 'super' } = {}): Prom
       skill,
       edge: 1.6,
     }
-    const them: SideInfo = { order: rival.ids, bowlers: rival.ids.slice(5, 11).reverse(), keeper: rival.ids[2], skill: rival.skill, edge: live ? 2.2 : rival.edge }
+    const them: SideInfo = { order: rival.ids, bowlers: rival.ids.slice(5, 11).reverse(), keeper: rival.ids[2], skill: rival.skill, edge: live ? 1.6 : rival.edge }
     // Today's game is a tight chase, so the live screen has something to show.
-    if (live) us.edge = 0.4
+    if (live) us.edge = 1.6
     const first = file.innings[0].batting === 'home' ? [us, them] : [them, us]
     file = playInnings(file, first[0], first[1])
     file = startSecondInnings(file)

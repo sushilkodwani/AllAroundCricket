@@ -54,12 +54,12 @@ const PACE: { value: PaceKey | 'any'; label: string }[] = [
 ]
 const PACE_LABEL: Record<PaceKey, string> = { pace: 'Pace', spin: 'Spin', unknown: 'Not recorded' }
 const B = ({ children }: { children: ReactNode }) => <strong className="font-semibold">{children}</strong>
-const f1 = (n: number | null) => fmt(n, 1)
+export const f1 = (n: number | null) => fmt(n, 1)
 const scoreText = (i: { runs: number; notOut: boolean }) => `${i.runs}${i.notOut ? '*' : ''}`
 const innsLabel = (inn: number) => (inn === 0 ? 'Batting first' : 'Chasing')
 const bowlInnsLabel = (inn: number) => (inn === 0 ? 'Bowling first' : 'Defending')
-const NUM_COLOR = (runs: number) => (runs === 0 ? 'rgb(var(--text-muted) / 0.6)' : runs === 4 ? 'var(--series-1)' : runs === 6 ? 'var(--series-2)' : 'rgb(var(--text) / 0.75)')
-const openMatch = (m?: Match) => m && navigate(`/teams/${m.teamId}/matches/${m.id}/live?tab=scorecard`)
+export const NUM_COLOR = (runs: number) => (runs === 0 ? 'rgb(var(--text-muted) / 0.6)' : runs === 4 ? 'var(--series-1)' : runs === 6 ? 'var(--series-2)' : 'rgb(var(--text) / 0.75)')
+export const openMatch = (m?: Match) => m && navigate(`/teams/${m.teamId}/matches/${m.id}/live?tab=scorecard`)
 
 export interface TabProps {
   personId: string
@@ -71,7 +71,7 @@ export interface TabProps {
   career?: Career
 }
 
-function FormList<T extends { matchId: string; date: string; opponent: string }>({ items, text, sub, matchOf }: { items: T[]; text: (x: T) => string; sub?: (x: T) => string; matchOf: (id: string) => Match | undefined }) {
+export function FormList<T extends { matchId: string; date: string; opponent: string }>({ items, text, sub, matchOf }: { items: T[]; text: (x: T) => string; sub?: (x: T) => string; matchOf: (id: string) => Match | undefined }) {
   const [all, setAll] = useState(false)
   const shown = all ? items : items.slice(0, 5)
   return (
@@ -230,7 +230,7 @@ export function BattingTab({ personId, d, name, personName, left, matchOf }: Tab
               .map((k) => ({ k, a: batAgg(d.batBalls.filter((b) => b.phase === k)) }))
               .filter((r) => r.a.balls > 0)
               .map(({ k, a }) => [PHASES.find((p) => p.value === k)!.label, a.runs, a.balls, f1(sr(a.runs, a.balls)), a.outs, `${pct(a.dots, a.balls)}%`, a.fours, a.sixes])}
-            note="Powerplay, middle and death come from the overs of each innings (6 / 9 / 5 in a 20-over game)."
+            note="Powerplay = the overs set when each match started (older matches: 30% of the overs). Death = the last quarter of the overs."
           />
         </Panel>
       )}
@@ -762,142 +762,6 @@ export function BowlingTab({ personId, d, name, personName, matchOf, career }: T
       </Panel>
 
       {fielding}
-    </div>
-  )
-}
-
-// ======================================================================
-// Compare
-// ======================================================================
-type Better = 'high' | 'low' | null
-export function CompareTab({ personId, files, personName, players }: { personId: string; files: ScoreFile[]; personName: (id: string) => string; players: string[] }) {
-  const [other, setOther] = useState<string>('')
-  const careers = useMemo(() => careerStats(files), [files])
-  const me = careers.get(personId)
-  const them = other ? careers.get(other) : undefined
-  const options = players.filter((id) => id !== personId).map((id) => ({ value: id, label: personName(id) }))
-
-  const rows: [string, (c: Career) => number | null, (c: Career) => string, Better][] = [
-    ['Matches', (c) => c.matches, (c) => String(c.matches), null],
-    ['Innings', (c) => c.bat.innings, (c) => String(c.bat.innings), null],
-    ['Runs', (c) => c.bat.runs, (c) => String(c.bat.runs), 'high'],
-    ['Average', (c) => avg(c.bat.runs, c.bat.innings - c.bat.notOuts), (c) => f1(avg(c.bat.runs, c.bat.innings - c.bat.notOuts)), 'high'],
-    ['Strike rate', (c) => sr(c.bat.runs, c.bat.balls), (c) => f1(sr(c.bat.runs, c.bat.balls)), 'high'],
-    ['Highest', (c) => c.bat.best?.runs ?? null, (c) => (c.bat.best ? `${c.bat.best.runs}${c.bat.best.notOut ? '*' : ''}` : '–'), 'high'],
-    ['50s', (c) => c.bat.fifties + c.bat.hundreds, (c) => String(c.bat.fifties + c.bat.hundreds), 'high'],
-    ['4s', (c) => c.bat.fours, (c) => String(c.bat.fours), 'high'],
-    ['6s', (c) => c.bat.sixes, (c) => String(c.bat.sixes), 'high'],
-    ['Overs', (c) => c.bowl.balls, (c) => oversText(c.bowl.balls), null],
-    ['Wickets', (c) => c.bowl.wickets, (c) => String(c.bowl.wickets), 'high'],
-    ['Economy', (c) => econ(c.bowl.runs, c.bowl.balls), (c) => fmt(econ(c.bowl.runs, c.bowl.balls)), 'low'],
-    ['Bowling avg', (c) => avg(c.bowl.runs, c.bowl.wickets), (c) => f1(avg(c.bowl.runs, c.bowl.wickets)), 'low'],
-    ['Best bowling', (c) => (c.bowl.best ? c.bowl.best.wickets * 1000 - c.bowl.best.runs : null), (c) => (c.bowl.best ? `${c.bowl.best.wickets}/${c.bowl.best.runs}` : '–'), 'high'],
-    ['Catches', (c) => c.field.catches, (c) => String(c.field.catches), 'high'],
-    ['Player of the match', (c) => c.potm, (c) => String(c.potm), 'high'],
-  ]
-  const win = (a: number | null, b: number | null, better: Better) => (better === null || a === null || b === null || a === b ? 0 : (better === 'high' ? a > b : a < b) ? 1 : -1)
-
-  return (
-    <div className="flex flex-col gap-4">
-      <Panel title="Compare with" sub="Pick another player from these matches">
-        <SearchSelect options={options} value={other} onChange={setOther} placeholder="Search players…" ariaLabel="Player to compare with" />
-      </Panel>
-      {me && them && (
-        <section className="card overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 bg-alt px-3 py-2 text-sm font-semibold">
-            <span className="truncate">{personName(personId)}</span>
-            <span />
-            <span className="truncate text-right">{personName(other)}</span>
-          </div>
-          <div className="divide-y divide-line">
-            {rows.map(([label, value, text, better]) => {
-              const w = win(value(me), value(them), better)
-              return (
-                <div key={label} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-2 text-sm">
-                  <span className={w > 0 ? 'font-bold text-accent' : ''}>{text(me)}</span>
-                  <span className="text-center text-xs text-muted">{label}</span>
-                  <span className={`text-right ${w < 0 ? 'font-bold text-accent' : ''}`}>{text(them)}</span>
-                </div>
-              )
-            })}
-          </div>
-          <p className="px-3 pb-3 pt-1 text-xs text-muted">The better figure is in bold.</p>
-        </section>
-      )}
-      {other && !them && <p className="card px-4 py-5 text-center text-sm text-muted">{personName(other)} has no figures in these matches.</p>}
-    </div>
-  )
-}
-
-// ======================================================================
-// Face off
-// ======================================================================
-export function FaceOffTab({ d, personName }: { d: PlayerData; personName: (id: string) => string }) {
-  const [pick, setPick] = useState('')
-  const asBat = [...groupBy(d.batBalls, (b) => b.bowler).entries()].map(([id, xs]) => ({ id, a: batAgg(xs) })).sort((x, y) => y.a.balls - x.a.balls)
-  const asBowl = [...groupBy(d.bowlBalls, (b) => b.striker).entries()].map(([id, xs]) => ({ id, a: bowlAgg(xs) })).sort((x, y) => y.a.balls - x.a.balls)
-  const ids = [...new Set([...asBat.map((x) => x.id), ...asBowl.map((x) => x.id)])]
-  const options = ids.map((id) => ({ value: id, label: personName(id) })).sort((a, b) => a.label.localeCompare(b.label))
-  const bat = asBat.find((x) => x.id === pick)?.a
-  const bowl = asBowl.find((x) => x.id === pick)?.a
-  if (!ids.length) return <p className="card px-4 py-5 text-center text-sm text-muted">No head-to-heads yet.</p>
-
-  return (
-    <div className="flex flex-col gap-4">
-      <Panel title="Head to head" sub="Pick a player they have batted against or bowled to">
-        <SearchSelect options={options} value={pick} onChange={setPick} placeholder="Search players…" ariaLabel="Opponent player" />
-        {pick && (
-          <div className="mt-3 flex flex-col gap-3">
-            {bat && (
-              <div>
-                <p className="mb-1 text-sm font-semibold">Batting against {personName(pick)}</p>
-                <Tiles
-                  items={[
-                    ['Runs (balls)', `${bat.runs} (${bat.balls})`],
-                    ['Out', bat.outs],
-                    ['Strike rate', f1(sr(bat.runs, bat.balls))],
-                    ['Dot balls', bat.dots],
-                    ['4s', bat.fours],
-                    ['6s', bat.sixes],
-                  ]}
-                />
-              </div>
-            )}
-            {bowl && (
-              <div>
-                <p className="mb-1 text-sm font-semibold">Bowling to {personName(pick)}</p>
-                <Tiles
-                  items={[
-                    ['Runs (balls)', `${bowl.runs} (${bowl.balls})`],
-                    ['Wickets', bowl.wickets],
-                    ['Economy', fmt(econ(bowl.runs, bowl.balls))],
-                    ['Dot balls', bowl.dots],
-                    ['4s given', bowl.fours],
-                    ['6s given', bowl.sixes],
-                  ]}
-                />
-              </div>
-            )}
-          </div>
-        )}
-      </Panel>
-
-      {asBat.length > 0 && (
-        <Panel title="Against bowlers" sub="Most balls faced first">
-          <DataTable
-            head={['Bowler', 'Runs', 'Balls', 'Out', 'SR', '4s', '6s']}
-            rows={asBat.slice(0, 10).map(({ id, a }) => [<button key={id} className="max-w-[9rem] truncate text-left underline-offset-2 hover:underline" onClick={() => setPick(id)}>{personName(id)}</button>, a.runs, a.balls, a.outs, f1(sr(a.runs, a.balls)), a.fours, a.sixes])}
-          />
-        </Panel>
-      )}
-      {asBowl.length > 0 && (
-        <Panel title="Against batters" sub="Most balls bowled first">
-          <DataTable
-            head={['Batter', 'Runs', 'Balls', 'Wkts', 'Econ', '4s', '6s']}
-            rows={asBowl.slice(0, 10).map(({ id, a }) => [<button key={id} className="max-w-[9rem] truncate text-left underline-offset-2 hover:underline" onClick={() => setPick(id)}>{personName(id)}</button>, a.runs, a.balls, a.wickets, fmt(econ(a.runs, a.balls)), a.fours, a.sixes])}
-          />
-        </Panel>
-      )}
     </div>
   )
 }

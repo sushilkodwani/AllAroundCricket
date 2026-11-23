@@ -147,19 +147,28 @@ try {
     ['home', '/teams'],
     ['live', `${t}/matches/${ids.live}/live`],
     ['scorecard', `${t}/matches/${ids.done}/live?tab=scorecard`],
-    ['analysis', `${t}/matches/${ids.done}/live?tab=analysis`, 'Score progression'],
+    ['analysis', `${t}/matches/${ids.done}/live?tab=analysis`, 'Partnerships'],
     ['detailed', `${t}/matches/${ids.done}/live?tab=detailed`, 'Wagon wheel'],
-    ['player', `${t}/players/${ids.me}`],
+    ['player', `${t}/players/${ids.me}`, 'Current form', 175],
+    // Compare: pick the captain from the photo picker first.
+    ['compare', `${t}/players/${ids.me}?ptab=compare`, 'Batting figures', 320, `(async () => {
+      [...document.querySelectorAll('button')].find(b => b.textContent.includes('Pick a player')).click()
+      await new Promise(r => setTimeout(r, 600))
+      ;[...document.querySelectorAll('[role=dialog] button')].find(b => b.textContent.includes('Rohan Deshpande')).click()
+      await new Promise(r => setTimeout(r, 800))
+      return 1
+    })()`],
     ['team-stats', `${t}?tab=stats`],
     ['availability', `${t}/matches/${ids.next}`],
     ['funds', '/funds'],
   ]
   mkdirSync(OUT, { recursive: true })
-  for (const [name, hash, scrollTo] of shots) {
+  for (const [name, hash, scrollTo, above = 72, prep] of shots) {
     await go(hash)
+    if (prep) await evaluate(prep)
     if (scrollTo) {
-      // Bring a chart to the top, just under the sticky header.
-      await evaluate(`(() => { const el = [...document.querySelectorAll('h2,h3')].find(h => h.textContent.trim() === ${JSON.stringify(scrollTo)}); if (el) { el.scrollIntoView(); window.scrollBy(0, -72) } return !!el })()`)
+      // Bring a section to the top, just under the sticky header (`above` = how much to show over it).
+      await evaluate(`(() => { const el = [...document.querySelectorAll('h2,h3')].find(h => h.textContent.trim() === ${JSON.stringify(scrollTo)}); if (el) { el.scrollIntoView(); window.scrollBy(0, -${above}) } return !!el })()`)
       await sleep(500)
     }
     const { data } = await cdp.call('Page.captureScreenshot', { format: 'jpeg', quality: 82 })

@@ -13,10 +13,11 @@ interface Slide {
 export const SLIDES: Slide[] = [
   { img: 'home', title: 'Your club in one place', text: 'Your team, the next match, recent form and the team fund at a glance.' },
   { img: 'live', title: 'Follow every ball live', text: 'Live score, win chance and par score, updated as the match is scored.' },
-  { img: 'scorecard', title: 'Full scorecards', text: 'Every batter and bowler, how each wicket fell and the player of the match.' },
-  { img: 'analysis', title: 'Match analysis', text: 'Score progression, run rate, phases of the innings and partnerships.' },
-  { img: 'detailed', title: 'Go deeper', text: 'Wagon wheel, where the boundaries went, batter against bowler and more.' },
-  { img: 'player', title: 'Your own stats', text: 'Runs, strike rate, wickets and your form over the season.' },
+  { img: 'scorecard', title: 'Full scorecards', text: 'Every batter and bowler, minutes at the crease, how each wicket fell and the player of the match.' },
+  { img: 'analysis', title: 'Match analysis', text: 'Partnerships, how the wickets fell, run rates, phases of the innings and time on the field.' },
+  { img: 'detailed', title: 'Go deeper', text: 'A big wagon wheel for every scoring shot, with the share of runs in each direction.' },
+  { img: 'player', title: 'Your own stats', text: 'Batting and bowling in depth: current form, playing style, how you get out and your best partnerships.' },
+  { img: 'compare', title: 'Compare and face off', text: 'Put yourself side by side with a teammate, or see how you do against one bowler.' },
   { img: 'team-stats', title: 'Team records', text: 'Top run-scorers and wicket-takers, and how the team does batting first or chasing.' },
   { img: 'availability', title: 'Say if you can play', text: 'Tap In, Maybe or Out for the next match and see who else is playing.' },
   { img: 'funds', title: 'Money made simple', text: 'Your fund balance, match costs split fairly, and what you owe.' },
@@ -38,6 +39,11 @@ export function Intro({ onDone }: { onDone: () => void }) {
 
   const go = useCallback((i: number) => setIndex(Math.max(0, Math.min(SLIDES.length - 1, i))), [])
   const pause = () => setPausedUntil(Date.now() + PAUSE_MS)
+
+  // Start fetching every picture now, so later slides are ready before they slide in.
+  useEffect(() => {
+    for (const s of SLIDES) new Image().src = `./intro/${s.img}.jpg`
+  }, [])
 
   // Slide on by itself, stopping at the last slide.
   useEffect(() => {
@@ -123,8 +129,18 @@ export function Intro({ onDone }: { onDone: () => void }) {
             >
               <div className="flex min-h-0 flex-1 items-center justify-center">
                 <div className="h-full max-h-[min(60dvh,520px)] overflow-hidden rounded-[28px] border-[6px] border-ink/90 bg-surface shadow-xl" style={{ aspectRatio: '375 / 812' }}>
-                  {/* Neighbouring slides load early so a swipe never shows an empty frame. */}
-                  {Math.abs(i - index) <= 1 && <img src={`./intro/${s.img}.jpg`} alt={`Screenshot: ${s.title}`} className="h-full w-full object-cover object-top" draggable={false} />}
+                  {/* The picture's own size (width/height) lets every browser size the frame before it has
+                      downloaded; without it Safari showed only the frame's border, as a thin line. */}
+                  <img
+                    src={`./intro/${s.img}.jpg`}
+                    width={750}
+                    height={1624}
+                    alt={`Screenshot: ${s.title}`}
+                    className="block h-full w-auto max-w-none object-cover object-top"
+                    draggable={false}
+                    loading={Math.abs(i - index) <= 1 ? 'eager' : 'lazy'}
+                    {...{ fetchpriority: i === 0 ? 'high' : 'auto' }}
+                  />
                 </div>
               </div>
               <h2 className="mt-5 text-center text-xl font-bold">{s.title}</h2>

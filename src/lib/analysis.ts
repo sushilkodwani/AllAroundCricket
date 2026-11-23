@@ -18,17 +18,25 @@ export interface Phase {
   to: number
 }
 
-/** Powerplay / middle / death for the overs of an innings (6 / 9 / 5 in a 20-over game, scaled for shorter ones). */
-export function phasesOf(overs: number): Phase[] {
-  if (overs < 3) return [{ key: 'all', label: 'Innings', from: 1, to: Math.max(1, overs) }]
-  const pp = Math.max(1, Math.round(overs * 0.3))
-  const death = Math.max(1, Math.round(overs * 0.25))
+/** The powerplay a match uses when the scorer did not set one: 30% of the overs (6 in a 20-over game). */
+export const defaultPowerplay = (overs: number) => (overs < 3 ? 0 : Math.max(1, Math.round(overs * 0.3)))
+
+/**
+ * Powerplay / middle / death for the overs of an innings. `powerplay` is the number of powerplay
+ * overs set when the match started (0 = none); without it, 30% of the overs. The death overs are
+ * the last quarter (5 in a 20-over game), never eating into the powerplay.
+ */
+export function phasesOf(overs: number, powerplay?: number): Phase[] {
+  if (overs < 3 && powerplay === undefined) return [{ key: 'all', label: 'Innings', from: 1, to: Math.max(1, overs) }]
+  const pp = Math.min(overs, Math.max(0, powerplay ?? defaultPowerplay(overs)))
+  let death = overs < 3 ? 0 : Math.max(1, Math.round(overs * 0.25))
+  if (pp + death >= overs) death = Math.max(0, overs - pp - 1)
   const midTo = overs - death
-  return [
-    { key: 'pp', label: 'Powerplay', from: 1, to: pp },
-    { key: 'mid', label: 'Middle', from: pp + 1, to: midTo },
-    { key: 'death', label: 'Death', from: midTo + 1, to: overs },
-  ]
+  const out: Phase[] = []
+  if (pp > 0) out.push({ key: 'pp', label: 'Powerplay', from: 1, to: pp })
+  if (midTo > pp) out.push({ key: 'mid', label: 'Middle', from: pp + 1, to: midTo })
+  if (death > 0) out.push({ key: 'death', label: 'Death', from: midTo + 1, to: overs })
+  return out.length ? out : [{ key: 'all', label: 'Innings', from: 1, to: Math.max(1, overs) }]
 }
 
 export const phaseRange = (p: Phase) => (p.from === p.to ? `over ${p.from}` : `overs ${p.from}–${p.to}`)
@@ -61,7 +69,7 @@ export interface PhaseLine {
 }
 
 export function phaseStats(file: ScoreFile, idx: number): PhaseLine[] {
-  const phases = phasesOf(file.innings[idx].overs)
+  const phases = phasesOf(file.innings[idx].overs, file.powerplay)
   const lines: PhaseLine[] = phases.map((phase) => ({ phase, runs: 0, wickets: 0, balls: 0, dots: 0, boundaries: 0, runRate: null, dotPct: 0, boundaryPct: 0 }))
   for (const { b, over } of ballsWithOver(file, idx)) {
     const l = lines[phases.indexOf(phaseAt(phases, over))]
@@ -145,7 +153,7 @@ export interface BatterInnings {
 }
 
 export function battersOf(file: ScoreFile, idx: number): BatterInnings[] {
-  const phases = phasesOf(file.innings[idx].overs)
+  const phases = phasesOf(file.innings[idx].overs, file.powerplay)
   const out = new Map<string, BatterInnings>()
   const order = summarize(file, idx).batters
   for (const l of order) {

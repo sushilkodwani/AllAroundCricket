@@ -229,6 +229,9 @@ export interface Match {
   opponentId?: string
   /** Set while / after the match is scored ball by ball (PLAN §24). */
   scoring?: 'live' | 'finished'
+  /** The opponent's playing XI and captain, picked before the match; used when scoring starts. */
+  opponentXi?: string[]
+  opponentCaptainId?: string
   /** A player the admin lets score this one match (PLAN §31). */
   scorerId?: string
   /** Super admin's switch: the live score updates itself every 20 s for everyone watching (else ⟳ only). */
@@ -442,6 +445,8 @@ export interface ScoreFile {
   opponentId?: string
   toss: { wonBy: SideKey; chose: 'bat' | 'bowl' }
   innings: Innings[]
+  /** Powerplay overs, set before the first ball (0 = no powerplay). Older matches: 30% of the overs. */
+  powerplay?: number
   /** Also ask where 1s, 2s and 3s went (optional for the scorer), so the wagon wheel shows every scoring shot. */
   allDirections?: boolean
   status: 'live' | 'break' | 'finished'

@@ -234,6 +234,41 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
           )}
           {squadLocked && isAdmin && match.squad.length > 0 && <p className="mt-1 px-1 text-xs text-muted">The squad is locked once expenses are submitted.</p>}
         </section>
+
+        {!match.cancelled && !match.scoring && (isAdmin || !!match.opponentXi?.length) && (
+          <section>
+            <div className="flex items-center justify-between">
+              <h2 className="section-title">
+                {match.opponent} playing XI ({match.opponentXi?.length ?? 0})
+              </h2>
+              {isAdmin && !!match.opponentXi?.length && (
+                <button className="btn-ghost min-h-[36px]" onClick={() => navigate(`${base}/opponent-xi`)}>
+                  Edit XI
+                </button>
+              )}
+            </div>
+            {!match.opponentXi?.length ? (
+              <div className="card px-4 py-6 text-center">
+                <p className="text-sm text-muted">Pick {match.opponent}’s players now, so scoring can start straight after the toss.</p>
+                <button className="btn-secondary mt-3" onClick={() => navigate(`${base}/opponent-xi`)}>
+                  Pick opponent XI
+                </button>
+              </div>
+            ) : (
+              <div className="card divide-y divide-line overflow-hidden">
+                {[...match.opponentXi]
+                  .sort((a, b) => personName(a).localeCompare(personName(b)))
+                  .map((id) => (
+                    <button key={id} className="row active:bg-alt" onClick={() => match.opponentId && navigate(`/opponents/${match.opponentId}/players/${id}`)}>
+                      <Avatar name={personName(id)} personId={id} size={36} />
+                      <span className="min-w-0 flex-1 truncate">{personName(id)}</span>
+                      {match.opponentCaptainId === id && <Pill>Captain</Pill>}
+                    </button>
+                  ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {sheet.name === 'matchmenu' && isAdmin && (

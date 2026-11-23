@@ -109,3 +109,43 @@ describe('directions for 1s, 2s and 3s', () => {
     expect(wagonSlices([{ shot: [0.05, 1], runs: 4 }, { shot: [0.05, 0.5], runs: 1 }, { shot: [1, -0.2], runs: 3 }]).pct).toEqual([0, 0, 0, 0, 63, 0, 38, 0])
   })
 })
+
+describe('powerplay overs set at the start', () => {
+  it('splits the innings by the powerplay picked, including none at all', async () => {
+    const { phasesOf, defaultPowerplay } = await import('./analysis')
+    expect(defaultPowerplay(20)).toBe(6)
+    expect(phasesOf(20).map((p) => [p.key, p.from, p.to])).toEqual([['pp', 1, 6], ['mid', 7, 15], ['death', 16, 20]])
+    expect(phasesOf(20, 4).map((p) => [p.key, p.from, p.to])).toEqual([['pp', 1, 4], ['mid', 5, 15], ['death', 16, 20]])
+    expect(phasesOf(10, 0).map((p) => p.key)).toEqual(['mid', 'death'])
+    expect(phasesOf(8, 7).map((p) => [p.key, p.from, p.to])).toEqual([['pp', 1, 7], ['mid', 8, 8]])
+  })
+
+  it('is checked and stored when scoring starts', async () => {
+    const { newScore } = await import('./scoring')
+    const base = { matchId: 'm', teamId: 't', overs: 10, home: { name: 'H', shortName: 'H', xi: ['h1', 'h2'] }, away: { name: 'A', shortName: 'A', xi: ['a1', 'a2'] }, toss: { wonBy: 'home' as const, chose: 'bat' as const } }
+    expect(newScore({ ...base, powerplay: 3 }).powerplay).toBe(3)
+    expect(newScore({ ...base, powerplay: 0 }).powerplay).toBe(0)
+    expect(newScore(base).powerplay).toBeUndefined()
+    expect(() => newScore({ ...base, powerplay: 10 })).toThrow('between 0 and 9')
+  })
+})
+
+describe('opponent playing XI picked beforehand', () => {
+  it('is saved on the match with its captain, and cleared when emptied', async () => {
+    const { setOpponentXi } = await import('./domain')
+    const match = { id: 'm1', teamId: 't1', date: '2026-11-29', opponent: 'X', squad: [], cancelled: false, lifecycle: 'scheduled', createdAt: 'x', updatedAt: 'x' }
+    const { store, backend } = await storeWith({ 'teams/t1/matches.json': { schemaVersion: 1, matches: [match] } })
+    setOpponentXi(store, 't1', 'm1', ['o1', 'o2', 'o1'], 'o2')
+    await store.flush()
+    let m = backend.json<MatchesFile>('teams/t1/matches.json')!.matches[0]
+    expect([m.opponentXi, m.opponentCaptainId]).toEqual([['o1', 'o2'], 'o2'])
+    setOpponentXi(store, 't1', 'm1', ['o1'], 'o2') // captain no longer in the XI
+    await store.flush()
+    m = backend.json<MatchesFile>('teams/t1/matches.json')!.matches[0]
+    expect(m.opponentCaptainId).toBeUndefined()
+    setOpponentXi(store, 't1', 'm1', [])
+    await store.flush()
+    expect(backend.json<MatchesFile>('teams/t1/matches.json')!.matches[0].opponentXi).toBeUndefined()
+    expect(() => setOpponentXi(store, 't1', 'm1', Array.from({ length: 12 }, (_, i) => `p${i}`))).toThrow('11 at most')
+  })
+})

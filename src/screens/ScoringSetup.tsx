@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AddPlayerSheet, BulkPlayersSheet } from '../components/scoring'
 import { Screen } from '../components/Screen'
 import { Avatar, ChoiceChips, Empty, ErrorNote, Field, NumberInput, Pill, Toggle } from '../components/ui'
+import { defaultPowerplay } from '../lib/analysis'
 import { addOpponentPlayers, ensureOpponent, opponentsOf } from '../lib/domain'
 import { maskPhone } from '../lib/phone'
 import { P } from '../lib/paths'
@@ -36,6 +37,7 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
   }, [existing, base])
 
   const [overs, setOvers] = useState('')
+  const [pp, setPp] = useState<string | null>(null)
   const [ours, setOurs] = useState<string[] | null>(null)
   const [theirs, setTheirs] = useState<string[] | null>(null)
   const [extraOurs, setExtraOurs] = useState<string[]>([])
@@ -47,6 +49,9 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
   const [allDirections, setAllDirections] = useState(true)
 
   const oversValue = overs || (match?.overs ? String(match.overs) : '')
+  // Powerplay overs: filled in with the usual 30% until the scorer changes it.
+  const ppValue = pp ?? (Number(oversValue) >= 1 ? String(defaultPowerplay(Number(oversValue))) : '')
+  const ppNum = ppValue === '' ? NaN : Number(ppValue)
   const ourPool = useMemo(() => {
     if (!match) return []
     const active = data.members.filter((m) => m.status === 'active').map((m) => m.personId)
@@ -54,7 +59,8 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
   }, [match, data.members, extraOurs, personName])
   const ourXi = ours ?? match?.squad ?? []
   const theirPool = opponent?.playerIds ?? []
-  const theirXi = (theirs ?? (theirPool.length <= 11 ? theirPool : [])).filter((id) => !ourXi.includes(id))
+  // Picked on the match screen beforehand, else everyone saved when they are 11 or fewer.
+  const theirXi = (theirs ?? (match?.opponentXi?.length ? match.opponentXi : theirPool.length <= 11 ? theirPool : [])).filter((id) => !ourXi.includes(id))
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
 
   if (data.ready && !canScore) {
@@ -76,13 +82,14 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
   // A captain who is no longer in the XI is dropped; a one-player pick is the obvious choice only when asked.
   const captainOf = (key: SideKey, xi: string[]) => (captains[key] && xi.includes(captains[key]!) ? captains[key] : undefined)
   const homeCaptain = captainOf('home', ourXi)
-  const awayCaptain = captainOf('away', theirXi)
+  const awayCaptain = captainOf('away', theirXi) ?? (match.opponentCaptainId && theirXi.includes(match.opponentCaptainId) ? match.opponentCaptainId : undefined)
 
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
 
   // Everything the scorer still has to fill in before the first ball.
   const todo: string[] = []
   if (!(Number(oversValue) >= 1)) todo.push('Enter the overs per innings')
+  else if (!(ppNum >= 0 && ppNum < Number(oversValue))) todo.push(`Enter the powerplay overs (0 to ${Number(oversValue) - 1})`)
   for (const [name, xi] of [[team.name, ourXi], [match.opponent, theirXi]] as const) {
     if (xi.length < 2) todo.push(`Pick the players for ${name} (at least 2)`)
     else if (xi.length > 11) todo.push(`${name}: ${xi.length} picked — a side plays 11 at most`)
@@ -108,6 +115,7 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
         away: { name: opponent.name, shortName: opponent.shortName, xi: theirXi, captainId: awayCaptain },
         toss: { wonBy, chose },
         allDirections,
+        powerplay: ppNum,
       })
       navigate(`${base}/score`, { replace: true })
     } catch (e) {
@@ -137,6 +145,9 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
 
         <Field label="Overs per innings">
           <NumberInput value={oversValue} onChange={setOvers} maxLength={3} placeholder="20" ariaLabel="Overs per innings" />
+        </Field>
+        <Field label="Powerplay overs" hint="Fielding restrictions at the start of each innings. 0 = no powerplay. Used for the powerplay, middle and death figures.">
+          <NumberInput value={ppValue} onChange={setPp} maxLength={2} placeholder="6" ariaLabel="Powerplay overs" />
         </Field>
 
         {sides.map((side) => (
