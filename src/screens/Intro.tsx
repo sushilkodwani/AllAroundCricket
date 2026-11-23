@@ -40,11 +40,6 @@ export function Intro({ onDone }: { onDone: () => void }) {
   const go = useCallback((i: number) => setIndex(Math.max(0, Math.min(SLIDES.length - 1, i))), [])
   const pause = () => setPausedUntil(Date.now() + PAUSE_MS)
 
-  // Start fetching every picture now, so later slides are ready before they slide in.
-  useEffect(() => {
-    for (const s of SLIDES) new Image().src = `./intro/${s.img}.jpg`
-  }, [])
-
   // Slide on by itself, stopping at the last slide.
   useEffect(() => {
     if (last || dragging) return
@@ -129,18 +124,8 @@ export function Intro({ onDone }: { onDone: () => void }) {
             >
               <div className="flex min-h-0 flex-1 items-center justify-center">
                 <div className="h-full max-h-[min(60dvh,520px)] overflow-hidden rounded-[28px] border-[6px] border-ink/90 bg-surface shadow-xl" style={{ aspectRatio: '375 / 812' }}>
-                  {/* The picture's own size (width/height) lets every browser size the frame before it has
-                      downloaded; without it Safari showed only the frame's border, as a thin line. */}
-                  <img
-                    src={`./intro/${s.img}.jpg`}
-                    width={750}
-                    height={1624}
-                    alt={`Screenshot: ${s.title}`}
-                    className="block h-full w-auto max-w-none object-cover object-top"
-                    draggable={false}
-                    loading={Math.abs(i - index) <= 1 ? 'eager' : 'lazy'}
-                    {...{ fetchpriority: i === 0 ? 'high' : 'auto' }}
-                  />
+                  {/* Neighbouring slides load early so a swipe never shows an empty frame. */}
+                  {Math.abs(i - index) <= 1 && <img src={`./intro/${s.img}.jpg`} alt={`Screenshot: ${s.title}`} className="h-full w-full object-cover object-top" draggable={false} />}
                 </div>
               </div>
               <h2 className="mt-5 text-center text-xl font-bold">{s.title}</h2>
