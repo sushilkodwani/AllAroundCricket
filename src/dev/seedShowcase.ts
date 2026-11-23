@@ -129,7 +129,7 @@ interface SideInfo {
   edge: number // team strength: + bats and bowls better
 }
 
-function shotFor(left: boolean, six: boolean): [number, number] {
+function shotFor(left: boolean, runs: number): [number, number] {
   // Angle from straight down the ground; leg side a little more often.
   const deg = weighted<number>([
     [0, 2],
@@ -143,7 +143,8 @@ function shotFor(left: boolean, six: boolean): [number, number] {
     [-140, 1],
   ]) + (rnd() - 0.5) * 24
   const a = ((left ? -deg : deg) * Math.PI) / 180
-  const r = six ? 1 : 0.97
+  // Boundaries reach the rope; 1s, 2s and 3s stop inside it (further for more runs).
+  const r = runs === 6 ? 1 : runs === 4 ? 0.97 : 0.3 + runs * 0.12 + rnd() * 0.25
   return [Math.round(Math.sin(a) * r * 100) / 100, Math.round(Math.cos(a) * r * 100) / 100]
 }
 
@@ -187,9 +188,38 @@ function nextBall(file: ScoreFile, inn: Innings, bat: SideInfo, bowl: SideInfo, 
   ])
   const input: BallInput = { bat: runs }
   if (extra === 'nb') input.kind = 'nb'
-  if (runs === 4 || runs === 6) input.shot = shotFor(!!striker.left, runs === 6)
+  if (runs === 4 || runs === 6) input.shot = shotFor(!!striker.left, runs)
+  // The scorer marks most singles, and skips a few.
+  else if (runs >= 1 && file.allDirections && rnd() < 0.8) input.shot = shotFor(!!striker.left, runs)
   if (runs === 0 && rnd() < 0.05) return { byes: 1, byeType: rnd() < 0.5 ? 'lb' : 'b' }
   return input
+}
+
+/**
+ * Gives every event a believable time, as if scored live: 25–55 s a ball, a minute or
+ * two between overs, longer after a wicket, now and then a stoppage, and a 15-minute
+ * innings break. Without this every ball carries the moment the demo was built.
+ */
+function stampTimes(file: ScoreFile, date: string): ScoreFile {
+  let t = Date.parse(`${date}T07:45:00+05:30`)
+  const innings = file.innings.map((inn, n) => {
+    if (n > 0) t += 15 * 60_000
+    let legal = 0
+    let lastWicket = false
+    const events = inn.events.map((e) => {
+      t += 25_000 + rnd() * 30_000
+      if (legal > 0 && legal % 6 === 0 && e.t === 'ball') t += 50_000 + rnd() * 50_000
+      if (lastWicket) t += 80_000 + rnd() * 70_000
+      if (rnd() < 0.01) t += 3 * 60_000 // lost ball, a word with the umpire
+      if (e.t === 'ball') {
+        lastWicket = !!e.wicket
+        if (e.kind === 'legal') legal++
+      }
+      return { ...e, at: new Date(Math.round(t)).toISOString() }
+    })
+    return { ...inn, events }
+  })
+  return { ...file, innings, startedAt: innings[0]?.events[0]?.at ?? file.startedAt }
 }
 
 /** Plays the current innings to its end (or `stopAfterOvers`). */
@@ -327,6 +357,7 @@ export async function seedShowcase(opts: { as?: 'player' | 'super' } = {}): Prom
       home: { name: team.name, shortName: team.shortName, xi, captainId: byName('Rohan Deshpande'), keeperId: byName('Kunal Joshi') },
       away: { name: rival.name, shortName: RIVALS[fixture.rival].short, xi: rival.ids, captainId: rival.ids[0], keeperId: rival.ids[2] },
       toss: { wonBy: tossWon, chose },
+      allDirections: true,
     })
     const us: SideInfo = {
       order: xi,
@@ -343,6 +374,8 @@ export async function seedShowcase(opts: { as?: 'player' | 'super' } = {}): Prom
     file = startSecondInnings(file)
     file = playInnings(file, first[1], first[0], live ? 13 : undefined)
     if (file.status === 'finished') file = { ...file, awards: suggestAwards(file) }
+    // The first match was typed in afterwards, so it has no minutes; the rest were scored live.
+    if (k > 0) file = stampTimes(file, fixture.date)
     saveScore(store, file, live ? 'Live' : 'Result')
     if (live) {
       results.push(`LIVE ${rival.name}`)

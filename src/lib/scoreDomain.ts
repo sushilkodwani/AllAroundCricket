@@ -44,6 +44,7 @@ export interface StartInput {
   home: ScoreSide
   away: ScoreSide
   toss: { wonBy: SideKey; chose: 'bat' | 'bowl' }
+  allDirections?: boolean
 }
 
 export function startScoring(s: Store, input: StartInput): ScoreFile {

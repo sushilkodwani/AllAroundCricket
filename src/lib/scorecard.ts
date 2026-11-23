@@ -53,6 +53,15 @@ export interface Partnership {
   bRuns: number
   bBalls: number
   unbroken: boolean
+  /** The team score when the stand began and (so far) ended: runs/wickets and overs, e.g. 20/1 at 2.4. */
+  start: ScoreAt
+  end: ScoreAt
+}
+
+export interface ScoreAt {
+  score: number
+  wickets: number
+  over: string
 }
 
 export interface Fow {
@@ -170,8 +179,10 @@ export function summarize(file: ScoreFile, idx: number): InningsSummary {
     // Partnership: starts whenever the pair in the middle changes.
     if (!pair || !((pair.a === e.striker && pair.b === e.nonStriker) || (pair.a === e.nonStriker && pair.b === e.striker))) {
       if (pair) pair.unbroken = false
-      partnerships.push((pair = { wicket: wickets + 1, a: e.striker, b: e.nonStriker, runs: 0, balls: 0, aRuns: 0, aBalls: 0, bRuns: 0, bBalls: 0, unbroken: true }))
+      const at = { score: total, wickets, over: oversText(legal) }
+      partnerships.push((pair = { wicket: wickets + 1, a: e.striker, b: e.nonStriker, runs: 0, balls: 0, aRuns: 0, aBalls: 0, bRuns: 0, bBalls: 0, unbroken: true, start: at, end: at }))
     }
+    const stand = pair
     pair.runs += runs
     const strikerIsA = pair.a === e.striker
     if (strikerIsA) pair.aRuns += e.bat
@@ -215,6 +226,7 @@ export function summarize(file: ScoreFile, idx: number): InningsSummary {
     }
     over.total = total
     over.totalWickets = wickets
+    stand.end = { score: total, wickets, over: oversText(legal) }
   }
 
   // Penalty runs the other innings awarded to this side.

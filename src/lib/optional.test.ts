@@ -60,3 +60,52 @@ describe('live auto-refresh switch', () => {
     expect(backend.json<MatchesFile>('teams/t1/matches.json')!.matches[0].liveAuto).toBeUndefined()
   })
 })
+
+describe('wagon wheel slices', () => {
+  it('puts straight drives, cover drives and pulls in the right slice and adds up the shares', async () => {
+    const { wagonSlices, sliceOf } = await import('./analysis')
+    // Batter at (0, -0.14); bowler's end is below. Straight past the bowler = just right of straight down.
+    expect(sliceOf([0.05, 1])).toBe(4)
+    expect(sliceOf([-0.05, 1])).toBe(3)
+    // Square on the leg side (screen right for a right-hander) and the mirror image for a left-hander.
+    expect(sliceOf([1, -0.2])).toBe(6)
+    expect(sliceOf([1, -0.2], true)).toBe(1)
+    const { runs, pct } = wagonSlices([
+      { shot: [0.05, 1], runs: 4 },
+      { shot: [0.05, 1], runs: 6 },
+      { shot: [1, -0.2], runs: 6 },
+    ])
+    expect(runs[4]).toBe(10)
+    expect(runs[6]).toBe(6)
+    expect(pct[4]).toBe(63)
+    expect(pct[6]).toBe(38)
+  })
+})
+
+describe('directions for 1s, 2s and 3s', () => {
+  it('is stored only when switched on, can be changed mid-match, and keeps a single’s direction', async () => {
+    const { addBall, editBall, newScore, setAllDirections, setCrease } = await import('./scoring')
+    const { wagonSlices } = await import('./analysis')
+    const sides = { home: { name: 'H', shortName: 'H', xi: ['h1', 'h2'] }, away: { name: 'A', shortName: 'A', xi: ['a1', 'a2'] } }
+    const base = { matchId: 'm', teamId: 't', overs: 2, ...sides, toss: { wonBy: 'home' as const, chose: 'bat' as const } }
+    expect(newScore(base).allDirections).toBeUndefined()
+    let f = newScore({ ...base, allDirections: true })
+    expect(f.allDirections).toBe(true)
+    f = setCrease(f, { striker: 'h1', nonStriker: 'h2', bowler: 'a1' })
+    f = addBall(f, { bat: 1, shot: [0.3, 0.4] })
+    f = addBall(f, { bat: 2 }) // skipped
+    const [single, two] = f.innings[0].events as import('../types').BallEvent[]
+    expect(single.shot).toEqual([0.3, 0.4])
+    expect(two.shot).toBeUndefined()
+    // Correcting a single to a two keeps its direction; turning it into byes drops it.
+    f = editBall(f, 0, single.id, { bat: 2, byes: 0, shot: [0.3, 0.4] })
+    expect((f.innings[0].events[0] as import('../types').BallEvent).shot).toEqual([0.3, 0.4])
+    f = editBall(f, 0, single.id, { bat: 0, byes: 1, shot: null })
+    expect((f.innings[0].events[0] as import('../types').BallEvent).shot).toBeUndefined()
+    f = setAllDirections(f, false)
+    expect(f.allDirections).toBeUndefined()
+    expect(setAllDirections(f, false)).toBe(f)
+    // The wheel's shares count every run with a direction.
+    expect(wagonSlices([{ shot: [0.05, 1], runs: 4 }, { shot: [0.05, 0.5], runs: 1 }, { shot: [1, -0.2], runs: 3 }]).pct).toEqual([0, 0, 0, 0, 63, 0, 38, 0])
+  })
+})

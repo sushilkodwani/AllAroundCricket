@@ -35,6 +35,7 @@ import {
   penalty,
   previousOverBowler,
   retire,
+  setAllDirections,
   setCrease,
   setOvers,
   setTarget,
@@ -174,10 +175,15 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
     if (run((f) => setCrease(f, { [a.role]: a.id }))) hide()
   }
 
-  /** Every delivery goes through here. A four or six first asks where it went. */
-  function commit(input: BallInput) {
-    const boundary = input.kind !== 'wd' && (input.bat === 4 || input.bat === 6)
-    if (boundary && !input.shot && !input.wicket) {
+  /**
+   * Every delivery goes through here. A four or six first asks where it went; so do 1s, 2s and 3s when
+   * the match asks for every direction (the scorer may skip those).
+   */
+  function commit(input: BallInput, skipShot = false) {
+    const offBat = input.kind !== 'wd' && !input.shot && !input.wicket
+    const boundary = input.bat === 4 || input.bat === 6
+    const small = !!file!.allDirections && !skipShot && (input.bat ?? 0) >= 1 && (input.bat ?? 0) <= 3
+    if (offBat && (boundary || small)) {
       setPending(input)
       show('shot')
       return
@@ -498,6 +504,7 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
           onLeft={(v) => setBatsLeft(store, striker, v)}
           onClose={sheet.close}
           onSave={(shot) => commit({ ...pending, shot })}
+          onSkip={() => commit(pending, true)}
         />
       )}
 
@@ -505,6 +512,7 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
         <EditBallSheet
           ball={editing}
           left={lefties.has(editing.striker)}
+          allDirections={!!file.allDirections}
           onClose={sheet.close}
           onSave={(patch) => {
             if (run((f) => editBall(f, idx, editing.id, patch), 'Correct a ball')) hide()
@@ -542,6 +550,13 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
                 </button>
               </>
             )}
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2.5 text-sm">
+              <span className="min-w-0">
+                Ask where 1s, 2s and 3s went
+                <span className="block text-xs text-muted">For the wagon wheel. You can skip any ball.</span>
+              </span>
+              <Toggle checked={!!file.allDirections} onChange={(v) => run((f) => setAllDirections(f, v), v ? 'Ask every shot direction' : 'Ask boundary directions only')} label="Ask where 1s, 2s and 3s went" />
+            </div>
             <p className="px-1 text-xs text-muted">Tap a ball in “This over” to correct its runs. Undo steps back one ball at a time, as far as needed.</p>
           </div>
         </Sheet>
@@ -771,30 +786,43 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
 }
 
 // ---------- where did the boundary go ----------
-function ShotSheet({ runs, batter, left, onLeft, onSave, onClose }: { runs: number; batter: string; left: boolean; onLeft: (v: boolean) => void; onSave: (shot: [number, number]) => void; onClose: () => void }) {
+function ShotSheet({ runs, batter, left, onLeft, onSave, onSkip, onClose }: { runs: number; batter: string; left: boolean; onLeft: (v: boolean) => void; onSave: (shot: [number, number]) => void; onSkip: () => void; onClose: () => void }) {
   const [picked, setPicked] = useState<[number, number] | null>(null)
+  const boundary = runs === 4 || runs === 6
+  const what = runs === 6 ? 'six' : runs === 4 ? 'four' : runs === 1 ? '1 run' : `${runs} runs`
   return (
-    <Sheet title={`${runs === 6 ? 'SIX' : 'FOUR'} — where did it go?`} onClose={onClose}>
+    <Sheet title={`${boundary ? what.toUpperCase() : what[0].toUpperCase() + what.slice(1)} — where did it go?`} onClose={onClose}>
       <GroundMap left={left} picked={picked} onPick={setPicked} />
-      <p className="mt-1 min-h-[20px] text-center text-sm font-medium">{picked ? `To ${shotRegion(picked, left)}` : <span className="text-muted">Tap the ground where the ball crossed the rope</span>}</p>
+      <p className="mt-1 min-h-[20px] text-center text-sm font-medium">
+        {picked ? `To ${shotRegion(picked, left)}` : <span className="text-muted">{boundary ? 'Tap the ground where the ball crossed the rope' : 'Tap where the ball went (optional)'}</span>}
+      </p>
       <div className="mt-2 flex items-center justify-between gap-3 text-sm">
         <span className="min-w-0 truncate">{batter} bats left-handed</span>
         <Toggle checked={left} onChange={onLeft} label={`${batter} bats left-handed`} />
       </div>
-      <button className="btn-primary mt-3 w-full" disabled={!picked} onClick={() => picked && onSave(picked)}>
-        Save {runs === 6 ? 'six' : 'four'}
-      </button>
+      <div className="mt-3 flex gap-2">
+        {!boundary && (
+          <button className="btn-secondary flex-1" onClick={onSkip}>
+            Skip
+          </button>
+        )}
+        <button className="btn-primary flex-1" disabled={!picked} onClick={() => picked && onSave(picked)}>
+          Save {what}
+        </button>
+      </div>
     </Sheet>
   )
 }
 
 // ---------- correct an earlier ball ----------
-function EditBallSheet({ ball, left, onSave, onClose }: { ball: BallEvent; left: boolean; onSave: (patch: { bat: number; byes: number; byeType?: 'b' | 'lb'; shot?: [number, number] | null }) => void; onClose: () => void }) {
+function EditBallSheet({ ball, left, allDirections, onSave, onClose }: { ball: BallEvent; left: boolean; allDirections: boolean; onSave: (patch: { bat: number; byes: number; byeType?: 'b' | 'lb'; shot?: [number, number] | null }) => void; onClose: () => void }) {
   const wide = ball.kind === 'wd'
   const [how, setHow] = useState<'bat' | 'b' | 'lb'>(ball.byes > 0 && !wide ? (ball.byeType ?? 'b') : 'bat')
   const [n, setN] = useState(wide ? ball.byes : ball.byes > 0 ? ball.byes : ball.bat)
   const [shot, setShot] = useState<[number, number] | null>(ball.shot ?? null)
   const boundary = !wide && how === 'bat' && (n === 4 || n === 6)
+  // 1s, 2s and 3s may carry a direction too (never required).
+  const small = !wide && how === 'bat' && n >= 1 && n <= 3 && (allDirections || !!ball.shot)
   return (
     <Sheet title="Correct this ball" onClose={onClose}>
       <div className="flex flex-col gap-4">
@@ -814,13 +842,13 @@ function EditBallSheet({ ball, left, onSave, onClose }: { ball: BallEvent; left:
           <span className="label">{wide ? 'Extra runs on the wide' : ball.kind === 'nb' ? 'Runs (on top of the no-ball)' : 'Runs'}</span>
           <ChoiceChips options={[0, 1, 2, 3, 4, 5, 6].map((v) => ({ value: String(v), label: String(v) }))} value={String(n)} onChange={(v) => setN(Number(v))} />
         </div>
-        {boundary && (
+        {(boundary || small) && (
           <div>
-            <span className="label">Direction (required){shot ? ` — ${shotRegion(shot, left)}` : ''}</span>
+            <span className="label">Direction ({boundary ? 'required' : 'optional'}){shot ? ` — ${shotRegion(shot, left)}` : ''}</span>
             <GroundMap left={left} picked={shot} onPick={setShot} />
           </div>
         )}
-        <button className="btn-primary" disabled={boundary && !shot} onClick={() => onSave(wide ? { bat: 0, byes: n } : how === 'bat' ? { bat: n, byes: 0, shot: boundary ? shot : null } : { bat: 0, byes: n, byeType: how, shot: null })}>
+        <button className="btn-primary" disabled={boundary && !shot} onClick={() => onSave(wide ? { bat: 0, byes: n } : how === 'bat' ? { bat: n, byes: 0, shot: boundary || small ? shot : null } : { bat: 0, byes: n, byeType: how, shot: null })}>
           Save
         </button>
         <p className="text-xs text-muted">To turn a ball into a wide or no-ball (or back), use Undo instead.</p>

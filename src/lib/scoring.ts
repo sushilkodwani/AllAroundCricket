@@ -236,6 +236,7 @@ export interface NewScoreInput {
   away: ScoreSide
   opponentId?: string
   toss: { wonBy: SideKey; chose: 'bat' | 'bowl' }
+  allDirections?: boolean
 }
 
 export function newScore(input: NewScoreInput): ScoreFile {
@@ -260,10 +261,20 @@ export function newScore(input: NewScoreInput): ScoreFile {
     opponentId: input.opponentId,
     toss: input.toss,
     innings: [{ batting: battingFirst, overs: input.overs, events: [], crease: {} }],
+    ...(input.allDirections ? { allDirections: true } : {}),
     status: 'live',
     startedAt: now,
     updatedAt: now,
   }
+}
+
+/** Turn on or off asking where 1s, 2s and 3s went. */
+export function setAllDirections(file: ScoreFile, on: boolean): ScoreFile {
+  if (!!file.allDirections === on) return file
+  const next = { ...file, updatedAt: nowStamp() }
+  if (on) next.allDirections = true
+  else delete next.allDirections
+  return next
 }
 
 export function startSecondInnings(file: ScoreFile): ScoreFile {

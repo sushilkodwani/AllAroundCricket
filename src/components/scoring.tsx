@@ -279,7 +279,7 @@ export function GroundMap({
         </text>
       </g>
       {shots.map((s, i) => (
-        <line key={i} x1={bx} y1={by} x2={s.shot[0]} y2={s.shot[1]} stroke={s.runs === 6 ? 'var(--series-2)' : 'var(--series-1)'} strokeWidth="0.022" strokeLinecap="round" />
+        <line key={i} x1={bx} y1={by} x2={s.shot[0]} y2={s.shot[1]} stroke={s.runs === 6 ? 'var(--series-2)' : s.runs === 4 ? 'var(--series-1)' : 'rgb(var(--text) / 0.75)'} strokeWidth="0.022" strokeLinecap="round" />
       ))}
       {marks.map((m, i) => (
         <g key={`m${i}`} stroke="rgb(var(--danger))" strokeWidth="0.03" strokeLinecap="round">

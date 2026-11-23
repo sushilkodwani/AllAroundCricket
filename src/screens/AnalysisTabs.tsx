@@ -3,12 +3,15 @@
 // every bowler's spell, every batter's innings ball by ball, fielding, extras.
 import { useState } from 'react'
 import { BarList, ChartCard, LineChart, Manhattan, type Series } from '../components/charts'
-import { BallChip, GroundMap } from '../components/scoring'
+import { BallChip } from '../components/scoring'
+import { PartnershipCards, WagonWheel, WicketDonut } from '../components/matchViz'
+import { Bars, Insights, Tiles } from '../components/playerViz'
 import { ChoiceChips, Empty } from '../components/ui'
 import { battersOf, chaseOf, fieldingOf, handSplitOf, kpisOf, matchupsOf, momentumOf, phaseRange, phaseStats, spellsOf, swingOf, zonesOf } from '../lib/analysis'
 import { awardPoints } from '../lib/insights'
+import { inningsMinutes, mins, type InningsMinutes } from '../lib/minutes'
 import { economy, fmtRate, strikeRate, type InningsSummary } from '../lib/scorecard'
-import { BALLS, ballRuns, battingSide, bowlingSide, isBall } from '../lib/scoring'
+import { BALLS, ballRuns, battingSide, bowlingSide, isBall, legalBalls, oversText } from '../lib/scoring'
 import { useApp } from '../state/AppContext'
 import { WICKET_LABELS, type ScoreFile, type WicketKind } from '../types'
 
@@ -58,6 +61,7 @@ export function AnalysisTab({ file, summaries }: { file: ScoreFile; summaries: I
   const s = summaries[idx]
   const inn = file.innings[idx]
   const slot = (n: number) => slotOf(file, n)
+  const time = inningsMinutes(inn)
 
   const perOver: Series[] = summaries.map((x, n) => ({ name: battingSide(file, file.innings[n]).shortName, slot: slot(n), values: x.overLines.map((o) => o.runs), wickets: x.overLines.map((o) => o.wickets) }))
   const worm: Series[] = summaries.map((x, n) => ({ name: battingSide(file, file.innings[n]).shortName, slot: slot(n), values: x.overLines.map((o) => o.total), wickets: x.overLines.map((o) => o.wickets) }))
@@ -80,8 +84,6 @@ export function AnalysisTab({ file, summaries }: { file: ScoreFile; summaries: I
       ]
     : []
 
-  const wicketRows = (Object.keys(s.wicketKinds) as WicketKind[]).map((k) => ({ label: WICKET_LABELS[k], value: s.wicketKinds[k] ?? 0 })).sort((a, b) => b.value - a.value)
-  const maxPair = Math.max(1, ...s.partnerships.map((p) => p.runs))
   const extrasRuns = inn.events.filter(isBall).reduce((sum, b) => sum + ballRuns(b) - b.bat, 0)
   const { personName } = useApp()
 
@@ -151,46 +153,65 @@ export function AnalysisTab({ file, summaries }: { file: ScoreFile; summaries: I
       </ChartCard>
 
       <ChartCard title="Wickets" subtitle={`${battingSide(file, inn).name} — how they got out`}>
-        <BarList slot={slot(idx)} rows={wicketRows} />
+        <WicketDonut kinds={s.wicketKinds} />
       </ChartCard>
 
-      <ChartCard title="Partnerships" subtitle={`${battingSide(file, inn).name} — runs (balls)`}>
-        {s.partnerships.length === 0 && <p className="py-3 text-center text-sm text-muted">Nothing yet</p>}
-        <div className="flex flex-col gap-3">
-          {s.partnerships.map((p, n) => (
-            <div key={n} className="text-sm">
-              <div className="flex justify-between gap-2">
-                <span className="min-w-0 truncate">
-                  <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'var(--series-1)' }} />
-                  {personName(p.a)} <span className="text-muted">{p.aRuns} ({p.aBalls})</span>
-                </span>
-                <span className="min-w-0 truncate text-right">
-                  {personName(p.b)} <span className="text-muted">{p.bRuns} ({p.bBalls})</span>
-                  <span className="ml-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'var(--series-2)' }} />
-                </span>
-              </div>
-              <div className="mt-1 flex items-center gap-2">
-                {/* One bar per partnership, split by who scored what; leftover runs are extras. */}
-                <span className="flex h-3 gap-0.5 overflow-hidden rounded-r" style={{ width: `${(p.runs / maxPair) * 100}%`, minWidth: 3, maxWidth: 'calc(100% - 76px)' }}>
-                  {[
-                    { n: p.aRuns, c: 'var(--series-1)' },
-                    { n: Math.max(0, p.runs - p.aRuns - p.bRuns), c: 'rgb(var(--border))' },
-                    { n: p.bRuns, c: 'var(--series-2)' },
-                  ]
-                    .filter((x) => x.n > 0)
-                    .map((x, k) => (
-                      <span key={k} style={{ flex: x.n, background: x.c }} />
-                    ))}
-                </span>
-                <span className="font-semibold">
-                  {p.runs} ({p.balls}){p.unbroken ? '*' : ''}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+      <ChartCard title="Partnerships" subtitle={`${battingSide(file, inn).name} — each stand, and the score it began and ended at`}>
+        <PartnershipCards partnerships={s.partnerships} name={personName} minutes={time.timed ? time.stands : undefined} />
       </ChartCard>
+
+      <TimeCard file={file} idx={idx} time={time} />
     </>
+  )
+}
+
+/** Minutes on the field for one innings: how long it took, the over rate, the slowest overs and who batted longest. */
+function TimeCard({ file, idx, time }: { file: ScoreFile; idx: number; time: InningsMinutes }) {
+  const { personName } = useApp()
+  const name = battingSide(file, file.innings[idx]).name
+  if (!time.timed)
+    return (
+      <ChartCard title="Time on the field" subtitle={name}>
+        <p className="py-2 text-sm text-muted">Not available for this innings. Minutes come from when each ball was entered, and these balls were entered in quick bursts (for example, scored after the match), so the times would be wrong.</p>
+      </ChartCard>
+    )
+  const done = time.overs.length
+  const legal = legalBalls(file.innings[idx])
+  const perOver = time.total / 60_000 / Math.max(1 / BALLS, legal / BALLS)
+  const slowest = time.overs
+    .map((ms, i) => ({ over: i + 1, ms }))
+    .slice(0, file.innings[idx].closed ? done : done - 1) // the over being bowled isn't over yet
+    .sort((a, b) => b.ms - a.ms)
+    .slice(0, 3)
+  const longest = [...time.batters.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+  return (
+    <ChartCard title="Time on the field" subtitle={`${name} — minutes, from when each ball was entered`}>
+      <Tiles
+        items={[
+          ['Innings', `${mins(time.total)} min`],
+          ['Per over', `${perOver.toFixed(1)} min`],
+          ['Overs', oversText(legal)],
+        ]}
+      />
+      <div className="mt-3">
+        <Bars axis="over" idle="Minutes each over took. Tap a bar to read it." bars={time.overs.map((ms, i) => ({ label: String(i + 1), value: Number((ms / 60_000).toFixed(1)), note: `Over ${i + 1}: ${(ms / 60_000).toFixed(1)} min` }))} />
+      </div>
+      <Insights
+        items={[
+          slowest.length > 0 && (
+            <>
+              Slowest over{slowest.length > 1 ? 's' : ''}: <strong className="font-semibold">{slowest.map((o) => `${o.over} (${(o.ms / 60_000).toFixed(1)} min)`).join(', ')}</strong>
+            </>
+          ),
+          longest.length > 0 && (
+            <>
+              Longest at the crease: <strong className="font-semibold">{longest.map(([id, ms]) => `${personName(id)} ${mins(ms)} min`).join(', ')}</strong>
+            </>
+          ),
+        ]}
+      />
+      <p className="mt-2 text-xs text-muted">A break longer than 5 minutes between two balls counts as 5 minutes.</p>
+    </ChartCard>
   )
 }
 
@@ -214,6 +235,8 @@ export function DetailedTab({ file, summaries, lefties }: { file: ScoreFile; sum
   const batters = battersOf(file, idx)
   const fielding = fieldingOf(file, idx)
   const caughtAt = inn.events.filter(isBall).flatMap((b) => (b.wicket?.at ? [b.wicket.at] : []))
+  // Catches (and run-out throws) for the wagon wheel: all of them, or the chosen batter's.
+  const batterOuts = inn.events.filter(isBall).flatMap((b) => (b.wicket?.at && (batter === 'all' || b.wicket.who === batter) ? [b.wicket.at] : []))
   const boundaries = inn.events.filter(isBall).filter((b) => b.shot && (batter === 'all' || b.striker === batter))
   const hitters = [...new Set(inn.events.filter(isBall).filter((b) => b.shot).map((b) => b.striker))]
   const maxOverRuns = Math.max(1, ...spells.flatMap((x) => x.overs.map((o) => o.runs)))
@@ -396,23 +419,15 @@ export function DetailedTab({ file, summaries, lefties }: { file: ScoreFile; sum
         )}
       </ChartCard>
 
-      <ChartCard title="Wagon wheel" subtitle={`${batName} — where the fours and sixes went`}>
-        {hitters.length === 0 ? (
-          <p className="py-3 text-center text-sm text-muted">No boundary directions recorded in this innings.</p>
+      <ChartCard title="Wagon wheel" subtitle={`${batName} — where the runs went, and where catches were taken`}>
+        {hitters.length === 0 && caughtAt.length === 0 ? (
+          <p className="py-3 text-center text-sm text-muted">No shot directions recorded in this innings.</p>
         ) : (
           <>
-            <ChoiceChips options={[{ value: 'all', label: 'All' }, ...hitters.map((id) => ({ value: id, label: personName(id) }))]} value={batter} onChange={setBatter} />
-            <div className="mt-2 flex gap-4 text-xs text-muted">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-0.5 w-4" style={{ background: 'var(--series-1)' }} />
-                Fours ({boundaries.filter((b) => b.bat === 4).length})
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-0.5 w-4" style={{ background: 'var(--series-2)' }} />
-                Sixes ({boundaries.filter((b) => b.bat === 6).length})
-              </span>
+            {hitters.length > 0 && <ChoiceChips options={[{ value: 'all', label: 'All batters' }, ...hitters.map((id) => ({ value: id, label: personName(id) }))]} value={batter} onChange={setBatter} row />}
+            <div className="mt-2">
+              <WagonWheel key={batter} left={batter !== 'all' && lefties.has(batter)} shots={boundaries.map((b) => ({ shot: b.shot!, runs: b.bat }))} outs={batterOuts} />
             </div>
-            <GroundMap left={batter !== 'all' && lefties.has(batter)} shots={boundaries.map((b) => ({ shot: b.shot!, runs: b.bat }))} />
           </>
         )}
       </ChartCard>
@@ -424,11 +439,6 @@ export function DetailedTab({ file, summaries, lefties }: { file: ScoreFile; sum
         </ChartCard>
       )}
 
-      {caughtAt.length > 0 && (
-        <ChartCard title="Where catches were taken" subtitle={`✕ catches and run-out throws (${caughtAt.length} recorded)`}>
-          <GroundMap marks={caughtAt} />
-        </ChartCard>
-      )}
 
       <ChartCard title="Player impact" subtitle="Points from batting, bowling and fielding — the same formula as the player-of-the-match suggestion">
         {impact.length === 0 ? (

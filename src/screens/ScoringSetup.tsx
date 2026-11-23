@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AddPlayerSheet, BulkPlayersSheet } from '../components/scoring'
 import { Screen } from '../components/Screen'
-import { Avatar, ChoiceChips, Empty, ErrorNote, Field, NumberInput, Pill } from '../components/ui'
+import { Avatar, ChoiceChips, Empty, ErrorNote, Field, NumberInput, Pill, Toggle } from '../components/ui'
 import { addOpponentPlayers, ensureOpponent, opponentsOf } from '../lib/domain'
 import { maskPhone } from '../lib/phone'
 import { P } from '../lib/paths'
@@ -43,6 +43,8 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
   const [chose, setChose] = useState<'bat' | 'bowl' | undefined>()
   const [captains, setCaptains] = useState<Partial<Record<SideKey, string>>>({})
   const [error, setError] = useState<string | null>(null)
+  // Ask where every scoring shot went (on by default); fours and sixes are always asked.
+  const [allDirections, setAllDirections] = useState(true)
 
   const oversValue = overs || (match?.overs ? String(match.overs) : '')
   const ourPool = useMemo(() => {
@@ -105,6 +107,7 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
         home: { name: team.name, shortName: team.shortName, xi: ourXi, captainId: homeCaptain },
         away: { name: opponent.name, shortName: opponent.shortName, xi: theirXi, captainId: awayCaptain },
         toss: { wonBy, chose },
+        allDirections,
       })
       navigate(`${base}/score`, { replace: true })
     } catch (e) {
@@ -217,6 +220,17 @@ export function ScoringSetup({ teamId, matchId }: { teamId: string; matchId: str
                 <Pill tone="brand">Batting first</Pill> {(chose === 'bat') === (wonBy === 'home') ? team.name : match.opponent}
               </p>
             )}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="section-title">Wagon wheel</h2>
+          <div className="card flex items-center justify-between gap-3 p-4">
+            <span className="min-w-0 text-sm">
+              Ask where 1s, 2s and 3s went
+              <span className="block text-xs text-muted">Fours and sixes are always asked. You can skip any single, and change this later in Scoring options.</span>
+            </span>
+            <Toggle checked={allDirections} onChange={setAllDirections} label="Ask where 1s, 2s and 3s went" />
           </div>
         </section>
 

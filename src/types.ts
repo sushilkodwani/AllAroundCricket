@@ -442,6 +442,8 @@ export interface ScoreFile {
   opponentId?: string
   toss: { wonBy: SideKey; chose: 'bat' | 'bowl' }
   innings: Innings[]
+  /** Also ask where 1s, 2s and 3s went (optional for the scorer), so the wagon wheel shows every scoring shot. */
+  allDirections?: boolean
   status: 'live' | 'break' | 'finished'
   result?: { winner?: SideKey; text: string }
   /** Confirmed by the admin after the match (PLAN §33). */

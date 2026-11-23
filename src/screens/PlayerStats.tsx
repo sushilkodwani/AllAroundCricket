@@ -1,31 +1,17 @@
-// A player's page (PLAN §28, §39, §40): profile card, recent form and the
-// career record over a set of matches.
-import { useMemo, type ReactNode } from 'react'
-import { BarList, TrendBars } from '../components/charts'
+// A player's page (PLAN §28, §39, §40): profile card, then the detailed
+// analysis in four tabs (Batting, Bowling, Compare, Face off) over a set of matches.
+import { useMemo, useState } from 'react'
+import { FilterChips } from '../components/playerViz'
 import { ProfileCard, ProfileSheet } from '../components/Profile'
-import { GroundMap } from '../components/scoring'
 import { Screen } from '../components/Screen'
 import { useScores } from '../components/StatsTab'
-import { batAverage, batStrikeRate, bestBowling, bowlAverage, bowlEconomy, bowlOvers, careerStats, formOf, highScore } from '../lib/career'
-import { fmtDayMonth } from '../lib/dates'
-import { phaseProfile } from '../lib/season'
-import { oversText } from '../lib/scoring'
+import { careerStats } from '../lib/career'
+import { groundByName } from '../lib/domain'
+import { inYear, playerData, yearsOf, type PlayerCtx } from '../lib/playerAnalysis'
 import { useApp, useTeam } from '../state/AppContext'
-import { navigate, useSheet } from '../state/router'
-import { WICKET_LABELS, type Match, type WicketKind } from '../types'
-
-function Grid({ items }: { items: [string, ReactNode][] }) {
-  return (
-    <div className="card grid grid-cols-4 gap-y-3 p-3 text-center">
-      {items.map(([label, value]) => (
-        <div key={label}>
-          <p className="text-lg font-semibold">{value}</p>
-          <p className="text-[11px] text-muted">{label}</p>
-        </div>
-      ))}
-    </div>
-  )
-}
+import { navigate, useRoute, useSheet, withQuery } from '../state/router'
+import type { Match } from '../types'
+import { BattingTab, BowlingTab, CompareTab, FaceOffTab } from './PlayerTabs'
 
 /** Last few scores as chips, newest first. */
 export function FormStrip({ label, values }: { label: string; values: string[] }) {
@@ -57,6 +43,22 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
   const c = useMemo(() => careerStats(files).get(personId), [stamp, personId])
   const person = people.find((p) => p.id === personId)
   const name = personName(personId)
+  const route = useRoute()
+  const tabQ = route.query.get('ptab')
+  const tab = tabQ === 'bowling' || tabQ === 'compare' || tabQ === 'faceoff' ? tabQ : 'batting'
+  const [year, setYear] = useState('all')
+  const ctx: PlayerCtx = {
+    styleOf: (id) => people.find((p) => p.id === id)?.bowlStyle,
+    leftOf: (id) => !!people.find((p) => p.id === id)?.batsLeft,
+    pitchOf: (mid) => (store ? groundByName(store, scored.find((m) => m.id === mid)?.venue)?.pitch : undefined),
+    dateOf: (mid) => scored.find((m) => m.id === mid)?.date ?? '',
+    opponentOf: (mid) => scored.find((m) => m.id === mid)?.opponent ?? '',
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const all = useMemo(() => playerData(files, personId, ctx), [stamp, personId, people])
+  const years = yearsOf(all)
+  // Everyone who played in these matches, for Compare.
+  const players = [...new Set(files.flatMap((f) => [...f.home.xi, ...f.away.xi]))].sort((a, b) => personName(a).localeCompare(personName(b)))
   // Their own profile; the admin of a team they are in (or a player in no team); the super admin.
   const canEdit = !!person && !!store && (isSuper || session?.personId === personId || (isAdmin && !store.lookup.isStaff(person.id) && (person.teamIds.length === 0 ? !person.guestOfTeamIds?.length : person.teamIds.some(canManage)) ) || (isAdmin && !!person.guestOfTeamIds?.some(canManage)))
 
@@ -69,18 +71,15 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
   }
 
   const matchOf = (id: string) => scored.find((m) => m.id === id)
-  const rows = (c?.byMatch ?? [])
-    .map((l) => ({ l, m: matchOf(l.matchId) }))
-    .filter((x) => !!x.m)
-    .sort((a, b) => b.m!.date.localeCompare(a.m!.date))
-  const form = formOf(c, scored)
-  const phases = phaseProfile(files, personId)
-  const phaseRows = phases.filter((p) => p.bat.balls > 0 || p.bowl.balls > 0)
-  // Oldest to newest, so the chart reads left to right like a season.
-  const inOrder = [...rows].reverse().slice(-12)
-  const trendBat = inOrder.filter((x) => x.l.bat).map((x) => ({ label: fmtDayMonth(x.m!.date), value: x.l.bat!.runs, hollow: x.l.bat!.notOut, note: `vs ${x.m!.opponent}` }))
-  const trendBowl = inOrder.filter((x) => x.l.bowl).map((x) => ({ label: fmtDayMonth(x.m!.date), value: x.l.bowl!.wickets, note: `${x.l.bowl!.wickets}/${x.l.bowl!.runs} vs ${x.m!.opponent}` }))
-  const outs = c ? (Object.keys(c.dismissals) as WicketKind[]).map((k) => ({ label: WICKET_LABELS[k], value: c.dismissals[k] ?? 0 })).sort((a, b) => b.value - a.value) : []
+  const tabs = [
+    { value: 'batting' as const, label: 'Batting' },
+    { value: 'bowling' as const, label: 'Bowling' },
+    { value: 'compare' as const, label: 'Compare' },
+    { value: 'faceoff' as const, label: 'Face off' },
+  ]
+  const yearFiles = year === 'all' ? files : files.filter((f) => (matchOf(f.matchId)?.date ?? '').startsWith(year))
+  const d = inYear(all, year)
+  const props = { personId, d, name, personName, left: !!person?.batsLeft, matchOf, career: year === 'all' ? c : careerStats(yearFiles).get(personId) }
 
   return (
     <Screen title={name} back={back}>
@@ -89,179 +88,32 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
 
         {!c && <p className="card px-4 py-5 text-center text-sm text-muted">No scored matches yet. Batting, bowling and fielding figures appear after the first ball-by-ball match.</p>}
 
-        {(form.bat.length > 0 || form.bowl.length > 0) && (
-          <section>
-            <h2 className="section-title">Recent form (latest first)</h2>
-            <div className="card flex flex-col gap-2 p-3">
-              <FormStrip label="Batting" values={form.bat} />
-              <FormStrip label="Bowling" values={form.bowl} />
-            </div>
-          </section>
-        )}
-
         {c && (
           <>
-            {trendBat.length > 1 && (
-              <section>
-                <h2 className="section-title">Runs in each match (last {trendBat.length})</h2>
-                <div className="card p-3">
-                  <TrendBars points={trendBat} />
-                </div>
-              </section>
-            )}
-            {trendBowl.length > 1 && (
-              <section>
-                <h2 className="section-title">Wickets in each match (last {trendBowl.length})</h2>
-                <div className="card p-3">
-                  <TrendBars points={trendBowl} slot={2} />
-                </div>
-              </section>
-            )}
-
-            {phaseRows.length > 0 && (
-              <section>
-                <h2 className="section-title">By phase of the innings</h2>
-                <div className="card overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-alt text-xs text-muted">
-                        <th className="px-3 py-1.5 text-left font-semibold">Phase</th>
-                        <th className="px-1.5 py-1.5 text-right font-semibold">Bat SR</th>
-                        <th className="px-1.5 py-1.5 text-right font-semibold">Runs (balls)</th>
-                        <th className="px-1.5 py-1.5 text-right font-semibold">Bowl econ</th>
-                        <th className="px-3 py-1.5 text-right font-semibold">Wkts</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line">
-                      {phaseRows.map((p) => (
-                        <tr key={p.key}>
-                          <td className="px-3 py-2.5 font-medium">{p.label}</td>
-                          <td className="px-1.5 py-2.5 text-right">{p.bat.balls > 0 ? ((p.bat.runs * 100) / p.bat.balls).toFixed(0) : '–'}</td>
-                          <td className="px-1.5 py-2.5 text-right text-muted">{p.bat.balls > 0 ? `${p.bat.runs} (${p.bat.balls})` : '–'}</td>
-                          <td className="px-1.5 py-2.5 text-right">{p.bowl.balls > 0 ? ((p.bowl.runs * 6) / p.bowl.balls).toFixed(2) : '–'}</td>
-                          <td className="px-3 py-2.5 text-right">{p.bowl.balls > 0 ? p.bowl.wickets : '–'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-1 text-xs text-muted">Powerplay, middle and death are worked out from the overs of each innings (6 / 9 / 5 in a 20-over game). Matches shorter than 3 overs are left out.</p>
-              </section>
-            )}
-
-            <section>
-              <h2 className="section-title">Batting</h2>
-              {c.bat.innings === 0 ? (
-                <p className="card px-4 py-4 text-center text-sm text-muted">Has not batted yet</p>
-              ) : (
-                <Grid
-                  items={[
-                    ['Innings', c.bat.innings],
-                    ['Runs', c.bat.runs],
-                    ['Highest', highScore(c)],
-                    ['Average', batAverage(c)],
-                    ['Strike rate', batStrikeRate(c)],
-                    ['Not outs', c.bat.notOuts],
-                    ['Fours', c.bat.fours],
-                    ['Sixes', c.bat.sixes],
-                    ['50s', c.bat.fifties],
-                    ['100s', c.bat.hundreds],
-                    ['Ducks', c.bat.ducks],
-                    ['Balls', c.bat.balls],
-                  ]}
-                />
-              )}
-            </section>
-
-            <section>
-              <h2 className="section-title">Bowling</h2>
-              {c.bowl.innings === 0 ? (
-                <p className="card px-4 py-4 text-center text-sm text-muted">Has not bowled yet</p>
-              ) : (
-                <Grid
-                  items={[
-                    ['Overs', bowlOvers(c)],
-                    ['Wickets', c.bowl.wickets],
-                    ['Best', bestBowling(c)],
-                    ['Economy', bowlEconomy(c)],
-                    ['Runs', c.bowl.runs],
-                    ['Average', bowlAverage(c)],
-                    ['Maidens', c.bowl.maidens],
-                    ['Wd / Nb', `${c.bowl.wides} / ${c.bowl.noBalls}`],
-                  ]}
-                />
-              )}
-            </section>
-
-            <section>
-              <h2 className="section-title">Fielding</h2>
-              <div className="card grid grid-cols-3 gap-y-3 p-3 text-center">
-                {(
-                  [
-                    ['Catches', c.field.catches],
-                    ['Stumpings', c.field.stumpings],
-                    ['Run outs', c.field.runOuts],
-                  ] as const
-                ).map(([label, value]) => (
-                  <div key={label}>
-                    <p className="text-lg font-semibold">{value}</p>
-                    <p className="text-[11px] text-muted">{label}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {(c.shots.length > 0 || c.outAt.length > 0) && (
-              <section>
-                <h2 className="section-title">Wagon wheel — all matches</h2>
-                <div className="card p-4">
-                  <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="h-0.5 w-4" style={{ background: 'var(--series-1)' }} />
-                      Fours ({c.shots.filter((s) => s.runs === 4).length})
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="h-0.5 w-4" style={{ background: 'var(--series-2)' }} />
-                      Sixes ({c.shots.filter((s) => s.runs === 6).length})
-                    </span>
-                    {c.outAt.length > 0 && <span>✕ Caught / run out ({c.outAt.length})</span>}
-                  </div>
-                  <GroundMap left={person?.batsLeft} shots={c.shots} marks={c.outAt} />
-                  <p className="mt-1 text-center text-xs text-muted">Only boundaries and dismissals whose position was recorded.</p>
-                </div>
-              </section>
-            )}
-
-            {outs.length > 0 && (
-              <section>
-                <h2 className="section-title">How they get out</h2>
-                <div className="card p-4">
-                  <BarList slot={1} rows={outs} />
-                </div>
-              </section>
-            )}
-
-            <section>
-              <h2 className="section-title">Match by match</h2>
-              <div className="card divide-y divide-line overflow-hidden">
-                {rows.map(({ l, m }) => (
-                  <button key={l.matchId} className="row active:bg-alt" onClick={() => navigate(`/teams/${m!.teamId}/matches/${l.matchId}/live?tab=scorecard`)}>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">vs {m!.opponent}</span>
-                      <span className="block text-xs text-muted">{fmtDayMonth(m!.date)}</span>
-                    </span>
-                    <span className="text-right text-sm">
-                      <span className="block">{l.bat ? `${l.bat.runs}${l.bat.notOut ? '*' : ''} (${l.bat.balls})` : <span className="text-muted">did not bat</span>}</span>
-                      {l.bowl && (
-                        <span className="block text-xs text-muted">
-                          {l.bowl.wickets}/{l.bowl.runs} ({oversText(l.bowl.balls)} ov)
-                        </span>
-                      )}
-                    </span>
+            <div className="sticky top-0 z-10 -mx-4 bg-bg px-4 pb-2 pt-1">
+              <div className="-mx-4 flex overflow-x-auto border-b border-line px-2 [scrollbar-width:none]" role="tablist">
+                {tabs.map((t) => (
+                  <button
+                    key={t.value}
+                    role="tab"
+                    aria-selected={tab === t.value}
+                    className={`min-h-[44px] shrink-0 border-b-2 px-3 text-sm font-semibold ${tab === t.value ? 'border-brand text-accent' : 'border-transparent text-muted'}`}
+                    onClick={() => navigate(withQuery(route, { ptab: t.value }), { replace: true })}
+                  >
+                    {t.label}
                   </button>
                 ))}
               </div>
-            </section>
+              {years.length > 1 && (
+                <div className="mt-2">
+                  <FilterChips options={[{ value: 'all', label: 'All years' }, ...years.map((y) => ({ value: y, label: y }))]} value={year} onChange={setYear} />
+                </div>
+              )}
+            </div>
+            {tab === 'batting' && <BattingTab {...props} />}
+            {tab === 'bowling' && <BowlingTab {...props} />}
+            {tab === 'compare' && <CompareTab personId={personId} files={yearFiles} personName={personName} players={players} />}
+            {tab === 'faceoff' && <FaceOffTab d={d} personName={personName} />}
           </>
         )}
       </div>

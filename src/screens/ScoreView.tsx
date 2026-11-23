@@ -12,6 +12,7 @@ import { fmtDate } from '../lib/dates'
 import { chaseView, milestoneText, milestonesOf, parScore } from '../lib/insights'
 import { buildPublicCard, cardUrl, encodeCard } from '../lib/publicCard'
 import { drawResultCard, shareResultCard } from '../lib/resultCard'
+import { inningsMinutes, mins as toMin } from '../lib/minutes'
 import { P } from '../lib/paths'
 import { ballNumbers, ballText, economy, fmtRate, howOut, scoreLine, strikeRate, summarize, type InningsSummary } from '../lib/scorecard'
 import { BALLS, ballRuns, battingSide, bowlingSide, isBall, oversText } from '../lib/scoring'
@@ -269,7 +270,8 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
 const Th = ({ children, left }: { children?: ReactNode; left?: boolean }) => <th className={`px-1.5 py-1.5 text-xs font-semibold text-muted ${left ? 'text-left' : 'text-right'}`}>{children}</th>
 const Td = ({ children, strong }: { children?: ReactNode; strong?: boolean }) => <td className={`px-1.5 py-2 text-right ${strong ? 'font-bold' : ''}`}>{children}</td>
 
-function BattingTable({ s, only, closed }: { s: InningsSummary; only?: 'crease'; closed?: boolean }) {
+/** `mins` = minutes at the crease (only when the innings was scored live). */
+function BattingTable({ s, only, closed, mins }: { s: InningsSummary; only?: 'crease'; closed?: boolean; mins?: Map<string, number> }) {
   const { personName } = useApp()
   const rows = only ? s.batters.filter((b) => b.atCrease) : s.batters
   return (
@@ -279,6 +281,7 @@ function BattingTable({ s, only, closed }: { s: InningsSummary; only?: 'crease';
           <Th left>Batter</Th>
           <Th>R</Th>
           <Th>B</Th>
+          {mins && <Th>M</Th>}
           <Th>4s</Th>
           <Th>6s</Th>
           <Th>SR</Th>
@@ -296,6 +299,7 @@ function BattingTable({ s, only, closed }: { s: InningsSummary; only?: 'crease';
             </td>
             <Td strong>{b.runs}</Td>
             <Td>{b.balls}</Td>
+            {mins && <Td>{mins.has(b.id) ? toMin(mins.get(b.id)!) : '–'}</Td>}
             <Td>{b.fours}</Td>
             <Td>{b.sixes}</Td>
             <Td>{strikeRate(b.runs, b.balls)}</Td>
@@ -303,7 +307,7 @@ function BattingTable({ s, only, closed }: { s: InningsSummary; only?: 'crease';
         ))}
         {rows.length === 0 && (
           <tr>
-            <td colSpan={6} className="px-2 py-4 text-center text-muted">
+            <td colSpan={mins ? 7 : 6} className="px-2 py-4 text-center text-muted">
               No batters yet
             </td>
           </tr>
@@ -432,6 +436,7 @@ function LiveTab({ file, s, tossText }: { file: ScoreFile; s: InningsSummary; to
 function InningsCard({ file, idx, s }: { file: ScoreFile; idx: number; s: InningsSummary }) {
   const { personName } = useApp()
   const e = s.extras
+  const time = inningsMinutes(file.innings[idx])
   return (
     <section className="card overflow-hidden">
       <h3 className="flex items-baseline justify-between gap-2 border-b border-line px-3 py-2.5 font-semibold">
@@ -440,7 +445,7 @@ function InningsCard({ file, idx, s }: { file: ScoreFile; idx: number; s: Inning
           {s.total}/{s.wickets} <span className="text-sm font-normal text-muted">({s.overs} ov)</span>
         </span>
       </h3>
-      <BattingTable s={s} closed={!!file.innings[idx].closed} />
+      <BattingTable s={s} closed={!!file.innings[idx].closed} mins={time.timed ? time.batters : undefined} />
       <div className="space-y-1.5 border-y border-line px-3 py-2.5 text-sm">
         <p>
           <span className="font-semibold">Extras {e.total}</span>{' '}
@@ -452,6 +457,14 @@ function InningsCard({ file, idx, s }: { file: ScoreFile; idx: number; s: Inning
         <p>
           <span className="font-semibold">Run rate</span> <span className="text-muted">{fmtRate(s.runRate)}</span>
         </p>
+        {time.timed && (
+          <p>
+            <span className="font-semibold">Time</span>{' '}
+            <span className="text-muted">
+              {toMin(time.total)} min ({(time.total / 60_000 / Math.max(1, s.legal / BALLS)).toFixed(1)} min per over). M = minutes at the crease.
+            </span>
+          </p>
+        )}
         {s.yetToBat.length > 0 && (
           <p>
             <span className="font-semibold">Yet to bat:</span> <span className="text-muted">{s.yetToBat.map(personName).join(', ')}</span>

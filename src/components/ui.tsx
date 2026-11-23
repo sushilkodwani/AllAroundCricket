@@ -354,15 +354,16 @@ export function Toggle({ checked, onChange, label, disabled }: { checked: boolea
 }
 
 /** Tappable chips for picking one value. */
-export function ChoiceChips<T extends string>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T | undefined; onChange: (v: T) => void }) {
+/** `row`: one line that scrolls sideways instead of wrapping (long lists such as batters). */
+export function ChoiceChips<T extends string>({ options, value, onChange, row }: { options: { value: T; label: string }[]; value: T | undefined; onChange: (v: T) => void; row?: boolean }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className={row ? '-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]' : 'flex flex-wrap gap-2'}>
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           aria-pressed={value === o.value}
-          className={`min-h-[40px] rounded-full border px-3.5 text-sm font-medium ${value === o.value ? 'border-brand bg-brand text-on-brand' : 'border-chip-line bg-chip text-ink active:bg-line'}`}
+          className={`min-h-[40px] shrink-0 rounded-full border px-3.5 text-sm font-medium ${value === o.value ? 'border-brand bg-brand text-on-brand' : 'border-chip-line bg-chip text-ink active:bg-line'}`}
           onClick={() => onChange(o.value)}
         >
           {o.label}

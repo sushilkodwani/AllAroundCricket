@@ -3,7 +3,7 @@
 // All worked out from the ball-by-ball log — nothing extra is stored.
 import type { BallEvent, ScoreFile } from '../types'
 import { parScore, winChance } from './insights'
-import { shotRegion, summarize } from './scorecard'
+import { BATTER_POS, shotRegion, summarize } from './scorecard'
 import { BALLS, BOWLER_WICKETS, ballRuns, bowlerRuns, isBall } from './scoring'
 
 const pct = (n: number, d: number) => (d > 0 ? Math.round((n * 100) / d) : 0)
@@ -359,6 +359,25 @@ export function zonesOf(file: ScoreFile, idx: number, lefties: Set<string>): Zon
     else z.sixes++
   }
   return [...m.values()].sort((a, b) => b.fours + b.sixes - (a.fours + a.sixes))
+}
+
+// ---------- wagon wheel: eight 45° slices ----------
+/** Angle of a shot from the batter: 0° = straight past the bowler, positive = leg side (mirrored for left-handers). */
+export function shotAngle(shot: [number, number], left = false): number {
+  const dx = (shot[0] - BATTER_POS[0]) * (left ? -1 : 1)
+  const dy = shot[1] - BATTER_POS[1]
+  return (Math.atan2(dx, dy) * 180) / Math.PI
+}
+
+/** Slice 0–7 of a shot; slice i spans -180 + 45·i to -135 + 45·i degrees (0–3 off side, 4–7 leg side). */
+export const sliceOf = (shot: [number, number], left = false) => Math.min(7, Math.max(0, Math.floor((shotAngle(shot, left) + 180) / 45)))
+
+/** Runs in each of the eight slices and each slice's share of them (whole per cent). */
+export function wagonSlices(shots: { shot: [number, number]; runs: number }[], left = false): { runs: number[]; pct: number[] } {
+  const runs = Array(8).fill(0) as number[]
+  for (const s of shots) runs[sliceOf(s.shot, left)] += s.runs
+  const total = runs.reduce((a, b) => a + b, 0)
+  return { runs, pct: runs.map((r) => (total ? Math.round((r / total) * 100) : 0)) }
 }
 
 // ---------- the chase against par ----------
