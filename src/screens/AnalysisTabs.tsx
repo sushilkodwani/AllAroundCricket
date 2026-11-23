@@ -11,7 +11,8 @@ import { battersOf, chaseOf, fieldingOf, handSplitOf, kpisOf, matchupsOf, moment
 import { awardPoints } from '../lib/insights'
 import { inningsMinutes, mins, type InningsMinutes } from '../lib/minutes'
 import { economy, fmtRate, strikeRate, type InningsSummary } from '../lib/scorecard'
-import { BALLS, ballRuns, battingSide, bowlingSide, isBall, legalBalls, oversText } from '../lib/scoring'
+import { BALLS, BOWLER_WICKETS, ballRuns, battingSide, bowlingSide, isBall, legalBalls, oversText } from '../lib/scoring'
+import { ShotsBreakdown } from '../components/ShotsAnalysis'
 import { useApp } from '../state/AppContext'
 import { WICKET_LABELS, type ScoreFile, type WicketKind } from '../types'
 
@@ -234,6 +235,23 @@ export function DetailedTab({ file, summaries, lefties }: { file: ScoreFile; sum
   const spells = spellsOf(file, idx)
   const batters = battersOf(file, idx)
   const fielding = fieldingOf(file, idx)
+  // Shots analysis: every ball faced in this innings (or by the chosen batter), with the shot noted.
+  const shotBalls = inn.events
+    .filter(isBall)
+    .filter((b) => batter === 'all' || b.striker === batter || b.wicket?.who === batter)
+    .map((b) => ({ shotType: b.kind === 'wd' ? undefined : b.shotType, bat: b.kind === 'wd' ? 0 : b.bat, faced: b.kind !== 'wd', out: b.wicket && b.wicket.who === b.striker ? b.wicket.kind : undefined }))
+  // Over or round the wicket, per bowler and side (only balls where it was noted).
+  const sideMap = new Map<string, { bowler: string; side: 'over' | 'round'; balls: number; runs: number; wickets: number }>()
+  for (const b of inn.events.filter(isBall)) {
+    if (!b.side) continue
+    const k = `${b.bowler}:${b.side}`
+    let r = sideMap.get(k)
+    if (!r) sideMap.set(k, (r = { bowler: b.bowler, side: b.side, balls: 0, runs: 0, wickets: 0 }))
+    if (b.kind === 'legal') r.balls++
+    r.runs += b.kind === 'wd' ? 1 + b.byes : b.bat + (b.kind === 'nb' ? 1 : 0)
+    if (b.wicket && BOWLER_WICKETS.includes(b.wicket.kind)) r.wickets++
+  }
+  const sideRows = [...sideMap.values()].sort((a, b) => personName(a.bowler).localeCompare(personName(b.bowler)) || a.side.localeCompare(b.side))
   const caughtAt = inn.events.filter(isBall).flatMap((b) => (b.wicket?.at ? [b.wicket.at] : []))
   // Catches (and run-out throws) for the wagon wheel: all of them, or the chosen batter's.
   const batterOuts = inn.events.filter(isBall).flatMap((b) => (b.wicket?.at && (batter === 'all' || b.wicket.who === batter) ? [b.wicket.at] : []))
@@ -481,6 +499,18 @@ export function DetailedTab({ file, summaries, lefties }: { file: ScoreFile; sum
           </>
         )}
       </ChartCard>
+
+      {shotBalls.some((b) => b.shotType) && (
+        <ChartCard title="Shots analysis" subtitle={`${batter === 'all' ? batName : personName(batter)} — runs, boundaries and dismissals from each kind of shot`}>
+          <ShotsBreakdown key={`${idx}:${batter}`} balls={shotBalls} left={batter !== 'all' && lefties.has(batter)} />
+        </ChartCard>
+      )}
+
+      {sideRows.length > 0 && (
+        <ChartCard title="Over or round the wicket" subtitle={`${bowlingSide(file, inn).name} — each bowler from each side`}>
+          <Table head={['Bowler', 'Side', 'Balls', 'Runs', 'Wkts', 'Econ']} rows={sideRows.map((r) => [personName(r.bowler), r.side === 'over' ? 'Over' : 'Round', r.balls, r.runs, r.wickets, economy(r)])} />
+        </ChartCard>
+      )}
 
       <ChartCard title="Fielding" subtitle={`${bowlingSide(file, inn).name} — catches, run-outs and stumpings`}>
         {fielding.length === 0 ? (

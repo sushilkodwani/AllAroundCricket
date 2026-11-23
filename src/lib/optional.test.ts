@@ -216,3 +216,22 @@ describe('extra scoring details', () => {
     expect(setAsk(f, 'askSide', false).askSide).toBeUndefined()
   })
 })
+
+describe('shots analysis', () => {
+  it('adds up runs, dots, boundaries and dismissals for each shot, skipping wides and unrecorded balls', async () => {
+    const { shotRows } = await import('../components/ShotsAnalysis')
+    const rows = shotRows([
+      { shotType: 'pull', bat: 4, faced: true },
+      { shotType: 'pull', bat: 1, faced: true },
+      { shotType: 'pull', bat: 0, faced: true, out: 'caught' },
+      { shotType: 'drive', bat: 3, faced: true },
+      { shotType: 'drive', bat: 6, faced: true },
+      { bat: 4, faced: true }, // shot not recorded
+      { shotType: 'cut', bat: 0, faced: false }, // a wide: no ball faced
+    ])
+    expect(rows.map((r) => r.type)).toEqual(['drive', 'pull', 'cut'])
+    expect(rows[0]).toMatchObject({ runs: 9, balls: 2, twosThrees: 3, sixes: 1 })
+    expect(rows[1]).toMatchObject({ runs: 5, balls: 3, ones: 1, fours: 1, dots: 1, outs: 1 })
+    expect(rows[2]).toMatchObject({ runs: 0, balls: 0 })
+  })
+})

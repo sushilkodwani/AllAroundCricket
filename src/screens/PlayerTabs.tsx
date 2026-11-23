@@ -5,6 +5,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { TrendBars } from '../components/charts'
 import { WagonWheel, WicketDonut } from '../components/matchViz'
 import { ShotTiles } from '../components/ShotIcons'
+import { ShotsBreakdown } from '../components/ShotsAnalysis'
 import { Bars, DataTable, FilterChips, Insights, Panel, ProgressChart, Tiles } from '../components/playerViz'
 import { SearchSelect, Segmented } from '../components/ui'
 import { careerStats, type Career } from '../lib/career'
@@ -43,16 +44,6 @@ import { oversText } from '../lib/scoring'
 import { navigate } from '../state/router'
 import { PITCH_LABELS, SHOT_LABELS, SIDE_LABELS, WICKET_LABELS, type BowlingSide, type Match, type PitchType, type ScoreFile, type ShotType, type WicketKind } from '../types'
 
-type ShotFilter = 'all' | 'out' | 'dots' | 'ones' | 'twos' | 'fours' | 'sixes'
-const SHOT_FILTERS: { value: ShotFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'out', label: 'Out' },
-  { value: 'dots', label: 'Dots' },
-  { value: 'ones', label: '1s' },
-  { value: 'twos', label: '2s and 3s' },
-  { value: 'fours', label: '4s' },
-  { value: 'sixes', label: '6s' },
-]
 
 const PHASES: { value: PhaseKey | 'any'; label: string }[] = [
   { value: 'any', label: 'All overs' },
@@ -139,7 +130,6 @@ export function BattingTab({ personId, d, name, personName, left, matchOf, share
   const [wheelPace, setWheelPace] = useState<PaceKey | 'any'>('any')
   const [wheelPhase, setWheelPhase] = useState<PhaseKey | 'any'>('any')
   const [runsPace, setRunsPace] = useState<PaceKey | 'any'>('any')
-  const [shotFilter, setShotFilter] = useState<ShotFilter>('all')
   const inns = d.batInns
   if (!inns.length) return <p className="card px-4 py-5 text-center text-sm text-muted">Has not batted in these matches.</p>
 
@@ -205,16 +195,6 @@ export function BattingTab({ personId, d, name, personName, left, matchOf, share
   )
 
   const shotRows = [...groupBy(d.batBalls.filter((b) => b.shotType), (b) => b.shotType as ShotType).entries()].map(([k, xs]) => ({ k, a: batAgg(xs) })).sort((a, b) => b.a.runs - a.a.runs)
-  // Tiles for the Shots analysis, by the filter picked (like All / Out / 1s / 4s …).
-  const shotTiles = shotRows
-    .map(({ k, a }) => {
-      const v = shotFilter === 'all' ? a.runs : shotFilter === 'out' ? a.outs : shotFilter === 'dots' ? a.dots : shotFilter === 'ones' ? a.ones : shotFilter === 'twos' ? a.twos * 2 + a.threes * 3 : shotFilter === 'fours' ? a.fours : a.sixes
-      const unit = shotFilter === 'all' || shotFilter === 'twos' ? 'run' : shotFilter === 'out' ? 'time out' : shotFilter === 'dots' ? 'dot ball' : shotFilter === 'ones' ? 'single' : shotFilter === 'fours' ? 'four' : 'six'
-      const word = v === 1 ? unit : unit === 'six' ? 'sixes' : unit === 'time out' ? 'times out' : `${unit}s`
-      return { type: k, n: v, value: `${v} ${word}`, note: `${SHOT_LABELS[k]}: ${a.runs} runs off ${a.balls} balls, ${a.fours} fours, ${a.sixes} sixes${a.outs ? `, out ${a.outs} ${a.outs === 1 ? 'time' : 'times'}` : ''}.` }
-    })
-    .filter((r) => r.n > 0)
-    .sort((x, y) => y.n - x.n)
   const outShot = topBy(groupBy(d.batBalls.filter((b) => b.shotType && b.out), (b) => b.shotType as ShotType), (xs) => xs.length)
   const years = [...yearsSorted(inns).entries()].map(([year, xs]) => ({ year, value: xs.reduce((s, i) => s + i.runs, 0) }))
   const timed = inns.filter((i) => i.minutes !== undefined)
@@ -329,8 +309,7 @@ export function BattingTab({ personId, d, name, personName, left, matchOf, share
 
       {shotRows.length > 0 && (
         <Panel title="Shots analysis" sub="Each kind of shot, where the scorer recorded it. Tap a tile for more.">
-          <FilterChips options={SHOT_FILTERS} value={shotFilter} onChange={setShotFilter} />
-          <ShotTiles left={left} rows={shotTiles} />
+          <ShotsBreakdown balls={d.batBalls} left={left} />
           <Insights
             items={[
               <>
@@ -403,6 +382,18 @@ export function BattingTab({ personId, d, name, personName, left, matchOf, share
           note={styleRows.some((r) => r.k === 'unknown') ? 'Not recorded = the bowler’s style is not on their profile yet.' : undefined}
         />
       </Panel>
+
+      {d.batBalls.some((b) => b.side) && (
+        <Panel title="Over or round the wicket" sub="Against bowlers coming from each side">
+          <DataTable
+            head={['', 'Runs', 'Balls', 'Outs', 'Avg', 'SR', 'Dot %']}
+            rows={(['over', 'round'] as const)
+              .map((k) => ({ k, a: batAgg(d.batBalls.filter((b) => b.side === k)) }))
+              .filter((r) => r.a.balls > 0)
+              .map(({ k, a }) => [SIDE_LABELS[k], a.runs, a.balls, a.outs, f1(avg(a.runs, a.outs)), f1(sr(a.runs, a.balls)), `${pct(a.dots, a.balls)}%`])}
+          />
+        </Panel>
+      )}
 
       <Panel title="Pace v spin">
         <DataTable
@@ -515,6 +506,7 @@ type Hand = 'any' | 'right' | 'left'
 export function BowlingTab({ personId, d, name, personName, matchOf, career, share }: TabProps) {
   const [overView, setOverView] = useState<OverView>('wickets')
   const [hand, setHand] = useState<Hand>('any')
+  const [impact, setImpact] = useState<'wickets' | 'runs'>('wickets')
   const inns = d.bowlInns
   void personId
   const fielding = career && (
@@ -568,7 +560,12 @@ export function BowlingTab({ personId, d, name, personName, matchOf, career, sha
   const pitchRows = [...groupBy(inns.filter((i) => i.pitch), (i) => i.pitch as PitchType).entries()]
   const victims = d.bowlBalls.filter((b) => b.victim)
   const sideRows = [...groupBy(d.bowlBalls.filter((b) => b.side), (b) => b.side as BowlingSide).entries()].map(([k, xs]) => ({ k, a: bowlAgg(xs) })).sort((a, b) => a.k.localeCompare(b.k))
-  const wicketShots = [...groupBy(d.bowlBalls.filter((b) => b.wicket && b.shotType), (b) => b.shotType as ShotType).entries()].map(([k, xs]) => [k, xs.length] as [ShotType, number]).sort((a, b) => b[1] - a[1])
+  // Impact analysis: by the shot the batter played, the wickets taken or the runs given.
+  const byShot = groupBy(d.bowlBalls.filter((b) => b.shotType && b.kind !== 'wd'), (b) => b.shotType as ShotType)
+  const impactRows = [...byShot.entries()]
+    .map(([k, xs]) => ({ k, wickets: xs.filter((b) => b.wicket).length, runs: xs.reduce((sum, b) => sum + b.bat, 0), balls: xs.filter((b) => b.legal).length }))
+    .filter((r) => (impact === 'wickets' ? r.wickets : r.runs) > 0)
+    .sort((a, b) => (impact === 'wickets' ? b.wickets - a.wickets : b.runs - a.runs))
   const vpos = (from: number, to: number) => victims.filter((b) => b.victim! >= from && b.victim! <= to).length
   const spread = wicketsSpread(inns)
   const win3 = winPct(inns, (i) => i.wickets >= 3)
@@ -684,9 +681,25 @@ export function BowlingTab({ personId, d, name, personName, matchOf, career, sha
         </Panel>
       )}
 
-      {wicketShots.length > 0 && (
-        <Panel title="Wickets by shot" sub="The shot the batter played when this bowler got them out">
-          <ShotTiles rows={wicketShots.map(([k, n]) => ({ type: k, value: `${n} wicket${n === 1 ? '' : 's'}` }))} />
+      {byShot.size > 0 && (
+        <Panel title="Impact analysis" sub="By the shot the batter played">
+          <Segmented
+            options={[
+              { value: 'wickets', label: 'Wickets' },
+              { value: 'runs', label: 'Runs given' },
+            ]}
+            value={impact}
+            onChange={setImpact}
+          />
+          <div className="mt-2">
+            <ShotTiles
+              rows={impactRows.map((r) => ({
+                type: r.k,
+                value: impact === 'wickets' ? `${r.wickets} wicket${r.wickets === 1 ? '' : 's'}` : `${r.runs} run${r.runs === 1 ? '' : 's'}`,
+                note: `${SHOT_LABELS[r.k]}: ${r.balls} balls, ${r.runs} runs given, ${r.wickets} wicket${r.wickets === 1 ? '' : 's'}.`,
+              }))}
+            />
+          </div>
         </Panel>
       )}
 

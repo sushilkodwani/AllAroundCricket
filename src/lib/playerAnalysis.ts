@@ -52,6 +52,8 @@ export interface BatBall extends Where {
   /** Where the catch was taken / the throw came from. */
   at?: [number, number]
   shotType?: ShotType
+  /** The bowler came over or round the wicket (when noted). */
+  side?: BowlingSide
 }
 
 export interface BatInn {
@@ -169,7 +171,7 @@ export function playerData(files: ScoreFile[], id: string, ctx: PlayerCtx): Play
         if (b.striker === id || outHere) {
           const onStrike = b.striker === id
           const faced = onStrike && b.kind !== 'wd'
-          d.batBalls.push({ ...where, bowler: b.bowler, style: ctx.styleOf(b.bowler) ?? 'unknown', bat: onStrike ? b.bat : 0, faced, out: outHere, shot: onStrike ? b.shot : undefined, at: outHere ? b.wicket?.at : undefined, shotType: onStrike ? b.shotType : undefined })
+          d.batBalls.push({ ...where, bowler: b.bowler, style: ctx.styleOf(b.bowler) ?? 'unknown', bat: onStrike ? b.bat : 0, faced, out: outHere, shot: onStrike ? b.shot : undefined, at: outHere ? b.wicket?.at : undefined, shotType: onStrike ? b.shotType : undefined, side: b.side })
           if (faced) progress.push((mine += b.bat))
         }
         if (b.wicket && (b.wicket.kind === 'caught' || b.wicket.kind === 'caught_behind' ? b.wicket.fielder === id : b.wicket.kind === 'caught_bowled' && b.bowler === id)) d.catches.push({ matchId: file.matchId, date })

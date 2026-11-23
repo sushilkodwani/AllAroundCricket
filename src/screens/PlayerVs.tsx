@@ -31,7 +31,8 @@ import {
   type StyleKey,
 } from '../lib/playerAnalysis'
 import { oversText } from '../lib/scoring'
-import { WICKET_LABELS, type Match, type ScoreFile, type WicketKind } from '../types'
+import { SHOT_LABELS, WICKET_LABELS, type Match, type ScoreFile, type ShotType, type WicketKind } from '../types'
+import { ShotsBreakdown } from '../components/ShotsAnalysis'
 import { FormList, NUM_COLOR, f1, openMatch } from './PlayerTabs'
 
 type Mode = 'bat' | 'bowl'
@@ -192,6 +193,14 @@ function CompareBatting({
   const styleAgg = (x: PlayerData, s: StyleKey) => batAgg(x.batBalls.filter((b) => b.style === s))
 
   const wheelBalls = ds[wheelOf].batBalls.filter((b) => b.shot && b.faced && b.bat > 0)
+  // Shots: the ones either player scored most from (up to 8).
+  const runsBy = (x: PlayerData, k: ShotType) => x.batBalls.filter((b) => b.shotType === k && b.faced).reduce((sum, b) => sum + b.bat, 0)
+  const shotsBoth = (Object.keys(SHOT_LABELS) as ShotType[])
+    .map((k) => ({ k, n: runsBy(ds[0], k) + runsBy(ds[1], k) }))
+    .filter((r) => r.n > 0)
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 8)
+    .map((r) => r.k)
 
   return (
     <>
@@ -241,6 +250,12 @@ function CompareBatting({
       <Panel title="How they get out">
         <Butterfly rows={KINDS.map((k) => ({ label: WICKET_LABELS[k], a: ka[k] ?? 0, b: kb[k] ?? 0 }))} names={names} />
       </Panel>
+
+      {shotsBoth.length > 0 && (
+        <Panel title="Shots" sub="Runs from each kind of shot, where it was recorded">
+          <PairBars labels={shotsBoth.map((k) => SHOT_LABELS[k].split(' ')[0])} a={shotsBoth.map((k) => runsBy(ds[0], k))} b={shotsBoth.map((k) => runsBy(ds[1], k))} names={names} />
+        </Panel>
+      )}
 
       <Panel title="Out between runs" sub="The score they were out on">
         <PairBars labels={buckets.map((b) => b[0])} a={outsIn(ds[0])} b={outsIn(ds[1])} names={names} axis="runs when out" />
@@ -631,6 +646,11 @@ function FaceBat({ balls, name, them, left, matchOf }: { balls: BatBall[]; name:
           ]}
         />
       </Panel>
+      {balls.some((b) => b.shotType) && (
+        <Panel title="Shots" sub={`What ${name.split(' ')[0]} played against ${them}`}>
+          <ShotsBreakdown balls={balls} left={left} />
+        </Panel>
+      )}
       <Panel title="Types of runs">
         <Bars axis="balls" bars={RUN_LABELS.map((label, i) => ({ label, value: runsOf(a)[i], color: NUM_COLOR([0, 1, 2, 3, 4, 6][i]), note: `${label}: ${runsOf(a)[i]}` }))} />
       </Panel>
@@ -683,6 +703,11 @@ function FaceBowl({ balls, name, them, left, matchOf }: { balls: BowlBall[]; nam
           ]}
         />
       </Panel>
+      {balls.some((b) => b.shotType) && (
+        <Panel title="Shots" sub={`What ${them} played against ${name.split(' ')[0]}`}>
+          <ShotsBreakdown balls={balls.map((b) => ({ shotType: b.kind === 'wd' ? undefined : b.shotType, bat: b.bat, faced: b.kind !== 'wd', out: b.wicket }))} left={left} />
+        </Panel>
+      )}
       <Panel title="Types of runs given">
         <Bars axis="balls" bars={RUN_LABELS.map((label, i) => ({ label, value: runsOf(a)[i], color: NUM_COLOR([0, 1, 2, 3, 4, 6][i]), note: `${label}: ${runsOf(a)[i]}` }))} />
       </Panel>
