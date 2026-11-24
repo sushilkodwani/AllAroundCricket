@@ -175,7 +175,7 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
           )}
           <p className="mt-1 text-xs text-muted">
             Last scored {fmtClock(file.updatedAt)} · {auto ? `updates by itself every ${everyText(autoMs)}${saver === 'normal' ? '' : ' (saving data)'}` : 'tap ⟳ for the latest'}
-            {(isAdmin || (!!match?.scorerId && match.scorerId === session?.personId)) && (
+            {match?.lifecycle !== 'completed' && (isAdmin || (!!match?.scorerId && match.scorerId === session?.personId)) && (
               <button className="ml-2 font-semibold text-accent" onClick={() => navigate(`${base}/score`)}>
                 {file.status === 'finished' ? 'Open scoring' : 'Continue scoring'}
               </button>

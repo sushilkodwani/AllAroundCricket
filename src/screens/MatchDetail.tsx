@@ -50,7 +50,7 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
   const me = session?.personId ?? ''
   const inSquad = match.squad.includes(me)
   // The admin, or the one player the admin handed this match to (PLAN §31).
-  const canScore = isAdmin || match.scorerId === me
+  const canScore = (isAdmin || match.scorerId === me) && match.lifecycle !== 'completed' // a completed match is scored again only once it is reopened
   const ground = store ? groundByName(store, match.venue) : undefined
   const byId = new Map(people.map((p) => [p.id, p]))
   const share = (text: string) => void shareMessage(text).then((how) => how === 'copied' && toast('Message copied'))
@@ -160,7 +160,7 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
                 </button>
               </>
             )}
-            {match.scoring !== 'finished' && (isAdmin || match.scorerId) && (
+            {match.scoring !== 'finished' && match.lifecycle !== 'completed' && (isAdmin || match.scorerId) && (
               <div className="flex items-center justify-between gap-2 border-t border-line pt-2 text-sm">
                 <span className="min-w-0 truncate">
                   <span className="text-muted">Scorer:</span> {match.scorerId ? `${personName(match.scorerId)}${match.scorerId === me ? ' (you)' : ''}` : 'Admin only'}
