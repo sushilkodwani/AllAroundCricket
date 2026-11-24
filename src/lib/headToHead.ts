@@ -4,7 +4,7 @@
 // ball-by-ball score files, where our team is always the home side.
 import type { Match, MatchResult, ScoreFile } from '../types'
 import { careerStats, type Career } from './career'
-import { inningsTotal } from './scoring'
+import { inningsTotal, squadOf } from './scoring'
 
 export interface H2H {
   played: number
@@ -102,8 +102,8 @@ export function headToHeadOf(matches: Match[], files: ScoreFile[]): H2H {
   }
 
   const careers = [...careerStats(files).values()]
-  const ours = new Set(files.flatMap((f) => f.home.xi))
-  const theirs = new Set(files.flatMap((f) => f.away.xi))
+  const ours = new Set(files.flatMap((f) => squadOf(f.home)))
+  const theirs = new Set(files.flatMap((f) => squadOf(f.away)))
   const bat = (xs: Career[]) => xs.filter((c) => c.bat.innings > 0).sort((a, b) => b.bat.runs - a.bat.runs).slice(0, 3)
   const bowl = (xs: Career[]) => xs.filter((c) => c.bowl.wickets > 0).sort((a, b) => b.bowl.wickets - a.bowl.wickets || a.bowl.runs - b.bowl.runs).slice(0, 3)
   out.ourBat = bat(careers.filter((c) => ours.has(c.id)))

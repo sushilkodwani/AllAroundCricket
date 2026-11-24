@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ScoreFile } from '../types'
 import { ballNumbers, ballText, ballToken, shotRegion, summarize } from './scorecard'
-import { addBall, editBall, endInnings, inningsTotal, isFreeHit, newScore, penalty, retire, setCrease, setOvers, setTarget, startSecondInnings, swapStrike, undo, type BallInput } from './scoring'
+import { addBall, addToXi, editBall, endInnings, inningsTotal, isFreeHit, newScore, penalty, retire, setCrease, setOvers, setTarget, startSecondInnings, swapStrike, undo, type BallInput } from './scoring'
 
 const H = ['h1', 'h2', 'h3', 'h4']
 const A = ['a1', 'a2', 'a3', 'a4']
@@ -344,5 +344,35 @@ describe('mandatory details', () => {
     expect(() => newScore({ ...base, toss: {} as never })).toThrow(/toss/)
     const twelve = Array.from({ length: 12 }, (_, i) => `x${i}`)
     expect(() => newScore({ ...base, home: { ...base.home, xi: twelve }, toss: { wonBy: 'home', chose: 'bat' } })).toThrow(/11 at most/)
+  })
+})
+
+describe('substitutes', () => {
+  const eleven = Array.from({ length: 11 }, (_, i) => `p${i}`)
+  const side = (xi: string[], subs?: string[]) => ({ name: 'X', shortName: 'X', xi, ...(subs ? { subs } : {}) })
+  it('a side plays 11, plus substitutes who can bat and bowl', () => {
+    expect(() => newScore({ matchId: 'm', teamId: 't', overs: 5, home: side([...eleven, 'extra']), away: side(A), toss: { wonBy: 'home', chose: 'bat' } })).toThrow(/11 at most/)
+    let f = newScore({ matchId: 'm', teamId: 't', overs: 5, home: side(eleven, ['sub']), away: side(A, ['asub']), toss: { wonBy: 'home', chose: 'bat' } })
+    f = setCrease(f, { striker: 'p0', nonStriker: 'sub', bowler: 'asub' })
+    f = addBall(f, { bat: 2 })
+    expect(summarize(f, 0).batters.map((b) => b.id)).toContain('sub')
+    expect(() => newScore({ matchId: 'm', teamId: 't', overs: 5, home: side(eleven, ['a1']), away: side(A), toss: { wonBy: 'home', chose: 'bat' } })).toThrow(/both/)
+  })
+  it('all out still counts the 11, not the substitute', () => {
+    let f = newScore({ matchId: 'm', teamId: 't', overs: 5, home: side(['h1', 'h2', 'h3'], ['hs']), away: side(A), toss: { wonBy: 'home', chose: 'bat' } })
+    f = setCrease(f, { striker: 'h1', nonStriker: 'h2', bowler: 'a1' })
+    f = addBall(f, { wicket: { kind: 'bowled' } })
+    f = setCrease(f, { striker: 'h3' })
+    f = addBall(f, { wicket: { kind: 'bowled' } })
+    expect(inn(f).closed).toBe('all_out')
+  })
+  it('a late player joins the XI, then becomes a substitute once there are 11', () => {
+    let f = newScore({ matchId: 'm', teamId: 't', overs: 5, home: side(H), away: side(eleven), toss: { wonBy: 'home', chose: 'bat' } })
+    f = addToXi(f, 'home', 'late')
+    expect(f.home.xi).toContain('late')
+    f = addToXi(f, 'away', 'extra')
+    expect(f.away.subs).toEqual(['extra'])
+    expect(f.away.xi).toHaveLength(11)
+    expect(() => addToXi(f, 'home', 'extra')).toThrow(/already/)
   })
 })

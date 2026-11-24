@@ -3,7 +3,7 @@
 // nothing extra is stored.
 import type { Match, ScoreFile, WicketKind } from '../types'
 import { summarize } from './scorecard'
-import { BALLS, isBall, oversText } from './scoring'
+import { BALLS, isBall, oversText, squadOf } from './scoring'
 
 export interface MatchLine {
   matchId: string
@@ -80,7 +80,7 @@ export function careerStats(files: ScoreFile[]): Map<string, Career> {
       if (!l) lines.set(id, (l = { matchId: file.matchId }))
       return l
     }
-    for (const id of [...file.home.xi, ...file.away.xi]) {
+    for (const id of [...squadOf(file.home), ...squadOf(file.away)]) {
       get(id).matches++
       line(id)
     }

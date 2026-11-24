@@ -1,6 +1,7 @@
 // A player's page (PLAN §28, §39, §40): profile card, then the detailed
 // analysis in four tabs (Batting, Bowling, Compare, Face off) over a set of matches.
 import { useMemo, useState } from 'react'
+import { squadOf } from '../lib/scoring'
 import { FilterChips } from '../components/playerViz'
 import { ProfileCard, ProfileSheet } from '../components/Profile'
 import { Screen } from '../components/Screen'
@@ -69,7 +70,7 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const yearFiles = useMemo(() => (year === 'all' ? files : files.filter((f) => (scored.find((m) => m.id === f.matchId)?.date ?? '').startsWith(year))), [stamp, year])
   // Everyone who played in these matches, for Compare.
-  const players = [...new Set(files.flatMap((f) => [...f.home.xi, ...f.away.xi]))].sort((a, b) => personName(a).localeCompare(personName(b)))
+  const players = [...new Set(files.flatMap((f) => [...squadOf(f.home), ...squadOf(f.away)]))].sort((a, b) => personName(a).localeCompare(personName(b)))
   // Their own profile; the admin of a team they are in (or a player in no team); the super admin.
   const canEdit = !!person && !!store && (isSuper || session?.personId === personId || (isAdmin && !store.lookup.isStaff(person.id) && (person.teamIds.length === 0 ? !person.guestOfTeamIds?.length : person.teamIds.some(canManage)) ) || (isAdmin && !!person.guestOfTeamIds?.some(canManage)))
 
@@ -95,7 +96,7 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
     const m = matchOf(matchId)
     if (!file || !m) return
     try {
-      const mine = file.home.xi.includes(personId) ? file.home : file.away
+      const mine = squadOf(file.home).includes(personId) ? file.home : file.away
       const theirs = mine === file.home ? file.away : file.home
       const canvas = drawHighlightCard(file, personId, kind, { name, team: mine.name, color, opponent: theirs.name, date: fmtDate(m.date), venue: m.venue, jersey: person?.jersey }, personName)
       const how = await shareResultCard(canvas, `${name.replace(/\s+/g, '-')}-${kind === 'bat' ? 'batting' : 'bowling'}.png`, `${name} vs ${theirs.name}`)

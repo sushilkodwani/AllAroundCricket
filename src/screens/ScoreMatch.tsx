@@ -45,6 +45,7 @@ import {
   swapStrike,
   undo,
   type BallInput,
+  squadOf,
 } from '../lib/scoring'
 import { useApp, useFile, useTeam } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
@@ -715,7 +716,7 @@ function PickSheet({ file, role, batLines, bowlLines, onPick, onAdd, onClose }: 
   const blocked = isBowler && atOverStart(inn) ? previousOverBowler(inn) : undefined
   const rule = bowlingRule(inn.overs, bowlingSide(file, inn).xi.length)
   const bowled = oversBowledBy(inn)
-  const ids = isBowler ? bowlingSide(file, inn).xi : availableBatters(file, inn)
+  const ids = isBowler ? squadOf(bowlingSide(file, inn)) : availableBatters(file, inn)
   return (
     <Sheet title={`Pick the ${ROLE_LABEL[role]}`} onClose={onClose}>
       <div className="card divide-y divide-line overflow-hidden">
@@ -861,7 +862,7 @@ function WicketSheet({ file, delivery, freeHit, onCommit, onClose }: { file: Sco
         {fielderShown && (
           <div>
             <span className="label">{kind === 'run_out' ? 'Run out by' : KEEPER_KINDS.includes(kind!) ? 'Wicket-keeper' : 'Caught by'} (required)</span>
-            <SearchSelect options={fielders.xi.map((id) => ({ value: id, label: personName(id) }))} value={chosenFielder} onChange={setFielder} placeholder="Search for a player" ariaLabel="Fielder" />
+            <SearchSelect options={squadOf(fielders).map((id) => ({ value: id, label: personName(id) }))} value={chosenFielder} onChange={setFielder} placeholder="Search for a player" ariaLabel="Fielder" />
           </div>
         )}
         {(kind === 'caught' || kind === 'run_out') && (

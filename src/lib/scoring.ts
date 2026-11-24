@@ -73,10 +73,13 @@ export function isFreeHit(inn: Innings): boolean {
   return false
 }
 
+/** Everyone who played for a side: the XI and any substitutes. */
+export const squadOf = (side: { xi: string[]; subs?: string[] }): string[] => (side.subs?.length ? [...side.xi, ...side.subs] : side.xi)
+
 /** Batters who can still come in: in the XI, not out, not in the middle. Retired-hurt batters may return. */
 export function availableBatters(file: ScoreFile, inn: Innings): string[] {
   const out = outIds(inn)
-  return battingSide(file, inn).xi.filter((id) => !out.has(id) && id !== inn.crease.striker && id !== inn.crease.nonStriker)
+  return squadOf(battingSide(file, inn)).filter((id) => !out.has(id) && id !== inn.crease.striker && id !== inn.crease.nonStriker)
 }
 
 /** Who bowled the over before the one in progress — they may not bowl the next. */
@@ -163,7 +166,7 @@ export function bowlerBlock(file: ScoreFile, inn: Innings, id: string): string |
   const reason = rawBowlerBlock(inn, id, rule, bowled)
   if (!reason) return null
   const last = atOverStart(inn) ? previousOverBowler(inn) : undefined
-  const anyoneElse = bowl.xi.some((other) => other !== id && other !== last && !rawBowlerBlock(inn, other, rule, bowled))
+  const anyoneElse = squadOf(bowl).some((other) => other !== id && other !== last && !rawBowlerBlock(inn, other, rule, bowled))
   return anyoneElse ? reason : null
 }
 
@@ -249,11 +252,11 @@ export function newScore(input: NewScoreInput): ScoreFile {
   for (const side of [input.home, input.away]) {
     if (side.xi.length < 2) throw new Error(`Pick at least 2 players for ${side.name}.`)
     if (side.xi.length > 11) throw new Error(`${side.name} has ${side.xi.length} players — a side plays 11 at most.`)
-    if (new Set(side.xi).size !== side.xi.length) throw new Error(`A player is listed twice for ${side.name}.`)
+    if (new Set(squadOf(side)).size !== squadOf(side).length) throw new Error(`A player is listed twice for ${side.name}.`)
     if (side.captainId && !side.xi.includes(side.captainId)) throw new Error(`${side.name}: the captain must be in the playing XI.`)
   }
   if (input.powerplay !== undefined && (!Number.isInteger(input.powerplay) || input.powerplay < 0 || input.powerplay >= input.overs)) throw new Error(`Powerplay overs must be between 0 and ${input.overs - 1}.`)
-  if (input.home.xi.some((id) => input.away.xi.includes(id))) throw new Error('A player can’t be in both playing XIs.')
+  if (squadOf(input.home).some((id) => squadOf(input.away).includes(id))) throw new Error('A player can’t be in both playing XIs.')
   const battingFirst = input.toss.chose === 'bat' ? input.toss.wonBy : other(input.toss.wonBy)
   const now = nowStamp()
   return {
@@ -310,12 +313,12 @@ export function setCrease(file: ScoreFile, patch: Crease): ScoreFile {
   const bowl = bowlingSide(file, inn)
   for (const id of [patch.striker, patch.nonStriker]) {
     if (id === undefined) continue
-    if (!bat.xi.includes(id)) throw new Error('This player is not in the batting XI.')
+    if (!squadOf(bat).includes(id)) throw new Error('This player is not in the batting XI.')
     if (out.has(id)) throw new Error('This batter is already out.')
   }
   if (crease.striker && crease.striker === crease.nonStriker) throw new Error('Pick two different batters.')
   if (patch.bowler !== undefined) {
-    if (!bowl.xi.includes(patch.bowler)) throw new Error('This player is not in the bowling XI.')
+    if (!squadOf(bowl).includes(patch.bowler)) throw new Error('This player is not in the bowling XI.')
     if (atOverStart(inn) && previousOverBowler(inn) === patch.bowler) throw new Error('A bowler can’t bowl two overs in a row.')
     if (patch.bowler !== inn.crease.bowler) {
       const block = bowlerBlock(file, inn, patch.bowler)
@@ -437,10 +440,12 @@ export function setTarget(file: ScoreFile, target: number): ScoreFile {
   return withInnings(file, (i) => ({ ...i, target, targetRevised: true }))
 }
 
-/** A player who turned up late (or a substitute) joins a side's XI mid-match. */
+/** A player who turned up late joins a side's XI mid-match; once the side has 11, a newcomer plays as a substitute. */
 export function addToXi(file: ScoreFile, side: SideKey, id: string): ScoreFile {
-  if (file.home.xi.includes(id) || file.away.xi.includes(id)) throw new Error('This player is already in the match.')
-  return settle({ ...file, [side]: { ...file[side], xi: [...file[side].xi, id] } })
+  if (squadOf(file.home).includes(id) || squadOf(file.away).includes(id)) throw new Error('This player is already in the match.')
+  const s = file[side]
+  const next = s.xi.length >= 11 ? { ...s, subs: [...(s.subs ?? []), id] } : { ...s, xi: [...s.xi, id] }
+  return settle({ ...file, [side]: next })
 }
 
 // ---------- corrections ----------

@@ -6,7 +6,7 @@ import { BOWL_LABELS, type BowlingSide, type BowlStyle, type PitchType, type Sco
 import { ballsWithOver, phasesOf } from './analysis'
 import { inningsMinutes } from './minutes'
 import { shotRegion, summarize } from './scorecard'
-import { BALLS, BOWLER_WICKETS, bowlerRuns } from './scoring'
+import { BALLS, BOWLER_WICKETS, bowlerRuns, squadOf } from './scoring'
 
 export type PhaseKey = 'pp' | 'mid' | 'death' | 'all'
 export type StyleKey = BowlStyle | 'unknown'
@@ -140,7 +140,7 @@ export interface PlayerData {
   matches: { matchId: string; date: string; potm: boolean; batter: boolean; bowler: boolean }[]
 }
 
-const sideOf = (file: ScoreFile, id: string): SideKey | null => (file.home.xi.includes(id) ? 'home' : file.away.xi.includes(id) ? 'away' : null)
+const sideOf = (file: ScoreFile, id: string): SideKey | null => (squadOf(file.home).includes(id) ? 'home' : squadOf(file.away).includes(id) ? 'away' : null)
 const wonFor = (file: ScoreFile, side: SideKey | null): boolean | null => (file.status !== 'finished' || !side || !file.result?.winner ? null : file.result.winner === side)
 const byDate = <T extends { date: string }>(a: T, b: T) => b.date.localeCompare(a.date)
 

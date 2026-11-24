@@ -1,5 +1,6 @@
 // Team → Stats (PLAN §28): leaderboards built from every scored match.
 import { useEffect, useMemo, type ReactNode } from 'react'
+import { squadOf } from '../lib/scoring'
 import { batAverage, batStrikeRate, bestBowling, bowlEconomy, bowlOvers, careerStats, highScore, type Career } from '../lib/career'
 import { fmtDayMonth } from '../lib/dates'
 import { teamRecords } from '../lib/insights'
@@ -29,7 +30,7 @@ export function useScores(matches: Match[]): { files: ScoreFile[]; scored: Match
 
 /** One side's players only: everyone who was in that side's XI in these matches. */
 export function sideCareers(files: ScoreFile[], side: SideKey): Career[] {
-  const ids = new Set(files.flatMap((f) => f[side].xi))
+  const ids = new Set(files.flatMap((f) => squadOf(f[side])))
   return [...careerStats(files).values()].filter((c) => ids.has(c.id))
 }
 

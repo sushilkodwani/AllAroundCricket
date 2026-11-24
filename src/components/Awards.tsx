@@ -1,6 +1,7 @@
 // Match awards (PLAN §33): the app suggests them from a points formula; the
 // admin (or scorer) confirms or changes them. Everyone sees the confirmed ones.
 import { useMemo, useState } from 'react'
+import { squadOf } from '../lib/scoring'
 import { awardPoints, suggestAwards } from '../lib/insights'
 import { useApp } from '../state/AppContext'
 import type { MatchAwards, ScoreFile } from '../types'
@@ -33,7 +34,7 @@ export function AwardsEditor({ file, onSave }: { file: ScoreFile; onSave: (award
   const points = useMemo(() => new Map(awardPoints(file).map((p) => [p.id, p])), [file])
   const [editing, setEditing] = useState(!file.awards)
   const [draft, setDraft] = useState<MatchAwards>(file.awards ?? suggested)
-  const players = [...file.home.xi, ...file.away.xi].sort((a, b) => (points.get(b)?.total ?? 0) - (points.get(a)?.total ?? 0))
+  const players = [...squadOf(file.home), ...squadOf(file.away)].sort((a, b) => (points.get(b)?.total ?? 0) - (points.get(a)?.total ?? 0))
 
   if (!editing && file.awards) {
     return (

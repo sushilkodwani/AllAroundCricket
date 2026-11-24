@@ -16,7 +16,7 @@ import { inningsMinutes, mins as toMin } from '../lib/minutes'
 import { P } from '../lib/paths'
 import { everyText, liveRefreshMs, useSaverLevel } from '../lib/saver'
 import { ballNumbers, ballText, economy, fmtRate, howOut, scoreLine, strikeRate, summarize, type InningsSummary } from '../lib/scorecard'
-import { BALLS, ballRuns, battingSide, bowlingSide, isBall, oversText } from '../lib/scoring'
+import { BALLS, ballRuns, battingSide, bowlingSide, isBall, oversText, squadOf } from '../lib/scoring'
 import { useApp, useFile, useTeam } from '../state/AppContext'
 import { AnalysisTab, DetailedTab, InningsPicker } from './AnalysisTabs'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
@@ -224,10 +224,10 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
             {(['home', 'away'] as const).map((k) => (
               <section key={k} className="card overflow-hidden">
                 <h3 className="border-b border-line px-4 py-2.5 font-semibold">
-                  {file[k].name} <span className="font-normal text-muted">({file[k].xi.length})</span>
+                  {file[k].name} <span className="font-normal text-muted">({squadOf(file[k]).length})</span>
                 </h3>
                 <ol className="divide-y divide-line text-sm">
-                  {file[k].xi.map((id, n) => (
+                  {squadOf(file[k]).map((id, n) => (
                     <li key={id}>
                       <button
                         className="flex w-full items-center gap-3 px-4 py-2 text-left active:bg-alt"
@@ -238,6 +238,7 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
                           {personName(id)}
                           {file[k].captainId === id && ' (c)'}
                           {file[k].keeperId === id && ' †'}
+                          {file[k].subs?.includes(id) && ' (sub)'}
                         </span>
                         <RoleTag person={people.find((p) => p.id === id)} />
                       </button>

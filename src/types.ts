@@ -377,6 +377,8 @@ export interface ScoreSide {
   name: string
   shortName: string
   xi: string[]
+  /** Substitutes: played in the match (batted, bowled or fielded) beyond the 11 — they don't count towards "all out". */
+  subs?: string[]
   captainId?: string
   keeperId?: string
 }

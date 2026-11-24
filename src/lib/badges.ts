@@ -4,7 +4,7 @@
 import type { ScoreFile } from '../types'
 import { milestonesOf } from './insights'
 import { summarize } from './scorecard'
-import { isBall } from './scoring'
+import { isBall, squadOf } from './scoring'
 
 export type BadgeGroup = 'batting' | 'bowling' | 'fielding' | 'match'
 
@@ -97,7 +97,7 @@ export function badgesOf(files: ScoreFile[], id: string, dateOf: (matchId: strin
       b.times++
       if (!b.earned) b.earned = at
     }
-    const side = file.home.xi.includes(id) ? 'home' : file.away.xi.includes(id) ? 'away' : null
+    const side = squadOf(file.home).includes(id) ? 'home' : squadOf(file.away).includes(id) ? 'away' : null
     if (!side) continue
     totals.matches++
     if (file.awards?.potm === id) {

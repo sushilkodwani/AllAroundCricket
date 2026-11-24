@@ -5,7 +5,7 @@ import type { MatchResult, ScoreFile, ScoreSide, SideKey } from '../types'
 import { addOpponentPlayers, getMatch, patchMatch } from './domain'
 import { P } from './paths'
 import { scoreLine } from './scorecard'
-import { newScore } from './scoring'
+import { newScore, squadOf } from './scoring'
 import type { Store } from './store'
 
 export const scoreOf = (s: Store, teamId: string, matchId: string) => s.get<ScoreFile>(P.scoring(teamId, matchId))
@@ -56,7 +56,7 @@ export function startScoring(s: Store, input: StartInput): ScoreFile {
   if (match.cancelled) throw new Error('This match is cancelled.')
   if (scoreOf(s, input.teamId, input.matchId)) throw new Error('Scoring has already started for this match.')
   const file = newScore(input)
-  addOpponentPlayers(s, input.opponentId, input.away.xi)
+  addOpponentPlayers(s, input.opponentId, squadOf(input.away))
   patchMatch(s, input.teamId, input.matchId, (m) => ({
     ...m,
     overs: input.overs,
