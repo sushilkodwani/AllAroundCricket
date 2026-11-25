@@ -5,12 +5,14 @@ import { PlayersTab } from '../components/PlayersTab'
 import { HeaderButton, Screen } from '../components/Screen'
 import { StatsTab } from '../components/StatsTab'
 import { TeamSheet } from '../components/TeamSheet'
-import { Confirm, Empty, ErrorNote, Segmented, Sheet, TeamLogo } from '../components/ui'
+import { ChoiceChips, Confirm, Empty, ErrorNote, Segmented, Sheet, TeamLogo } from '../components/ui'
 import { deleteTeam, setTeamArchived } from '../lib/domain'
+import { P } from '../lib/paths'
+import { filterBySeason } from '../lib/seasons'
 import { matchStatus, sortMatchesAsc } from '../lib/stats'
-import { useApp, useTeam, type TeamData } from '../state/AppContext'
+import { useApp, useFile, useTeam, type TeamData } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
-import type { Team } from '../types'
+import type { SeasonsFile, Team } from '../types'
 
 type Tab = 'players' | 'matches' | 'stats'
 
@@ -151,8 +153,20 @@ function MatchesTab({ data }: { data: TeamData & { team: Team } }) {
   const { canManage } = useApp()
   const isAdmin = canManage(data.team.id)
   const sheet = useSheet()
+  const route = useRoute()
   const [showCancelled, setShowCancelled] = useState(false)
-  const { team, matches } = data
+  const { team, matches: all } = data
+  const seasons = useFile<SeasonsFile>(P.seasons(team.id))?.seasons ?? []
+  // The season filter lives in the address (?season=<id> or none), so it survives a reload and Back.
+  const asked = route.query.get('season')
+  const filter = asked === 'none' || seasons.some((x) => x.id === asked) ? (asked as string) : 'all'
+  const matches = filterBySeason(all, filter)
+  const hasLoose = all.some((m) => !m.seasonId)
+  const seasonOptions = [
+    { value: 'all', label: 'All seasons' },
+    ...[...seasons].sort((a, b) => Number(a.archived) - Number(b.archived)).map((x) => ({ value: x.id, label: x.name })),
+    ...(hasLoose ? [{ value: 'none', label: 'No season' }] : []),
+  ]
 
   const sorted = sortMatchesAsc(matches)
   const upcoming = sorted.filter((m) => matchStatus(m) === 'upcoming')
@@ -167,7 +181,20 @@ function MatchesTab({ data }: { data: TeamData & { team: Team } }) {
         </button>
       )}
 
-      {matches.length === 0 && <Empty icon="📅" title="No matches yet" text={isAdmin ? 'Add an upcoming fixture or a match you already played.' : 'No matches have been added yet.'} />}
+      {(isAdmin || seasons.length > 0) && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted">Season</span>
+            <button className="text-sm font-semibold text-accent" onClick={() => navigate(`/teams/${team.id}/seasons`)}>
+              {seasons.length === 0 ? 'Set up seasons ›' : 'Seasons ›'}
+            </button>
+          </div>
+          {seasons.length > 0 && <ChoiceChips row options={seasonOptions} value={filter} onChange={(v) => navigate(withQuery(route, { season: v === 'all' ? null : v }), { replace: true })} />}
+        </div>
+      )}
+
+      {all.length === 0 && <Empty icon="📅" title="No matches yet" text={isAdmin ? 'Add an upcoming fixture or a match you already played.' : 'No matches have been added yet.'} />}
+      {all.length > 0 && matches.length === 0 && <Empty icon="📆" title="No matches here" text={filter === 'none' ? 'Every match is in a season.' : 'No matches have been put in this season yet.'} />}
 
       {upcoming.length > 0 && (
         <section>
@@ -206,7 +233,7 @@ function MatchesTab({ data }: { data: TeamData & { team: Team } }) {
       )}
 
       {sheet.name === 'match' && isAdmin && (
-        <MatchForm team={team} matches={matches} onClose={sheet.close} onSaved={(m) => sheet.replaceWith(`/teams/${team.id}/matches/${m.id}`)} />
+        <MatchForm team={team} matches={all} seasonId={filter !== 'all' && filter !== 'none' ? filter : undefined} onClose={sheet.close} onSaved={(m) => sheet.replaceWith(`/teams/${team.id}/matches/${m.id}`)} />
       )}
     </div>
   )

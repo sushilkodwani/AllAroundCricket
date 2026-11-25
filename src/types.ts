@@ -251,8 +251,10 @@ export interface Match {
   scorerId?: string
   /** Super admin's switch: the live score updates itself every 20 s for everyone watching (else ⟳ only). */
   liveAuto?: boolean
-  /** Tournament / season this match counts towards (PLAN §35). */
+  /** Tournament this match counts towards (PLAN §35). */
   tournamentId?: string
+  /** The team's season this match belongs to (teams/<id>/seasons.json). */
+  seasonId?: string
   createdAt: string
   updatedAt: string
 }
@@ -509,6 +511,23 @@ export interface AvailabilityEntry {
 export interface AvailabilityFile {
   schemaVersion: 1
   entries: AvailabilityEntry[]
+}
+
+// ---------- teams/<id>/seasons.json ----------
+/** A period a team plays in, such as "LL-26-27"; matches are put in a season, and the season has its own analysis. */
+export interface Season {
+  id: string
+  teamId: string
+  name: string
+  startDate?: string
+  endDate?: string
+  archived: boolean
+  createdAt: string
+  updatedAt: string
+}
+export interface SeasonsFile {
+  schemaVersion: 1
+  seasons: Season[]
 }
 
 // ---------- tournaments.json (PLAN §35) ----------

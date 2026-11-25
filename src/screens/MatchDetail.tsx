@@ -7,12 +7,13 @@ import { MatchMoney } from '../components/MatchMoney'
 import { HeaderButton, Screen } from '../components/Screen'
 import { Avatar, ChoiceChips, Confirm, Empty, ErrorNote, Field, Pill, Sheet } from '../components/ui'
 import { fmtDate, fmtDayMonth, fmtTime, relativeDay } from '../lib/dates'
-import { deleteMatch, groundByName, isGuestIn, recordResult, setCancelled, setScorer } from '../lib/domain'
+import { assignSeason, deleteMatch, groundByName, isGuestIn, recordResult, setCancelled, setScorer } from '../lib/domain'
 import { expenseMessage, shareMessage, squadMessage } from '../lib/messages'
+import { P } from '../lib/paths'
 import { canMarkComplete, matchStatus } from '../lib/stats'
-import { useApp, useTeam } from '../state/AppContext'
+import { useApp, useFile, useTeam } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
-import { MATCH_TYPE_LABELS, type Match, type MatchResult } from '../types'
+import { MATCH_TYPE_LABELS, type Match, type MatchResult, type SeasonsFile } from '../types'
 import { GroundInfo } from './Grounds'
 import { ScoutCard } from './OpponentDetail'
 
@@ -23,6 +24,7 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
   const route = useRoute()
   const sheet = useSheet()
   const data = useTeam(teamId)
+  const seasons = useFile<SeasonsFile>(P.seasons(teamId))?.seasons ?? []
   const [confirm, setConfirm] = useState<'cancel' | 'delete' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -97,8 +99,32 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
             <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted">
               {match.venue && <span>📍 {match.venue}</span>}
               <Pill>{MATCH_TYPE_LABELS[match.matchType]}</Pill>
+              {match.seasonId && seasons.find((x) => x.id === match.seasonId) && <Pill tone="brand">{seasons.find((x) => x.id === match.seasonId)!.name}</Pill>}
               {match.overs && <Pill>{match.overs} overs</Pill>}
             </p>
+            {isAdmin && store && !match.cancelled && seasons.length > 0 && (
+              <label className="flex items-center gap-2 border-t border-line pt-2 text-sm">
+                <span className="text-muted">Season</span>
+                <select
+                  className="input !min-h-[40px] flex-1 py-1"
+                  value={match.seasonId ?? ''}
+                  onChange={(e) => {
+                    assignSeason(store, teamId, [match.id], e.target.value || undefined, 'Change season')
+                    toast(e.target.value ? `Moved to ${seasons.find((x) => x.id === e.target.value)?.name ?? 'the season'}` : 'Taken out of its season')
+                  }}
+                >
+                  <option value="">None</option>
+                  {seasons
+                    .filter((x) => !x.archived || x.id === match.seasonId)
+                    .map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name}
+                        {x.archived ? ' (closed)' : ''}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
             {(match.result || match.ourScore || match.theirScore) && (status !== 'upcoming' || match.scoring === 'finished') && (
               <div className="flex flex-wrap items-center gap-2 border-t border-line pt-2 text-sm">
                 <ResultChip result={match.result} />

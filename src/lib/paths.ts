@@ -20,4 +20,5 @@ export const P = {
   matches: (teamId: string) => `teams/${teamId}/matches.json`,
   funds: (teamId: string) => `teams/${teamId}/funds.json`,
   categories: (teamId: string) => `teams/${teamId}/categories.json`,
+  seasons: (teamId: string) => `teams/${teamId}/seasons.json`,
 }

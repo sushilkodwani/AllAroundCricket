@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react'
 import { todayISO } from '../lib/dates'
 import { addMatch, editMatch, groundsOf, opponentsOf, type MatchInput } from '../lib/domain'
+import { P } from '../lib/paths'
+import { suggestSeason } from '../lib/seasons'
 import { enrolMatchTeams, tournamentsOf } from '../lib/tournament'
-import { useApp } from '../state/AppContext'
-import { MATCH_TYPE_LABELS, RESULT_LABELS, type Match, type MatchResult, type MatchType, type Team } from '../types'
+import { useApp, useFile } from '../state/AppContext'
+import { MATCH_TYPE_LABELS, RESULT_LABELS, type Match, type MatchResult, type MatchType, type SeasonsFile, type Team } from '../types'
 import { ChoiceChips, ComboBox, ErrorNote, Field, NumberInput, Sheet } from './ui'
 
 const TYPES = (Object.keys(MATCH_TYPE_LABELS) as MatchType[]).map((value) => ({ value, label: MATCH_TYPE_LABELS[value] }))
 export const RESULTS = (Object.keys(RESULT_LABELS) as MatchResult[]).map((value) => ({ value, label: RESULT_LABELS[value] }))
 
 /** Add or edit a match. Any date — past or future. Past dates also offer result + scores. */
-export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Team; matches: Match[]; match?: Match; onClose: () => void; onSaved: (m: Match, isNew: boolean) => void }) {
+export function MatchForm({ team, matches, match, seasonId: presetSeason, onClose, onSaved }: { team: Team; matches: Match[]; match?: Match; /** Start a new match in this season. */ seasonId?: string; onClose: () => void; onSaved: (m: Match, isNew: boolean) => void }) {
   const { store, teams } = useApp()
   const [date, setDate] = useState(match?.date ?? todayISO())
   const [time, setTime] = useState(match?.time ?? '')
@@ -23,6 +25,11 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
   const [ourScore, setOurScore] = useState(match?.ourScore ?? '')
   const [theirScore, setTheirScore] = useState(match?.theirScore ?? '')
   const [tournamentId, setTournamentId] = useState(match?.tournamentId ?? '')
+  const allSeasons = useFile<SeasonsFile>(P.seasons(team.id))?.seasons ?? []
+  // A new match starts in the season asked for, else the one whose dates cover it; changing the date re-suggests until the admin picks one.
+  const [seasonId, setSeasonId] = useState(match ? (match.seasonId ?? '') : (presetSeason ?? suggestSeason(allSeasons, match ? '' : todayISO())))
+  const [seasonPicked, setSeasonPicked] = useState(!!match || !!presetSeason)
+  const seasons = allSeasons.filter((x) => !x.archived || x.id === seasonId)
   const [error, setError] = useState<string | null>(null)
   const tournaments = (store ? tournamentsOf(store) : []).filter((t) => !t.archived || t.id === match?.tournamentId)
 
@@ -51,6 +58,7 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
       ourScore,
       theirScore,
       tournamentId,
+      seasonId,
     }
     try {
       const saved = match ? editMatch(store, team.id, match.id, input) : addMatch(store, team.id, input)
@@ -72,7 +80,16 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
         }}
       >
         <Field label="Date">
-          <input className="input" type="date" value={date} required onChange={(e) => setDate(e.target.value)} />
+          <input
+            className="input"
+            type="date"
+            value={date}
+            required
+            onChange={(e) => {
+              setDate(e.target.value)
+              if (!seasonPicked) setSeasonId(suggestSeason(allSeasons, e.target.value))
+            }}
+          />
         </Field>
         <Field label="Time">
           <input className="input" type="time" value={time} required onChange={(e) => setTime(e.target.value)} />
@@ -90,6 +107,27 @@ export function MatchForm({ team, matches, match, onClose, onSaved }: { team: Te
           <span className="label">Type</span>
           <ChoiceChips options={TYPES} value={matchType} onChange={setMatchType} />
         </div>
+        {seasons.length > 0 && (
+          <label className="block">
+            <span className="label">Season (optional)</span>
+            <select
+              className="input"
+              value={seasonId}
+              onChange={(e) => {
+                setSeasonId(e.target.value)
+                setSeasonPicked(true)
+              }}
+            >
+              <option value="">None</option>
+              {seasons.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                  {x.archived ? ' (closed)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {tournaments.length > 0 && (
           <label className="block">
             <span className="label">Tournament (optional)</span>

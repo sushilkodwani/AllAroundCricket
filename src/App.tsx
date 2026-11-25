@@ -24,6 +24,7 @@ import { Settings } from './screens/Settings'
 import { SquadPicker } from './screens/SquadPicker'
 import { PlayerStatement } from './screens/PlayerStatement'
 import { TeamDetail } from './screens/TeamDetail'
+import { SeasonDetail, Seasons } from './screens/Seasons'
 import { TournamentDetail, Tournaments } from './screens/Tournaments'
 import { Teams } from './screens/Teams'
 import { Users } from './screens/Users'
@@ -166,6 +167,8 @@ export default function App() {
   else if (a === 'opponents' && b && c === 'scout' && !d) screen = <OpponentScout opponentId={b} />
   else if (a === 'teams' && b && c === 'year' && !d) screen = <YearSummary teamId={b} />
   else if (a === 'teams' && b && c === 'categories' && !d) screen = <ExpenseCategories teamId={b} />
+  else if (a === 'teams' && b && c === 'seasons' && !d) screen = <Seasons teamId={b} />
+  else if (a === 'teams' && b && c === 'seasons' && d && !e) screen = <SeasonDetail teamId={b} seasonId={d} />
   else if (a === 'settings' && b === 'grounds') screen = <Grounds />
   else if (a === 'opponents' && b && c === 'players' && d && !e) screen = <OpponentPlayerStats opponentId={b} personId={d} />
   else if (a === 'tournaments' && !b) screen = <Tournaments />

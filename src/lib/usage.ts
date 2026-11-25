@@ -113,6 +113,8 @@ export const FEATURES: { key: string; label: string; group: FeatureGroup }[] = [
   { key: 'opponent', label: 'Opponent page', group: 'player' },
   { key: 'scout', label: 'Opponent scouting', group: 'player' },
   { key: 'opponentPlayer', label: 'Opponent player stats', group: 'player' },
+  { key: 'seasons', label: 'Seasons', group: 'player' },
+  { key: 'season', label: 'Season page', group: 'player' },
   { key: 'tournaments', label: 'Tournaments', group: 'player' },
   { key: 'tournament', label: 'Tournament page', group: 'player' },
   { key: 'matches', label: 'Matches tab', group: 'player' },
@@ -152,6 +154,7 @@ export function featureOf(segs: string[], query: URLSearchParams): string | null
     if (c === 'players' && d) return 'player'
     if (c === 'statement' && d) return 'statement'
     if (c === 'year') return 'year'
+    if (c === 'seasons') return d ? 'season' : 'seasons'
     if (c === 'categories') return 'categories'
     return null
   }

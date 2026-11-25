@@ -76,7 +76,7 @@ const actorId = (s: Store) => s.actor.personId
 
 /** The three files a team cannot work without; availability answers and categories are loaded alongside. */
 const coreTeamPaths = (teamId: string) => [P.members(teamId), P.matches(teamId), P.funds(teamId)]
-export const teamPaths = (teamId: string) => [...coreTeamPaths(teamId), P.availability(teamId), P.categories(teamId)]
+export const teamPaths = (teamId: string) => [...coreTeamPaths(teamId), P.availability(teamId), P.categories(teamId), P.seasons(teamId)]
 export const teamLoaded = (s: Store, teamId: string) => coreTeamPaths(teamId).every((p) => s.has(p))
 export const loadTeam = (s: Store, teamId: string) => Promise.all(teamPaths(teamId).map((p) => s.load(p)))
 
@@ -220,7 +220,7 @@ export function deleteTeam(s: Store, teamId: string): void {
   const msg = `Delete team ${name}`
   const scored = matchesOf(s, teamId).filter((m) => m.scoring).map((m) => P.scoring(teamId, m.id))
   // The team's own files first, while the guard still knows who runs it.
-  for (const path of [...scored, P.members(teamId), P.matches(teamId), P.funds(teamId), P.availability(teamId), P.categories(teamId), P.teamLogo(teamId)]) {
+  for (const path of [...scored, P.members(teamId), P.matches(teamId), P.funds(teamId), P.availability(teamId), P.categories(teamId), P.seasons(teamId), P.teamLogo(teamId)]) {
     if (!s.remove(path, msg)) throw new Error('Only the admin who runs this team can delete it.')
   }
   const people = peopleOf(s)
@@ -557,6 +557,7 @@ export interface MatchInput {
   ourScore?: string
   theirScore?: string
   tournamentId?: string
+  seasonId?: string
 }
 
 function cleanMatchInput(input: MatchInput): MatchInput {
@@ -576,6 +577,7 @@ function cleanMatchInput(input: MatchInput): MatchInput {
     ourScore: input.ourScore?.trim() || undefined,
     theirScore: input.theirScore?.trim() || undefined,
     tournamentId: input.tournamentId || undefined,
+    seasonId: input.seasonId || undefined,
   }
 }
 
@@ -590,6 +592,24 @@ export function patchMatch(s: Store, teamId: string, matchId: string, fn: (m: Ma
   putMatches(s, teamId, matches, msg)
   recomputeTeam(s, teamId)
   return out
+}
+
+/** Puts these matches in a season (or takes them out of any season when `seasonId` is empty), in one write. */
+export function assignSeason(s: Store, teamId: string, matchIds: string[], seasonId: string | undefined, msg = 'Change season'): void {
+  const ids = new Set(matchIds)
+  const now = nowStamp()
+  putMatches(
+    s,
+    teamId,
+    matchesOf(s, teamId).map((m) => {
+      if (!ids.has(m.id) || m.seasonId === seasonId) return m
+      const next: Match = { ...m, updatedAt: now }
+      if (seasonId) next.seasonId = seasonId
+      else delete next.seasonId
+      return next
+    }),
+    msg,
+  )
 }
 
 export const getMatch = (s: Store, teamId: string, matchId: string) => matchesOf(s, teamId).find((m) => m.id === matchId)
