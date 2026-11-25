@@ -9,6 +9,8 @@ import { P } from '../lib/paths'
 import { useApp, type TeamData } from '../state/AppContext'
 import { navigate } from '../state/router'
 import type { Match, ScoreFile, SideKey, Team } from '../types'
+import { FormStrip, MatchGraphs, PhaseChart } from './TeamCharts'
+import { BatScatter, BowlScatter, Dismissals, ExtrasTrend, FirstVsChaseChart, PhaseHeat, ScoringMix } from './TeamInsightCharts'
 import { Empty } from './ui'
 
 /** Score files of a team's scored matches; each is loaded (cache first) the first time it is needed. */
@@ -96,7 +98,18 @@ export function StatsTables({ matches, side, onOpen: open }: { matches: Match[];
         ))}
       </div>
 
+      <FormStrip files={files} matches={matches} side={side} />
+      <PhaseChart files={files} side={side} />
+      <ScoringMix files={files} side={side} />
+      <Dismissals files={files} side={side} />
+      <MatchGraphs files={files} matches={matches} side={side} />
+
       <SeasonInsights files={files} matches={matches} side={side} careers={careers} onOpen={open} />
+
+      <BatScatter careers={careers} onOpen={open} />
+      <BowlScatter careers={careers} files={files} side={side} onOpen={open} />
+      <PhaseHeat careers={careers} files={files} />
+      <ExtrasTrend files={files} matches={matches} side={side} />
 
       {records.length > 0 && (
         <section>
@@ -261,20 +274,7 @@ function SeasonInsights({ files, matches, side, careers, onOpen }: { files: Scor
   if (finished.length === 0 && rates.length === 0 && econ.length === 0) return null
   return (
     <>
-      {finished.length > 0 && (
-        <section>
-          <h2 className="section-title">Batting first, chasing and the toss</h2>
-          <MiniTable
-            head={['', 'Played', 'Won', 'Win %', 'Avg runs']}
-            rows={[
-              ['Batting first', fc.battingFirst.played, fc.battingFirst.won, pct(fc.battingFirst.won, fc.battingFirst.played), num(fc.battingFirst.avgRuns)],
-              ['Chasing', fc.chasing.played, fc.chasing.won, pct(fc.chasing.won, fc.chasing.played), num(fc.chasing.avgRuns)],
-              ['Won the toss', fc.tossWon.played, fc.tossWon.won, pct(fc.tossWon.won, fc.tossWon.played), ''],
-              ['Lost the toss', fc.tossLost.played, fc.tossLost.won, pct(fc.tossLost.won, fc.tossLost.played), ''],
-            ]}
-          />
-        </section>
-      )}
+      {finished.length > 0 && <FirstVsChaseChart fc={fc} side={side} />}
 
       {(rates.length > 0 || econ.length > 0) && (
         <section>
