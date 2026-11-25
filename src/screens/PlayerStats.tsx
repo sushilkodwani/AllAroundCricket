@@ -8,7 +8,10 @@ import { Screen } from '../components/Screen'
 import { useScores } from '../components/StatsTab'
 import { BadgesCard } from '../components/Badges'
 import { GoalsCard } from '../components/Goals'
-import { badgesOf } from '../lib/badges'
+import { badgesOf, earnedBadges } from '../lib/badges'
+import { drawSeasonCard } from '../lib/seasonCard'
+import type { Wrapped } from '../lib/playerSeason'
+import type { Report } from '../lib/seasonReport'
 import { careerStats } from '../lib/career'
 import { fmtDate } from '../lib/dates'
 import { drawHighlightCard, type HighlightKind } from '../lib/highlightCard'
@@ -19,6 +22,7 @@ import { useApp, useTeam } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
 import type { Match } from '../types'
 import { BattingTab, BowlingTab } from './PlayerTabs'
+import { InsightsTab } from './PlayerInsights'
 import { CompareTab, FaceOffTab } from './PlayerVs'
 
 /** Last few scores as chips, newest first. */
@@ -53,7 +57,7 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
   const name = personName(personId)
   const route = useRoute()
   const tabQ = route.query.get('ptab')
-  const tab = tabQ === 'bowling' || tabQ === 'compare' || tabQ === 'faceoff' ? tabQ : 'batting'
+  const tab = tabQ === 'bowling' || tabQ === 'insights' || tabQ === 'compare' || tabQ === 'faceoff' ? tabQ : 'batting'
   const [year, setYear] = useState('all')
   const ctx: PlayerCtx = {
     styleOf: (id) => people.find((p) => p.id === id)?.bowlStyle,
@@ -86,6 +90,7 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
   const tabs = [
     { value: 'batting' as const, label: 'Batting' },
     { value: 'bowling' as const, label: 'Bowling' },
+    { value: 'insights' as const, label: 'Insights' },
     { value: 'compare' as const, label: 'Compare' },
     { value: 'faceoff' as const, label: 'Face off' },
   ]
@@ -101,6 +106,27 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
       const canvas = drawHighlightCard(file, personId, kind, { name, team: mine.name, color, opponent: theirs.name, date: fmtDate(m.date), venue: m.venue, jersey: person?.jersey }, personName)
       const how = await shareResultCard(canvas, `${name.replace(/\s+/g, '-')}-${kind === 'bat' ? 'batting' : 'bowling'}.png`, `${name} vs ${theirs.name}`)
       if (how === 'downloaded') toast('Image saved — share it from your photos or downloads')
+    } catch (e) {
+      toast((e as Error).message)
+    }
+  }
+  /** The season (or all matches, for the chosen year) as one picture, through the phone's share sheet. */
+  async function shareSeason(w: Wrapped) {
+    try {
+      const canvas = drawSeasonCard(w, { name, team: teamName, color, jersey: person?.jersey })
+      const how = await shareResultCard(canvas, `${name.replace(/\s+/g, '-')}-${w.label.replace(/\s+/g, '-')}.png`, `${name} — ${w.label}`)
+      if (how === 'downloaded') toast('Image saved — share it from your photos or downloads')
+    } catch (e) {
+      toast((e as Error).message)
+    }
+  }
+  /** The full season report as a PDF: overview, batting, bowling and insights pages. */
+  async function shareReport(r: Report) {
+    try {
+      const [{ drawReportPages }, { canvasesToPdf, sharePdf }] = await Promise.all([import('../lib/reportDraw'), import('../lib/pdf')])
+      const pdf = await canvasesToPdf(drawReportPages(r), `${name} - ${r.label}`)
+      const how = await sharePdf(pdf, `${name.replace(/\s+/g, '-')}-${r.label.replace(/\s+/g, '-')}.pdf`, `${name} — ${r.label}`)
+      if (how === 'downloaded') toast('Report saved — find it in your downloads')
     } catch (e) {
       toast((e as Error).message)
     }
@@ -141,6 +167,7 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
             </div>
             {tab === 'batting' && <BattingTab {...props} />}
             {tab === 'bowling' && <BowlingTab {...props} />}
+            {tab === 'insights' && <InsightsTab personId={personId} badges={earnedBadges(badges).length} onShareSeason={shareSeason} meta={{ name, team: teamName, color, jersey: person?.jersey }} onShareReport={shareReport} d={d} files={yearFiles} ctx={ctx} personName={personName} matchOf={matchOf} />}
             {tab === 'compare' && <CompareTab personId={personId} d={d} files={yearFiles} ctx={ctx} personName={personName} players={players} matchOf={matchOf} />}
             {tab === 'faceoff' && <FaceOffTab personId={personId} d={d} personName={personName} ctx={ctx} matchOf={matchOf} />}
           </>
