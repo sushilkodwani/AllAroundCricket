@@ -17,7 +17,4 @@ function secureInt(max: number): number {
   return buf[0] % max
 }
 
-/** Did the caller win? No call means there is nothing to win. */
-export const wonToss = (call: Side | undefined, result: Side): boolean | undefined => (call ? call === result : undefined)
-
 export const SIDE_LABEL: Record<Side, string> = { heads: 'Heads', tails: 'Tails' }

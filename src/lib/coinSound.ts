@@ -41,6 +41,20 @@ function ting(c: AudioContext, at: number, volume: number, pitch = 1) {
   }
 }
 
+/** The dull knock of the coin hitting the surface. */
+function thud(c: AudioContext, at: number) {
+  const osc = c.createOscillator()
+  const g = c.createGain()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(190, at)
+  osc.frequency.exponentialRampToValueAtTime(70, at + 0.12)
+  g.gain.setValueAtTime(0.5, at)
+  g.gain.exponentialRampToValueAtTime(0.0001, at + 0.15)
+  osc.connect(g).connect(c.destination)
+  osc.start(at)
+  osc.stop(at + 0.2)
+}
+
 /** A short click of filtered noise: the whirr of a spinning coin is a run of these. */
 function tick(c: AudioContext, at: number, volume: number) {
   const len = Math.floor(c.sampleRate * 0.012)
@@ -73,6 +87,7 @@ export function playToss(seconds: number): void {
     gap *= 1.06
   }
   const land = t0 + seconds
+  thud(c, land)
   ting(c, land, 0.45, 0.9)
   ting(c, land + 0.17, 0.2, 1.05)
   ting(c, land + 0.29, 0.1, 1.1)
