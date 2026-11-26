@@ -190,6 +190,8 @@ const safeImageFile = (after: unknown) => {
 }
 
 const PROFILE_FIELDS = ['role', 'batsLeft', 'bowlStyle', 'jersey', 'photo', 'goals', 'updatedAt']
+/** The profile fields only the player themself may change (PROFILE_FIELDS without the stamp). */
+const PROFILE_ONLY = PROFILE_FIELDS.filter((k) => k !== 'updatedAt')
 
 function ownProfileOnly(personId: string, before: unknown, after: unknown): boolean {
   const b = (before as PeopleFile | null)?.people ?? []
@@ -225,8 +227,7 @@ function adminMayWrite(me: string, path: string, before: unknown, after: unknown
   const logo = path.match(/^images\/teams\/([^/]+)\.json$/)
   if (logo) return owns(logo[1]) && safeImageFile(after)
 
-  const photo = path.match(/^images\/people\/([^/]+)\.json$/)
-  if (photo) return managesPerson(me, look.person(photo[1]), look) && safeImageFile(after)
+  // Profile photos are the player's own (see ownMayWrite); an admin can't change anyone else's.
 
   if (path === P.teams) {
     // New teams are theirs; they change or delete only their own; handing a team over is the super admin's job.
@@ -244,7 +245,10 @@ function adminMayWrite(me: string, path: string, before: unknown, after: unknown
       if (!was) return now.teamIds.every(owns) && (now.guestOfTeamIds ?? []).every(owns)
       // Team lists change only for their own teams.
       if (!diff(was.teamIds, now.teamIds).every(owns) || !diff(was.guestOfTeamIds, now.guestOfTeamIds).every(owns)) return false
-      const rest = ['teamIds', 'guestOfTeamIds', 'updatedAt', 'batsLeft', 'bowlStyle']
+      // Name, access and the like are theirs to manage, but never another player's own profile (role, hand, bowling, jersey, photo, goals).
+      const profileOf = (p: Person) => JSON.stringify(PROFILE_ONLY.map((k) => (p as unknown as Record<string, unknown>)[k] ?? null))
+      if (profileOf(was) !== profileOf(now)) return false
+      const rest = ['teamIds', 'guestOfTeamIds', 'updatedAt']
       return without(was, rest) === without(now, rest) || managesPerson(me, was, look)
     })
   }

@@ -61,6 +61,22 @@ describe('photos and logos', () => {
     expect(canWrite({ role: 'viewer', personId: 'p1' }, P.people, before, { schemaVersion: 1, people: [{ ...person('p1'), name: 'Other' }] })).toBe(false)
   })
 
+  it('an admin can rename a team member but not touch their profile or photo', () => {
+    const { store, teamId } = setup()
+    const member = { ...person('p2'), teamIds: [teamId] }
+    const before = { schemaVersion: 1, people: [person('p1'), member] }
+    const admin = { role: 'admin' as const, personId: 'p1' }
+    const write = (next: Person) => canWrite(admin, P.people, before, { schemaVersion: 1, people: [person('p1'), next] }, store.lookup)
+    expect(write({ ...member, name: 'Renamed' })).toBe(true)
+    expect(write({ ...member, role: 'wicketkeeper' as Person['role'] })).toBe(false)
+    expect(write({ ...member, jersey: 7 })).toBe(false)
+    expect(write({ ...member, batsLeft: true })).toBe(false)
+    expect(write({ ...member, photo: 'x' })).toBe(false)
+    expect(canWrite(admin, P.personPhoto('p2'), null, { schemaVersion: 1, dataUrl: null, updatedAt: 'x' }, store.lookup)).toBe(false)
+    // Their own profile is still theirs.
+    expect(canWrite(admin, P.personPhoto('p1'), null, { schemaVersion: 1, dataUrl: null, updatedAt: 'x' }, store.lookup)).toBe(true)
+  })
+
   it('the admin sets a team logo', () => {
     const { store, teamId } = setup()
     expect(setTeamLogo(store, teamId, PIC)).toBe(true)

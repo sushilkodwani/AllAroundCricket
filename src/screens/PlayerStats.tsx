@@ -76,7 +76,8 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
   // Everyone who played in these matches, for Compare.
   const players = [...new Set(files.flatMap((f) => [...squadOf(f.home), ...squadOf(f.away)]))].sort((a, b) => personName(a).localeCompare(personName(b)))
   // Their own profile; the admin of a team they are in (or a player in no team); the super admin.
-  const canEdit = !!person && !!store && (isSuper || session?.personId === personId || (isAdmin && !store.lookup.isStaff(person.id) && (person.teamIds.length === 0 ? !person.guestOfTeamIds?.length : person.teamIds.some(canManage)) ) || (isAdmin && !!person.guestOfTeamIds?.some(canManage)))
+  // Profile and goals are the player's own: nobody else edits them, admins included.
+  const canEdit = !!person && !!store && session?.personId === personId
 
   if (loading || !ready) {
     return (

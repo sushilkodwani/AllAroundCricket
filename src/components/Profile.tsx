@@ -12,7 +12,7 @@ import { ChoiceChips, ErrorNote, Field, NumberInput, Pill, Sheet } from './ui'
 
 const initialsOf = (name: string) =>
   name
-    .split(/s+/)
+    .split(/\s+/)
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase() ?? '')
     .join('')
