@@ -11,6 +11,7 @@ import { SplitExpenses } from './screens/SplitExpenses'
 import { MatchDetail } from './screens/MatchDetail'
 import { Matches } from './screens/Matches'
 import { Onboard } from './screens/Onboard'
+import { CoinToss } from './screens/CoinToss'
 import { Grounds } from './screens/Grounds'
 import { OpponentDetail, OpponentPlayerStats, OpponentScout } from './screens/OpponentDetail'
 import { PublicScorecard } from './screens/PublicScorecard'
@@ -170,6 +171,7 @@ export default function App() {
   else if (a === 'teams' && b && c === 'seasons' && !d) screen = <Seasons teamId={b} />
   else if (a === 'teams' && b && c === 'seasons' && d && !e) screen = <SeasonDetail teamId={b} seasonId={d} />
   else if (a === 'settings' && b === 'grounds') screen = <Grounds />
+  else if (a === 'settings' && b === 'toss') screen = <CoinToss />
   else if (a === 'opponents' && b && c === 'players' && d && !e) screen = <OpponentPlayerStats opponentId={b} personId={d} />
   else if (a === 'tournaments' && !b) screen = <Tournaments />
   else if (a === 'tournaments' && b && !c) screen = <TournamentDetail tournamentId={b} />

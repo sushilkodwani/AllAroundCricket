@@ -165,6 +165,7 @@ export function Settings() {
         )}
 
         <Section title="General">
+          <MenuRow label="Coin toss" hint="Flip a coin for the toss, with sound" onClick={() => navigate('/settings/toss')} />
           <MenuRow label="App tour" hint="A quick look at what the app can do" onClick={() => navigate('/tour')} />
           <MenuRow label="Refresh app" hint="Clears the app cache and reloads the latest version." onClick={() => void hardRefresh()} />
           <div className="px-4 py-3 text-xs text-muted">
