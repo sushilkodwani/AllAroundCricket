@@ -362,6 +362,7 @@ export function ballText(b: BallEvent, nameOf: NameOf, isLeft: (id: string) => b
     else if (b.kind === 'legal' && !b.wicket) parts.push('no run')
   }
   if (b.shot) parts.push(`to ${shotRegion(b.shot, isLeft(b.striker))}`)
+  if (b.drop) parts.push(`CATCH DROPPED! ${nameOf(b.drop.by)} puts down ${b.drop.tough ? 'a hard chance' : 'a chance'}${b.drop.at ? ` at ${shotRegion(b.drop.at, isLeft(b.striker))}` : ''}`)
   if (b.wicket) {
     const line: BatLine = { id: b.wicket.who, runs: 0, balls: 0, fours: 0, sixes: 0, out: { kind: b.wicket.kind, bowler: b.bowler, fielder: b.wicket.fielder } }
     parts.push(`OUT! ${nameOf(b.wicket.who)} ${howOut(line, nameOf)}${b.wicket.at ? ` at ${shotRegion(b.wicket.at, isLeft(b.striker))}` : ''}`)

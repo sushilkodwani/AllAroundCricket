@@ -28,7 +28,7 @@ import {
 } from '../lib/domain'
 import { suggestAwards } from '../lib/insights'
 import { saveScore, startScoring } from '../lib/scoreDomain'
-import { addBall, bowlerBlock, inningsTotal, isFreeHit, outIds, previousOverBowler, setCrease, startSecondInnings, type BallInput } from '../lib/scoring'
+import { addBall, bowlerBlock, inningsTotal, isFreeHit, other, outIds, previousOverBowler, setCrease, squadOf, startSecondInnings, type BallInput } from '../lib/scoring'
 import type { Store } from '../lib/store'
 import { seedUsage } from './seedUsage'
 import type { BowlStyle, ExpenseLine, Innings, PlayerRole, ScoreFile, ShotType, SideKey, WicketKind } from '../types'
@@ -206,6 +206,15 @@ function rnd2(): number {
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296
 }
+// A third sequence for dropped catches, so adding them never changes the scores or the shot details.
+let seed3 = 31_337
+function rnd3(): number {
+  seed3 |= 0
+  seed3 = (seed3 + 0x6d2b79f5) | 0
+  let t = Math.imul(seed3 ^ (seed3 >>> 15), 1 | seed3)
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+}
 function pick2<T>(table: [T, number][]): T {
   let r = rnd2() * table.reduce((sum, [, w]) => sum + w, 0)
   for (const [v, w] of table) if ((r -= w) <= 0) return v
@@ -248,7 +257,15 @@ function addDetails(file: ScoreFile, lefties: Set<string>): ScoreFile {
       } else type = pick2<ShotType>([['drive', 2], ['flick', 2], ['cut', 1], ['other', 1]])
       return type ? { ...b, shotType: type } : b
     })
-    return { ...inn, events }
+    // Now and then a catch goes down, marked as a scorer would: who, a hard chance or not, and usually where.
+    const fielders = squadOf(file[other(inn.batting)])
+    const withDrops = events.map((e) => {
+      if (e.t !== 'ball' || e.kind !== 'legal' || e.wicket || rnd3() > 0.012) return e
+      const who = fielders.filter((id) => id !== e.bowler)
+      const at: [number, number] = [Math.round((rnd3() * 1.6 - 0.8) * 100) / 100, Math.round((rnd3() * 1.4 - 0.3) * 100) / 100]
+      return { ...e, drop: { by: who[Math.floor(rnd3() * who.length)], ...(rnd3() < 0.7 ? { at } : {}), ...(rnd3() < 0.3 ? { tough: true } : {}) } }
+    })
+    return { ...inn, events: withDrops }
   })
   return { ...file, askShotType: true, askSide: true, innings }
 }

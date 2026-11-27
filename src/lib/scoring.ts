@@ -5,7 +5,7 @@
 // The ball-by-ball log is the only thing stored. Totals, the scorecard and the
 // charts are worked out from it (lib/scorecard.ts), so Undo is "drop the last
 // event" and fixing an old ball is "change it and recalculate".
-import type { BallEvent, Crease, DeliveryKind, Innings, ScoreEvent, ScoreFile, ScoreSide, ShotType, SideKey, WicketKind } from '../types'
+import type { BallEvent, Crease, DeliveryKind, Drop, Innings, ScoreEvent, ScoreFile, ScoreSide, ShotType, SideKey, WicketKind } from '../types'
 import { nowStamp } from './dates'
 import { uuid } from './uuid'
 
@@ -342,6 +342,16 @@ export interface BallInput {
   wicket?: { kind: WicketKind; who?: string; fielder?: string; at?: [number, number] }
   shot?: [number, number]
   shotType?: ShotType
+  /** A catch was put down off this ball. */
+  drop?: Drop
+}
+
+/** Checks a dropped catch and returns it tidy: a fielder of the fielding side, not on a wide, not with a catch out. */
+export function cleanDrop(file: ScoreFile, inn: Innings, drop: Drop, ball: { kind: DeliveryKind; wicket?: { kind: WicketKind } }): Drop {
+  if (ball.kind === 'wd') throw new Error('A catch cannot be dropped off a wide.')
+  if (ball.wicket && CAUGHT.includes(ball.wicket.kind)) throw new Error('A ball cannot be both a catch taken and a catch dropped.')
+  if (!drop.by || !squadOf(bowlingSide(file, inn)).includes(drop.by)) throw new Error('Pick the fielder who dropped it from the fielding side.')
+  return { by: drop.by, ...(drop.at ? { at: drop.at } : {}), ...(drop.tough ? { tough: true } : {}) }
 }
 
 export function addBall(file: ScoreFile, input: BallInput): ScoreFile {
@@ -377,6 +387,7 @@ export function addBall(file: ScoreFile, input: BallInput): ScoreFile {
   if (wicket) ball.wicket = wicket
   if (input.shot) ball.shot = input.shot
   if (input.shotType && kind !== 'wd') ball.shotType = input.shotType
+  if (input.drop) ball.drop = cleanDrop(file, inn, input.drop, { kind, wicket })
   if (inn.crease.side) ball.side = inn.crease.side
 
   // Where everyone stands for the next ball (over or round the wicket carries on until the over ends).
@@ -466,7 +477,7 @@ export function undo(file: ScoreFile): ScoreFile {
 }
 
 /** Fix the runs or the shot direction of an earlier ball. To change a wicket or a wide/no-ball, undo back to it. */
-export function editBall(file: ScoreFile, inningsIdx: number, ballId: string, patch: { bat: number; byes: number; byeType?: 'b' | 'lb'; shot?: [number, number] | null; shotType?: ShotType | null }): ScoreFile {
+export function editBall(file: ScoreFile, inningsIdx: number, ballId: string, patch: { bat: number; byes: number; byeType?: 'b' | 'lb'; shot?: [number, number] | null; shotType?: ShotType | null; drop?: Drop | null }): ScoreFile {
   const innings = file.innings.map((inn, i) => {
     if (i !== inningsIdx) return inn
     return {
@@ -482,6 +493,8 @@ export function editBall(file: ScoreFile, inningsIdx: number, ballId: string, pa
         else if (patch.shot) next.shot = patch.shot
         if (patch.shotType === null) delete next.shotType
         else if (patch.shotType) next.shotType = patch.shotType
+        if (patch.drop === null) delete next.drop
+        else if (patch.drop) next.drop = cleanDrop(file, inn, patch.drop, e)
         return next
       }),
     }

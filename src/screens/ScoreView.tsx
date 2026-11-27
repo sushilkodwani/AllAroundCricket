@@ -3,6 +3,7 @@
 // super admin turned on auto-refresh for this match, every 20 seconds by itself.
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AwardsList } from '../components/Awards'
+import { MatchDrops } from '../components/DropsCard'
 import { RoleTag } from '../components/Profile'
 import { BallChip, PressureStrip } from '../components/scoring'
 import { HeaderButton, RefreshIcon, Screen } from '../components/Screen'
@@ -218,6 +219,7 @@ export function ScoreView({ teamId, matchId }: { teamId: string; matchId: string
         {tab === 'scorecard' && file.innings.map((_, n) => <InningsCard key={n} file={file} idx={n} s={summaries[n]} />)}
         {tab === 'commentary' && <CommentaryTab file={file} summaries={summaries} lefties={lefties} />}
         {tab === 'analysis' && <AnalysisTab file={file} summaries={summaries} />}
+        {tab === 'analysis' && <MatchDrops file={file} names={personName} />}
         {tab === 'detailed' && <DetailedTab file={file} summaries={summaries} lefties={lefties} />}
         {tab === 'teams' && (
           <div className="grid gap-3 sm:grid-cols-2">

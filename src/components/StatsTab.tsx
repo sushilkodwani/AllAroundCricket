@@ -11,6 +11,7 @@ import { navigate } from '../state/router'
 import type { Match, ScoreFile, SideKey, Team } from '../types'
 import { FormStrip, MatchGraphs, PhaseChart } from './TeamCharts'
 import { BatScatter, BowlScatter, Dismissals, ExtrasTrend, FirstVsChaseChart, PhaseHeat, ScoringMix } from './TeamInsightCharts'
+import { TeamDrops } from './DropsCard'
 import { Empty } from './ui'
 
 /** Score files of a team's scored matches; each is loaded (cache first) the first time it is needed. */
@@ -110,6 +111,7 @@ export function StatsTables({ matches, side, onOpen: open }: { matches: Match[];
       <BowlScatter careers={careers} files={files} side={side} onOpen={open} />
       <PhaseHeat careers={careers} files={files} />
       <ExtrasTrend files={files} matches={matches} side={side} />
+      <TeamDrops files={files} matches={matches} side={side} />
 
       {records.length > 0 && (
         <section>

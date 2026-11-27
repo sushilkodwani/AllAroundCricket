@@ -413,6 +413,13 @@ export const SIDE_LABELS: Record<BowlingSide, string> = { over: 'Over the wicket
 export type ShotType = 'drive' | 'cut' | 'pull' | 'hook' | 'sweep' | 'flick' | 'glance' | 'lofted' | 'defence' | 'edge' | 'scoop' | 'other'
 export const SHOT_LABELS: Record<ShotType, string> = { drive: 'Drive', cut: 'Cut', pull: 'Pull', hook: 'Hook', sweep: 'Sweep', flick: 'Flick', glance: 'Glance', lofted: 'Lofted', defence: 'Defence', edge: 'Edge', scoop: 'Scoop / ramp', other: 'Other' }
 
+/** A catch that went down: who put it down, where it was (same coordinates as `shot`), and whether it was a hard chance. */
+export interface Drop {
+  by: string
+  at?: [number, number]
+  tough?: boolean
+}
+
 export interface BallEvent {
   t: 'ball'
   id: string
@@ -429,6 +436,8 @@ export interface BallEvent {
   wicket?: { kind: WicketKind; who: string; fielder?: string; at?: [number, number] }
   /** Where a boundary went: point on the ground, unit circle, centre = 0,0, y down. */
   shot?: [number, number]
+  /** A catch off this ball was dropped (the batter was not out). */
+  drop?: Drop
   /** The kind of shot played (only when the match asks for it). */
   shotType?: ShotType
   /** Bowled over or round the wicket (only when the match asks for it). */

@@ -7,6 +7,7 @@ import { BOWL_LABELS, ROLE_LABELS, WICKET_LABELS } from '../types'
 import { phaseStats } from './analysis'
 import { batAverage, batStrikeRate, bestBowling, bowlEconomy, bowlOvers, careerStats, formOf, highScore, type Career } from './career'
 import { fmtDate } from './dates'
+import { dropSummary, dropsIn, impactText, playerDrops } from './drops'
 import { summarize } from './scorecard'
 import { inningsTotal, squadOf } from './scoring'
 import { byGround, byOpponent, firstVsChase, phaseProfile } from './season'
@@ -50,6 +51,11 @@ export function playerLine(ctx: AiCtx, id: string, careers: Map<string, Career>)
   if (c.field.catches + c.field.stumpings + c.field.runOuts > 0) bits.push(`fielding ${c.field.catches} catches, ${c.field.stumpings} stumpings, ${c.field.runOuts} run-outs`)
   if (form.bat.length) bits.push(`last scores ${form.bat.join(', ')}`)
   if (form.bowl.length) bits.push(`last spells ${form.bowl.join(', ')}`)
+  if (dropsIn(ctx.files).length > 0) {
+    const pd = playerDrops(ctx.files, id)
+    if (pd.fielding.chances > 0) bits.push(`catching: held ${pd.fielding.taken} of ${pd.fielding.chances} chances (${pd.fielding.rate}%), ${pd.fielding.drops} dropped costing ${pd.fielding.runsCost} runs`)
+    if (pd.lives.count > 0) bits.push(`given ${pd.lives.count === 1 ? 'a life' : `${pd.lives.count} lives`} by dropped catches (${pd.lives.runsAfter} runs after)`)
+  }
   const ph = phaseProfile(ctx.files, id)
   const phases = ph
     .filter((r) => r.bat.balls >= 12 || r.bowl.balls >= 12)
@@ -75,12 +81,17 @@ function teamBlock(ctx: AiCtx): string {
     .map((f) => (wonByUs(f) ? 'W' : f.result?.winner ? 'L' : 'T'))
     .join('')
   const line = (label: string, s: { played: number; won: number; avgRuns?: number | null }) => `${label}: won ${s.won} of ${s.played}${s.avgRuns ? `, average score ${Math.round(s.avgRuns)}` : ''}`
+  const dr = dropSummary(ctx.files, 'home')
+  const catching = dropsIn(ctx.files).length > 0 ? `Catching (only drops the scorers marked): held ${dr.taken} of ${dr.chances} chances (${dr.rate}%), ${dr.drops} dropped, ${dr.runsCost} runs scored by batters after a life.` : ''
   return [
     `Played ${done.length}, won ${won}, lost ${done.length - won}. Recent form (newest first): ${recent}.`,
     line('Batting first', v.battingFirst),
     line('Chasing', v.chasing),
     `After winning the toss we won ${v.tossWon.won} of ${v.tossWon.played}; after losing it ${v.tossLost.won} of ${v.tossLost.played}.`,
-  ].join('\n')
+    catching,
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 /** Our record against one opponent, from earlier meetings. */
@@ -181,6 +192,14 @@ function inningsBlock(ctx: AiCtx, file: ScoreFile, idx: number): string {
     .join('\n')
 }
 
+/** The dropped catches of one match, with what each cost. */
+function dropsBlock(ctx: AiCtx, file: ScoreFile): string {
+  const drops = dropsIn([file])
+  if (drops.length === 0) return ''
+  const lines = drops.map((d) => `- ${nameOf(ctx, d.by)} (${d.fieldingSide === 'home' ? ctx.teamName : file.away.name}) dropped ${nameOf(ctx, d.batter)}${d.tough ? ' (a hard chance)' : ''} in over ${d.over} of innings ${d.inningsIdx + 1}; ${nameOf(ctx, d.batter)} then made ${d.runsAfter} off ${d.ballsAfter} balls. ${impactText(d)}.`)
+  return ['Dropped catches in this match:', ...lines].join('\n')
+}
+
 export function reviewPrompt(ctx: AiCtx, match: Match, file: ScoreFile | undefined): Prompt {
   const result = match.result ? `Result: ${match.result}${match.ourScore ? `, ${ctx.teamName} ${match.ourScore}` : ''}${match.theirScore ? `, ${match.opponent} ${match.theirScore}` : ''}.` : 'Result not recorded.'
   const detail = file
@@ -190,6 +209,7 @@ export function reviewPrompt(ctx: AiCtx, match: Match, file: ScoreFile | undefin
         inningsBlock(ctx, file, 0),
         file.innings[1] ? inningsBlock(ctx, file, 1) : '',
         file.awards?.potm ? `Player of the match: ${nameOf(ctx, file.awards.potm)}.` : '',
+        dropsBlock(ctx, file),
       ]
         .filter(Boolean)
         .join('\n')
@@ -209,7 +229,7 @@ export function reviewPrompt(ctx: AiCtx, match: Match, file: ScoreFile | undefin
     '## Second innings — the same for the other innings, including how the chase or defence was managed.',
     '## Turning points — the two or three moments or partnerships where the match swung, and why.',
     '## Batting performances — each batter who made a real contribution or let the team down, with the figures.',
-    '## Bowling and fielding — each bowler’s spell judged on economy, wickets and phase, plus catches, extras and discipline.',
+    '## Bowling and fielding — each bowler’s spell judged on economy, wickets and phase, plus catches, any dropped catches (name them and what they cost, kindly), extras and discipline.',
     '## Captaincy and tactics — what was done well, and decisions that could have gone differently (toss, order, bowling changes).',
     '## What to fix — five specific things, each with a drill or a change to try before the next match.',
     '## Next match — the one thing to focus on, and who should be ready for a bigger role.',

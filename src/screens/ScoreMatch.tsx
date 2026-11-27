@@ -2,6 +2,7 @@
 // bookkeeping — strike, overs, next batter, next bowler, innings and result.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AwardsEditor } from '../components/Awards'
+import { DropSheet, EditDrop, draftOf, dropOf, type DropDraft } from '../components/DropFields'
 import { AddPlayerSheet, BallChip, GroundMap, PressureStrip } from '../components/scoring'
 import { ShotPicker } from '../components/ShotIcons'
 import { HeaderButton, Screen } from '../components/Screen'
@@ -49,7 +50,7 @@ import {
 } from '../lib/scoring'
 import { useApp, useFile, useTeam } from '../state/AppContext'
 import { navigate, useRoute, useSheet, withQuery } from '../state/router'
-import { BOWL_LABELS, SIDE_LABELS, WICKET_LABELS, type BallEvent, type BowlingSide, type BowlStyle, type ScoreFile, type ShotType, type SideKey, type WicketKind } from '../types'
+import { BOWL_LABELS, SIDE_LABELS, WICKET_LABELS, type BallEvent, type Drop, type BowlingSide, type BowlStyle, type ScoreFile, type ShotType, type SideKey, type WicketKind } from '../types'
 
 type Role = 'striker' | 'nonStriker' | 'bowler'
 const ROLE_LABEL: Record<Role, string> = { striker: 'striker', nonStriker: 'non-striker', bowler: 'bowler' }
@@ -409,6 +410,9 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
             <button className={`${padBtn} col-span-2 text-base`} disabled={!canUndo(file)} onClick={() => run(undo, 'Undo')}>
               ↩ Undo
             </button>
+            <button className={`${padBtn} col-span-4 !min-h-[46px] text-sm`} disabled={!ready} onClick={() => show('drop')}>
+              🙌 Dropped catch
+            </button>
           </div>
         )}
         {inn.closed && (
@@ -531,6 +535,10 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
         />
       )}
 
+      {sheet.name === 'drop' && striker && (
+        <DropSheet fielders={squadOf(bowl)} left={lefties.has(striker)} batter={personName(striker)} onClose={sheet.close} onCommit={(input) => commit(input)} />
+      )}
+
       {sheet.name === 'shot' && pending && striker && (
         <ShotSheet
           runs={pending.bat ?? 4}
@@ -548,6 +556,7 @@ export function ScoreMatch({ teamId, matchId }: { teamId: string; matchId: strin
       {editing && (
         <EditBallSheet
           ball={editing}
+          fielders={squadOf(bowl)}
           left={lefties.has(editing.striker)}
           allDirections={!!file.allDirections}
           onClose={sheet.close}
@@ -929,11 +938,13 @@ function ShotSheet({ runs, batter, left, onLeft, withDirection, askType, onSave,
 }
 
 // ---------- correct an earlier ball ----------
-function EditBallSheet({ ball, left, allDirections, onSave, onClose }: { ball: BallEvent; left: boolean; allDirections: boolean; onSave: (patch: { bat: number; byes: number; byeType?: 'b' | 'lb'; shot?: [number, number] | null }) => void; onClose: () => void }) {
+function EditBallSheet({ ball, fielders, left, allDirections, onSave, onClose }: { ball: BallEvent; fielders: string[]; left: boolean; allDirections: boolean; onSave: (patch: { bat: number; byes: number; byeType?: 'b' | 'lb'; shot?: [number, number] | null; drop?: Drop | null }) => void; onClose: () => void }) {
   const wide = ball.kind === 'wd'
   const [how, setHow] = useState<'bat' | 'b' | 'lb'>(ball.byes > 0 && !wide ? (ball.byeType ?? 'b') : 'bat')
   const [n, setN] = useState(wide ? ball.byes : ball.byes > 0 ? ball.byes : ball.bat)
   const [shot, setShot] = useState<[number, number] | null>(ball.shot ?? null)
+  const [drop, setDrop] = useState<DropDraft | null>(ball.drop ? draftOf(ball.drop) : null)
+  const dropPatch: Drop | null = drop ? (dropOf(drop) ?? null) : null
   const boundary = !wide && how === 'bat' && (n === 4 || n === 6)
   // 1s, 2s and 3s may carry a direction too (never required).
   const small = !wide && how === 'bat' && n >= 1 && n <= 3 && (allDirections || !!ball.shot)
@@ -962,7 +973,8 @@ function EditBallSheet({ ball, left, allDirections, onSave, onClose }: { ball: B
             <GroundMap left={left} picked={shot} onPick={setShot} stop={!boundary} />
           </div>
         )}
-        <button className="btn-primary" disabled={boundary && !shot} onClick={() => onSave(wide ? { bat: 0, byes: n } : how === 'bat' ? { bat: n, byes: 0, shot: boundary || small ? shot : null } : { bat: 0, byes: n, byeType: how, shot: null })}>
+        <EditDrop ball={ball} fielders={fielders} left={left} draft={drop} setDraft={setDrop} />
+        <button className="btn-primary" disabled={(boundary && !shot) || (!!drop && !drop.by)} onClick={() => onSave({ ...(wide ? { bat: 0, byes: n } : how === 'bat' ? { bat: n, byes: 0, shot: boundary || small ? shot : null } : { bat: 0, byes: n, byeType: how, shot: null }), drop: dropPatch })}>
           Save
         </button>
         <p className="text-xs text-muted">To turn a ball into a wide or no-ball (or back), use Undo instead.</p>

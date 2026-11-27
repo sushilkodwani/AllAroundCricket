@@ -21,13 +21,17 @@ const TONE: Record<BallTone, string> = {
 export function BallChip({ ball, onClick, small }: { ball: BallEvent; onClick?: () => void; small?: boolean }) {
   const token = ballToken(ball)
   const size = small ? 'h-6 min-w-[24px] px-1 text-[10px]' : 'h-9 min-w-[36px] px-1.5 text-xs'
-  const cls = `flex ${size} shrink-0 items-center justify-center rounded-full font-bold ${TONE[ballTone(ball)]}`
+  const cls = `relative flex ${size} shrink-0 items-center justify-center rounded-full font-bold ${TONE[ballTone(ball)]}`
   return onClick ? (
-    <button className={cls} onClick={onClick} aria-label={`Edit ball: ${token}`}>
+    <button className={cls} onClick={onClick} aria-label={`Edit ball: ${token}${ball.drop ? ', catch dropped' : ''}`}>
       {token}
+      {ball.drop && <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-warn ring-1 ring-surface" aria-hidden />}
     </button>
   ) : (
-    <span className={cls}>{token}</span>
+    <span className={cls}>
+      {token}
+      {ball.drop && <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-warn ring-1 ring-surface" aria-label="Catch dropped" />}
+    </span>
   )
 }
 

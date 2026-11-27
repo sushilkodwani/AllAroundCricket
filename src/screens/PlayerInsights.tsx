@@ -2,6 +2,7 @@
 // matches, what the team does with and without them, and when and where they play best.
 // Everything is worked out from the ball-by-ball score files (see lib/playerInsights.ts).
 import { useMemo, type ReactNode } from 'react'
+import { PlayerDrops } from '../components/DropsCard'
 import { DataTable, Insights, Panel, Tiles } from '../components/playerViz'
 import { fmtDayMonth } from '../lib/dates'
 import { type PlayerCtx, type PlayerData } from '../lib/playerAnalysis'
@@ -300,6 +301,7 @@ export function InsightsTab(props: Props) {
         onShareReport={meta && onShareReport && (() => onShareReport(buildReport({ d, files, personId, name: personName, matchOf: (id) => matchOf(id), ranks, archetypes, badges, meta })))}
       />
       <VsTeam r={ranks} />
+      <PlayerDrops files={files} personId={personId} />
       <Consistency d={d} />
       <Moments files={files} personId={personId} personName={personName} matchOf={matchOf} />
       <Pressure files={files} d={d} personId={personId} />
