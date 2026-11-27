@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AiSetupSheet } from '../components/AiReportCard'
 import { DataCard } from '../components/DataCard'
 import { NotificationsCard } from '../components/NotificationsCard'
 import { ChangePinSheet, RecoveryCodeSheet } from '../components/PinSheets'
@@ -10,7 +11,10 @@ import { updateConfig } from '../lib/domain'
 import { getPref, setPref } from '../lib/session'
 import { DevelopedBy } from '../components/DevelopedBy'
 import { APP_BUILT_AT, APP_VERSION, reloadToLatest } from '../lib/version'
-import { useApp } from '../state/AppContext'
+import { aiOff, aiReady } from '../lib/ai'
+import { P } from '../lib/paths'
+import { useApp, useFile } from '../state/AppContext'
+import type { AiConfig } from '../types'
 import { navigate, useSheet } from '../state/router'
 import { useTheme, type ThemePref } from '../state/ThemeContext'
 
@@ -30,6 +34,7 @@ export function Settings() {
   const { me, role, isAdmin, isSuper, myTeams, allTeams, admins, people, config, store, session, logout, flushSaves, replaceToken, toast, creds, mock, stopMock } = useApp()
   const { pref, setPref: setTheme } = useTheme()
   const sheet = useSheet()
+  const aiCfg = useFile<AiConfig>(isSuper ? P.aiConfig : null)
   const [pinOnOpen, setPinOnOpen] = useState(() => getPref('pinOnOpen', false))
   const [showArchived, setShowArchived] = useState(() => getPref('showArchived', false))
   const [confirmLogout, setConfirmLogout] = useState(false)
@@ -131,6 +136,7 @@ export function Settings() {
                 hint={config?.tokenExpiresOn ? `Access key expires ${fmtDate(config.tokenExpiresOn)}` : 'Access key expiry date not set'}
                 onClick={() => sheet.open('repo')}
               />
+              <MenuRow label="AI reports" hint={aiOff(aiCfg) ? 'Off · saved reports still show, no new ones' : aiReady(aiCfg) ? 'On · match plans, reviews and player plans' : 'Add the Gemini key to turn them on'} onClick={() => sheet.open('ai')} />
               <MenuRow label="Personal access keys" hint="Send each player and admin their own key" onClick={() => navigate('/settings/keys')} />
               <MenuRow label="Recovery code" hint="Create a new one (needs your PIN)" onClick={() => sheet.open('recovery')} />
             </Section>
@@ -197,6 +203,7 @@ export function Settings() {
 
       {sheet.name === 'pin' && <ChangePinSheet onClose={sheet.close} />}
       {sheet.name === 'recovery' && <RecoveryCodeSheet onClose={sheet.close} />}
+      {sheet.name === 'ai' && isSuper && <AiSetupSheet onClose={sheet.close} />}
 
       {sheet.name === 'profile' && me && <ProfileSheet person={me} onClose={sheet.close} />}
 

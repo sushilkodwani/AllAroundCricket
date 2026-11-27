@@ -72,6 +72,7 @@ export function listSpecFor(path: string): ListSpec | null {
   if (path.endsWith('/matches.json')) return { key: 'matches', id: 'id' }
   if (path.endsWith('/funds.json')) return { key: 'entries', id: 'id' }
   if (path.endsWith('/seasons.json')) return { key: 'seasons', id: 'id' }
+  if (/^teams\/[^/]+\/ai\.json$/.test(path)) return { key: 'reports', id: 'id' }
   return null
 }
 

@@ -76,7 +76,7 @@ const actorId = (s: Store) => s.actor.personId
 
 /** The three files a team cannot work without; availability answers and categories are loaded alongside. */
 const coreTeamPaths = (teamId: string) => [P.members(teamId), P.matches(teamId), P.funds(teamId)]
-export const teamPaths = (teamId: string) => [...coreTeamPaths(teamId), P.availability(teamId), P.categories(teamId), P.seasons(teamId)]
+export const teamPaths = (teamId: string) => [...coreTeamPaths(teamId), P.availability(teamId), P.categories(teamId), P.seasons(teamId), P.ai(teamId)]
 export const teamLoaded = (s: Store, teamId: string) => coreTeamPaths(teamId).every((p) => s.has(p))
 export const loadTeam = (s: Store, teamId: string) => Promise.all(teamPaths(teamId).map((p) => s.load(p)))
 

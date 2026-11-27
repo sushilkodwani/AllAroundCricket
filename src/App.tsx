@@ -12,6 +12,7 @@ import { MatchDetail } from './screens/MatchDetail'
 import { Matches } from './screens/Matches'
 import { Onboard } from './screens/Onboard'
 import { CoinToss } from './screens/CoinToss'
+import { AiReportView } from './screens/AiReportView'
 import { Grounds } from './screens/Grounds'
 import { OpponentDetail, OpponentPlayerStats, OpponentScout } from './screens/OpponentDetail'
 import { PublicScorecard } from './screens/PublicScorecard'
@@ -168,6 +169,7 @@ export default function App() {
   else if (a === 'opponents' && b && c === 'scout' && !d) screen = <OpponentScout opponentId={b} />
   else if (a === 'teams' && b && c === 'year' && !d) screen = <YearSummary teamId={b} />
   else if (a === 'teams' && b && c === 'categories' && !d) screen = <ExpenseCategories teamId={b} />
+  else if (a === 'teams' && b && c === 'ai' && d && !e) screen = <AiReportView teamId={b} reportId={d} />
   else if (a === 'teams' && b && c === 'seasons' && !d) screen = <Seasons teamId={b} />
   else if (a === 'teams' && b && c === 'seasons' && d && !e) screen = <SeasonDetail teamId={b} seasonId={d} />
   else if (a === 'settings' && b === 'grounds') screen = <Grounds />

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { squadOf } from '../lib/scoring'
 import { FilterChips } from '../components/playerViz'
+import { AiReportCard } from '../components/AiReportCard'
 import { ProfileCard, ProfileSheet } from '../components/Profile'
 import { Screen } from '../components/Screen'
 import { useScores } from '../components/StatsTab'
@@ -42,12 +43,12 @@ export function FormStrip({ label, values }: { label: string; values: string[] }
 
 export function PlayerStats({ teamId, personId }: { teamId: string; personId: string }) {
   const data = useTeam(teamId)
-  return <PlayerStatsView personId={personId} matches={data.matches} loading={!data.ready} back={`/teams/${teamId}`} teamName={data.team?.name ?? ''} color={data.team?.color} />
+  return <PlayerStatsView personId={personId} teamId={teamId} matches={data.matches} loading={!data.ready} back={`/teams/${teamId}`} teamName={data.team?.name ?? ''} color={data.team?.color} />
 }
 
 /** A player's page over any set of matches (one of our teams, or every match against an opponent). */
-export function PlayerStatsView({ personId, matches, loading, back, teamName, color }: { personId: string; matches: Match[]; loading?: boolean; back: string; teamName: string; color?: string }) {
-  const { people, personName, isSuper, isAdmin, canManage, session, store, toast } = useApp()
+export function PlayerStatsView({ personId, teamId, matches, loading, back, teamName, color }: { personId: string; /** Our own team: its admin can ask for the weekly AI plan. */ teamId?: string; matches: Match[]; loading?: boolean; back: string; teamName: string; color?: string }) {
+  const { people, personName, canManage, session, store, toast } = useApp()
   const sheet = useSheet()
   const { files, scored, ready } = useScores(matches)
   const stamp = files.map((f) => f.updatedAt).join('|')
@@ -138,6 +139,8 @@ export function PlayerStatsView({ personId, matches, loading, back, teamName, co
     <Screen title={name} back={back}>
       <div className="flex flex-col gap-4 p-4">
         <ProfileCard person={person} name={name} teamName={teamName} color={color} career={c} onEdit={canEdit ? () => sheet.open('profile') : undefined} />
+
+        {teamId && c && person && <AiReportCard teamId={teamId} kind="player" id={personId} isAdmin={session?.personId === personId} />}
 
         {c && <BadgesCard badges={badges} name={name} />}
         {person && <GoalsCard person={person} data={all} canEdit={canEdit} own={session?.personId === personId} />}

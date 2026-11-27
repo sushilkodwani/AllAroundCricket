@@ -2,6 +2,8 @@
 export const P = {
   config: 'config/app.json',
   admins: 'config/admins.json',
+  /** The Gemini key for the AI reports; written by the super admin only. */
+  aiConfig: 'config/ai.json',
   people: 'people.json',
   creds: 'auth/credentials.json',
   teams: 'teams.json',
@@ -21,4 +23,6 @@ export const P = {
   funds: (teamId: string) => `teams/${teamId}/funds.json`,
   categories: (teamId: string) => `teams/${teamId}/categories.json`,
   seasons: (teamId: string) => `teams/${teamId}/seasons.json`,
+  /** AI reports (match plans, match reviews, player plans) the team's admin generated; everyone in the team reads them. */
+  ai: (teamId: string) => `teams/${teamId}/ai.json`,
 }

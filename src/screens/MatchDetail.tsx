@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AiReportCard } from '../components/AiReportCard'
 import { AvailabilityCard } from '../components/Availability'
 import { RoleTag } from '../components/Profile'
 import { ResultChip, StatusChip } from '../components/match'
@@ -148,6 +149,9 @@ export function MatchDetail({ teamId, matchId }: { teamId: string; matchId: stri
 
         {ground && <GroundInfo ground={ground} />}
         {!match.cancelled && match.lifecycle === 'scheduled' && match.scoring !== 'finished' && match.opponentId && <ScoutCard opponentId={match.opponentId} />}
+
+        {!match.cancelled && <AiReportCard teamId={teamId} kind="plan" id={match.id} match={match} isAdmin={isAdmin} />}
+        {!match.cancelled && <AiReportCard teamId={teamId} kind="review" id={match.id} match={match} isAdmin={isAdmin} />}
 
         {isAdmin && !match.cancelled && match.lifecycle === 'scheduled' && (
           <div>

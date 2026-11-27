@@ -8,6 +8,7 @@
 import type {
   AdminRecord,
   AppConfig,
+  AiReport,
   AvailabilityFile,
   Credential,
   CredentialsFile,
@@ -175,12 +176,30 @@ function ownMayWrite(me: string, path: string, before: unknown, after: unknown):
     return touched(b, a, (e) => e.id).every((e) => e.personId === me)
   }
 
+  // AI player plan: a player may make their own, once a week (the admin's reports are theirs to write).
+  if (/^teams\/[^/]+\/ai\.json$/.test(path)) return ownAiPlan(me, before, after)
+
   // Profile photo: a player may set or remove their own picture only.
   if (path === P.personPhoto(me)) return safeImageFile(after)
 
   // Profile: their own role, batting hand, bowling style, jersey number, photo stamp and goals.
   if (path === P.people) return ownProfileOnly(me, before, after)
   return false
+}
+
+const WEEK_MS = 7 * 86_400_000
+
+function ownAiPlan(me: string, before: unknown, after: unknown): boolean {
+  const changed = changes(list<AiReport>(before, 'reports'), list<AiReport>(after, 'reports'), (r) => r.id)
+  return (
+    changed.length > 0 &&
+    changed.every(([was, now]) => {
+      if (!now || now.kind !== 'player' || now.personId !== me || now.createdBy !== me || now.text.length > 10_000) return false
+      if (!was) return true
+      // Replacing their plan: it must be theirs already, and a week old.
+      return was.kind === 'player' && was.personId === me && Date.parse(now.createdAt) - Date.parse(was.createdAt) >= WEEK_MS - 60_000
+    })
+  )
 }
 
 const safeImageFile = (after: unknown) => {
@@ -220,6 +239,14 @@ const diff = (a: string[] = [], b: string[] = []) => [...a.filter((x) => !b.incl
 
 function adminMayWrite(me: string, path: string, before: unknown, after: unknown, look: Lookup): boolean {
   const owns = (teamId: string) => look.teamAdmin(teamId) === me
+
+  // Match plans and reviews are the admin's; a player's own plan is the player's alone (see ownAiPlan).
+  const aiFile = path.match(/^teams\/([^/]+)\/ai\.json$/)
+  if (aiFile) {
+    if (!owns(aiFile[1])) return false
+    if (after === null) return true // the whole team is being deleted
+    return changes(list<AiReport>(before, 'reports'), list<AiReport>(after, 'reports'), (r) => r.id).every(([was, now]) => (was?.kind ?? now!.kind) !== 'player' && (now?.kind ?? was!.kind) !== 'player')
+  }
 
   const teamFile = path.match(/^teams\/([^/]+)\//)
   if (teamFile) return owns(teamFile[1])

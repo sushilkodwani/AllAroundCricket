@@ -525,6 +525,40 @@ export interface Season {
   createdAt: string
   updatedAt: string
 }
+// ---------- AI reports (config/ai.json, teams/<id>/ai.json) ----------
+export interface AiConfig {
+  schemaVersion: 1
+  geminiKey: string
+  /** Gemini model name, e.g. gemini-3.1-flash-lite. */
+  model: string
+  /** The super admin's master switch. Off hides every generate button; saved reports keep showing. Missing = on. */
+  enabled?: boolean
+  updatedAt: string
+}
+
+export type AiKind = 'plan' | 'review' | 'player'
+
+export interface AiReport {
+  id: string
+  teamId: string
+  kind: AiKind
+  /** plan and review: the match. */
+  matchId?: string
+  /** player: the player. */
+  personId?: string
+  /** The answer, in light markdown (headings, bullets, bold). */
+  text: string
+  model: string
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AiFile {
+  schemaVersion: 1
+  reports: AiReport[]
+}
+
 export interface SeasonsFile {
   schemaVersion: 1
   seasons: Season[]

@@ -65,7 +65,7 @@ export function parseBackup(text: string): Backup {
 }
 
 const RESTORABLE = (path: string) =>
-  path === P.admins || path === P.people || path === P.teams || path === P.opponents || path === P.tournaments || path === P.grounds || /^teams\/[^/]+\/(members|matches|funds|availability|categories|seasons)\.json$/.test(path) || /^teams\/[^/]+\/scoring\/[^/]+\.json$/.test(path)
+  path === P.admins || path === P.people || path === P.teams || path === P.opponents || path === P.tournaments || path === P.grounds || /^teams\/[^/]+\/(members|matches|funds|availability|categories|seasons|ai)\.json$/.test(path) || /^teams\/[^/]+\/scoring\/[^/]+\.json$/.test(path)
 
 /**
  * Replaces the current data with the backup's. The app config (admin, phone
